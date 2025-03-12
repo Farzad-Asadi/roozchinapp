@@ -1,6 +1,7 @@
 package com.example.compoundeffectV1_01.utils
 
 import android.annotation.SuppressLint
+import android.util.Log
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Text
@@ -18,6 +19,7 @@ import com.example.compoundeffectV1_01.data.room.event.Event
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 import java.util.Calendar
 import kotlin.math.roundToInt
 
@@ -30,7 +32,6 @@ fun LoadingScreen() {
         Text(text = "LoadingScreen")
     }
 }
-
 
 
 @SuppressLint("DefaultLocale")
@@ -48,17 +49,25 @@ fun timeInstanceToLocalDate(timeInstance: Calendar): LocalDateTime {
     return LocalDateTime.parse(formattedDateTime, DateTimeFormatter.ISO_LOCAL_DATE_TIME)
 }
 
-fun createTimeForSampleEvents(timeInstance: Calendar, hour: Int, minute: Int, second: Int): LocalDateTime {
+fun createTimeForSampleEvents(
+    timeInstance: Calendar,
+    hour: Int,
+    minute: Int,
+    second: Int
+): LocalDateTime {
+    timeInstance.set(Calendar.HOUR_OF_DAY,hour)
+    timeInstance.set(Calendar.HOUR_OF_DAY,hour)
     return LocalDateTime.of(
         timeInstance.get(Calendar.YEAR),
         timeInstance.get(Calendar.MONTH) + 1, // چون ماه‌ها از 0 شروع می‌شوند
         timeInstance.get(Calendar.DAY_OF_MONTH),
-        hour,
+        timeInstance.time.hours, // استفاده از HOUR_OF_DAY برای فرمت ۲۴ ساعته
         minute,
         second
     )
-}
 
+
+}
 
 
 fun convertToPersianDate(localDate: LocalDate): String {
@@ -131,15 +140,14 @@ fun isPersianLeapYear(year: Int): Boolean {
 }
 
 
-
-val EventTimeFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("h:mm")
+val EventTimeFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("H:mm")
 val DayFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("E MM dd")
 val HourFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("H:00")
 
 
 //extended functions
-fun Color.colorToString():String{
-    return  "${red},${green},${blue},${alpha}"
+fun Color.colorToString(): String {
+    return "${red},${green},${blue},${alpha}"
 }
 
 fun String.stringToColor(): Color {
@@ -148,8 +156,6 @@ fun String.stringToColor(): Color {
 //    val (red, green, blue, alpha) = components
     return Color(components[0], components[1], components[2], components[3])
 }
-
-
 
 
 // for Attaching Data to Composables
@@ -164,7 +170,6 @@ class EventDataModifier(
 fun Modifier.eventData(event: Event) = this.then(EventDataModifier(event))
 
 
-
 fun currentTimeHeightPx(timeInstance: Calendar, hourHeight: Float): Int {
     val currentTimeToMinute =
         (timeInstance.get(Calendar.HOUR_OF_DAY) * 60) + (timeInstance.get(Calendar.MINUTE))
@@ -173,5 +178,17 @@ fun currentTimeHeightPx(timeInstance: Calendar, hourHeight: Float): Int {
 }
 
 
+// تابع محاسبه hourHeight بر اساس zoom
+fun calculateHourHeight(zoom: Float): Float {
+    val baseHeight = 86f // کمترین مقدار hourHeight
+    val step = 20f // مقدار افزایش به ازای هر مرحله
+    return (baseHeight + (zoom - 1f) * step).roundToInt().toFloat() // محاسبه hourHeight
 
+}
+
+@Composable
+fun eventHeightPx(event: Event, hourHeight: Float): Int {
+    val eventDurationMinutes = ChronoUnit.MINUTES.between(event.start, event.end)
+    return ((eventDurationMinutes / 60f) * hourHeight).roundToInt()
+}
 
