@@ -1,11 +1,13 @@
 package com.example.compoundeffectV1_01.ui.dashboardScreen
 
 
+import android.util.Log
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.horizontalScroll
@@ -19,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.size
@@ -53,13 +56,18 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.compoundeffectV1_01.AppViewModelProvider
@@ -98,7 +106,6 @@ fun DashboardScreen(
                 eventList = dashboardUiState.eventList,
                 activeEventId = activeEventId,
                 onLongClickEvent = { activeEventId = if (activeEventId == it) null else it },
-                modifier = Modifier.padding(innerPadding),
                 onChangeDuration = { activeEventId: Int?,
                                      totalDragAmount: Float,
                                      hourHeight: Float,
@@ -115,7 +122,19 @@ fun DashboardScreen(
                         changeStartEnd,
                         drugEnd
                     )
-                }
+                },
+                onEventDrugFromPalletToSchedule =
+                { eventId: Int, offsetX, distanceYFromTopOfSideBar: Float, hourHeight: Float, visibleColumnDayOffset: Int, endDrug: Boolean ->
+                    viewModel.onEventDrugFromPalletToSchedule(
+                        eventId,
+                        offsetX,
+                        distanceYFromTopOfSideBar,
+                        hourHeight,
+                        visibleColumnDayOffset,
+                        endDrug
+                    )
+                },
+                modifier = Modifier.padding(innerPadding)
             )
         }
     } else {
@@ -129,7 +148,6 @@ fun DashboardContent(
     eventList: List<Event>,
     activeEventId: Int?,
     onLongClickEvent: (eventId: Int) -> Unit,
-    modifier: Modifier = Modifier,
     onChangeDuration: (
         activeEventId: Int?,
         totalDragAmount: Float,
@@ -139,6 +157,15 @@ fun DashboardContent(
         changeStartEnd: Boolean,
         drugEnd: Boolean
     ) -> Unit,
+    onEventDrugFromPalletToSchedule: (
+        eventId: Int,
+        offsetX: Float,
+        distanceYFromTopOfSideBar: Float,
+        hourHeight: Float,
+        visibleColumnDayOffset: Int,
+        endDrug: Boolean
+    ) -> Unit,
+    modifier: Modifier = Modifier,
 
     ) {
 
@@ -163,15 +190,18 @@ fun DashboardContent(
     val density = LocalDensity.current
 
     var sidebarWidth by rememberSaveable { mutableIntStateOf(0) }
+    var headerHeight by rememberSaveable { mutableFloatStateOf(0f) }
 
     val dayWidth by remember { mutableIntStateOf(500) }
+
+    var visibleColumnDayOffset by remember { mutableIntStateOf(0) }    //فاصله روزی که در ستون قابل مشاهده است با روز جاری
 
     val verticalScrollState = rememberScrollState()
     val horizontalScrollState = rememberScrollState()
 
     val scope = rememberCoroutineScope()
 
-    val numDay = 3
+    val numDay = 5
 
     var zoom by remember { mutableFloatStateOf(1f) }
     val hourHeight = calculateHourHeight(zoom) // محاسبه hourHeight بر اساس zoom
@@ -205,16 +235,25 @@ fun DashboardContent(
                     .padding(start = with(density) { sidebarWidth.toDp() })
                     .horizontalScroll(horizontalScrollState, enabled = false)
             )
-            Row(modifier = Modifier.weight(1f)) {
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .onGloballyPositioned { layoutCoordinates ->
+                        val positionInRoot = layoutCoordinates.positionInParent().y
+                        headerHeight = positionInRoot
+                    }) {
                 TimeSidebar(
                     hourHeight = hourHeight,
                     onZoomChange = { zoom = it },
                     modifier = Modifier
                         .verticalScroll(verticalScrollState, enabled = false)
-                        .onGloballyPositioned { sidebarWidth = it.size.width }
+                        .onGloballyPositioned { layoutCoordinates ->
+                            sidebarWidth = layoutCoordinates.size.width
+
+                        }
                 )
                 Schedule(
-                    events = eventList,
+                    eventList = eventList,
                     hourHeight = hourHeight,
                     minDate = minDate,
                     maxDate = maxDate,
@@ -228,6 +267,11 @@ fun DashboardContent(
                         .weight(1f)
                         .verticalScroll(verticalScrollState)
                         .horizontalScroll(horizontalScrollState)
+                        .onGloballyPositioned { layoutCoordinates ->
+                            layoutCoordinates.size.width
+                            visibleColumnDayOffset =
+                                (((layoutCoordinates.positionInWindow().x.toInt()) - sidebarWidth) / (dayWidth - 50)) * -1
+                        }
 
                 )
             }
@@ -245,7 +289,9 @@ fun DashboardContent(
                 tint = MaterialTheme.colorScheme.onBackground,
                 contentDescription = null,
                 modifier = Modifier
-                    .clickable(onClick = { taskPalletWidth = if (taskPalletWidth==12) 160 else 12 })
+                    .clickable(onClick = {
+                        taskPalletWidth = if (taskPalletWidth == 12) 160 else 12
+                    })
             )
             Box(
                 modifier = Modifier
@@ -264,7 +310,7 @@ fun DashboardContent(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                ){
+                ) {
                     Text(
                         text = "پالت رویدادها",
                         modifier = Modifier
@@ -274,13 +320,100 @@ fun DashboardContent(
                     LazyColumn(
                         modifier = Modifier
                             .weight(1f),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+
 
                         ) {
-                        items(eventList){event ->
+                        items(eventList.filter { it.inPallet }, key = { it.id!! }) { event ->
+
+                            var offsetX by remember { mutableFloatStateOf(0f) }
+                            var offsetY by remember { mutableFloatStateOf(0f) }
+                            var distanceYFromTopOfSideBar by remember { mutableFloatStateOf(0f) } // فاصله از بالای صفحه
+
+
+
+
+
                             Box(
                                 contentAlignment = Alignment.Center,
                                 modifier = modifier
+                                    .offset {
+                                        IntOffset(
+                                            offsetX.roundToInt(),
+                                            offsetY.roundToInt()
+                                        )
+                                    }
+                                    .pointerInput(Unit) {
+
+                                        detectDragGestures(
+                                            onDragStart = {},
+                                            onDrag = { change, dragAmount ->
+                                                change.consume()
+                                                offsetX += dragAmount.x
+                                                offsetY += dragAmount.y
+
+
+                                                if (event.id != null) {
+                                                    onEventDrugFromPalletToSchedule(
+                                                        event.id,
+                                                        offsetX,
+                                                        distanceYFromTopOfSideBar,
+                                                        hourHeight,
+                                                        visibleColumnDayOffset,
+                                                        false
+                                                    )
+                                                }
+
+
+                                            },
+                                            onDragCancel = {
+
+                                                if (event.id != null) {
+                                                    onEventDrugFromPalletToSchedule(
+                                                        event.id,
+                                                        offsetX,
+                                                        distanceYFromTopOfSideBar,
+                                                        hourHeight,
+                                                        visibleColumnDayOffset,
+                                                        true
+                                                    )
+                                                }
+
+                                            },
+                                            onDragEnd = {
+
+                                                if (event.id != null) {
+                                                    onEventDrugFromPalletToSchedule(
+                                                        event.id,
+                                                        offsetX,
+                                                        distanceYFromTopOfSideBar,
+                                                        hourHeight,
+                                                        visibleColumnDayOffset,
+                                                        true
+                                                    )
+                                                }
+
+                                            },
+                                        )
+                                    }
+                                    .graphicsLayer {
+
+
+                                        // اگر offsetX از نصف عرض صفحه بیشتر شد، event را محو کنید
+                                        alpha = if (offsetX < -80) {
+
+                                            1f - (((offsetX + 80) / 80)*-1).coerceIn(0f, 1f)
+                                        } else {
+                                            1f
+                                        }
+                                    }
+
+                                    .onGloballyPositioned { layoutCoordinates ->
+
+                                        val positionInRoot = layoutCoordinates.positionInParent().y
+                                        distanceYFromTopOfSideBar = positionInRoot + headerHeight
+
+                                    }
                             )
                             {
 
@@ -322,16 +455,12 @@ fun DashboardContent(
                     }
 
 
-
-
-
-                    }
                 }
-
             }
 
         }
 
+    }
 
 
 }
@@ -424,7 +553,7 @@ fun TimeSidebarContent(
 
 @Composable
 fun Schedule(
-    events: List<Event>,
+    eventList: List<Event>,
     hourHeight: Float,
     minDate: LocalDate,
     maxDate: LocalDate,
@@ -474,6 +603,7 @@ fun Schedule(
     val currentTimeLine = MaterialTheme.colorScheme.onBackground
     val currentTimeHeightPx = currentTimeHeightPx(timeInstance, hourHeight)
 
+    val events = eventList.filter { it.inSchedule }
     Box(
         modifier = modifier
             .fillMaxSize()

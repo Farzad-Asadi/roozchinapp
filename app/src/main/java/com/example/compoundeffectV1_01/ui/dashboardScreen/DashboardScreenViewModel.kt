@@ -16,8 +16,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.time.Duration
 import java.time.LocalDateTime
-import java.time.LocalTime
 import java.util.Calendar
 
 
@@ -52,6 +52,7 @@ class DashboardScreenViewModel(
                         start = createTimeForSampleEvents(currentTime, 7, 0, 0),
                         end = createTimeForSampleEvents(currentTime, 9, 0, 0),
                         description = "Tune in to find out about how we're furthering our mission to organize the world’s information and make it universally accessible and useful.",
+                        inPallet = true,
                         selected = false
                     ),
                     Event(
@@ -61,6 +62,7 @@ class DashboardScreenViewModel(
                         start = createTimeForSampleEvents(currentTime, 11, 0, 0),
                         end = createTimeForSampleEvents(currentTime, 12, 0, 0),
                         description = "Learn about the latest updates to our developer products and platforms from Google Developers.",
+                        inPallet = true,
                         selected = false
                     ),
                     Event(
@@ -70,6 +72,7 @@ class DashboardScreenViewModel(
                         start = createTimeForSampleEvents(currentTime, 13, 0, 0),
                         end = createTimeForSampleEvents(currentTime, 15, 0, 0),
                         description = "In this Keynote, Chet Haase, Dan Sandler, and Romain Guy discuss the latest Android features and enhancements for developers.",
+                        inPallet = true,
                         selected = false
                     ),
                     Event(
@@ -79,6 +82,7 @@ class DashboardScreenViewModel(
                         start = createTimeForSampleEvents(currentTime, 18, 30, 0),
                         end = createTimeForSampleEvents(currentTime, 19, 45, 0),
                         description = "Learn about the latest and greatest in ML from Google. We’ll cover what’s available to developers when it comes to creating, understanding, and deploying models for a variety of different applications.",
+                        inPallet = true,
                         selected = false
                     ),
                     Event(
@@ -88,6 +92,7 @@ class DashboardScreenViewModel(
                         start = createTimeForSampleEvents(currentTime, 21, 30, 0),
                         end = createTimeForSampleEvents(currentTime, 23, 0, 0),
                         description = "Learn about the latest design improvements to help you build personal dynamic experiences with Material Design.",
+                        inPallet = true,
                         selected = false
                     ),
                     Event(
@@ -97,6 +102,7 @@ class DashboardScreenViewModel(
                         start = createTimeForSampleEvents(currentTime, 13, 30, 0).plusDays(1),
                         end = createTimeForSampleEvents(currentTime, 15, 45, 0).plusDays(1),
                         description = "This Workshop will take you through the basics of building your first app with Jetpack Compose, Android's new modern UI toolkit that simplifies and accelerates UI development on Android.",
+                        inPallet = true,
                         selected = false
                     ),
                     Event(
@@ -106,6 +112,7 @@ class DashboardScreenViewModel(
                         start = createTimeForSampleEvents(currentTime, 18, 30, 0).plusDays(1),
                         end = createTimeForSampleEvents(currentTime, 20, 0, 0).plusDays(1),
                         description = "This Workshop will take you through the basics of building your first app with Jetpack Compose, Android's new modern UI toolkit that simplifies and accelerates UI development on Android.",
+                        inPallet = true,
                         selected = false
                     ),
                 )
@@ -350,7 +357,7 @@ class DashboardScreenViewModel(
                         else -> return
                     }
             }
-            if ( newStartTime != null) {
+            if (newStartTime != null) {
                 newStartTime =
                     when {
                         newStartTime.isAfter(minimumTimeStartCanReach) ->
@@ -375,7 +382,8 @@ class DashboardScreenViewModel(
                 val changedEvent =
                     activatedEvent.copy(
                         end = newEndTime,
-                        start = newStartTime
+                        start = newStartTime,
+
                     )
 
 
@@ -399,7 +407,7 @@ class DashboardScreenViewModel(
                         )
                     }
                     viewModelScope.launch {
-                            eventRepository.updateEvent(changedEvent)
+                        eventRepository.updateEvent(changedEvent)
 
                     }
 
@@ -409,6 +417,151 @@ class DashboardScreenViewModel(
         }
 
         Log.i("TEST", "---------------")
+    }
+
+    fun onEventDrugFromPalletToSchedule(
+        activeEventId: Int?,
+        offsetX:Float,
+        distanceYFromTopOfSideBar: Float,
+        hourHeight: Float,
+        visibleColumnDayOffset:Int,
+        endDrug:Boolean=false,
+    ) {
+        val oneMinutePx: Float = (hourHeight / 60)
+        val offsetXMargin=-200
+
+        val eventDrugged = _dashboardUiState.value.eventList.first { it.id == activeEventId }
+        val eventDruggedIndex = _dashboardUiState.value.eventList.indexOfFirst { it.id == activeEventId }
+        val eventDuration = Duration.between(eventDrugged.start, eventDrugged.end).toMinutes()
+        val eventHeightPx = eventDuration * oneMinutePx
+
+
+        val pointerTime=distanceYFromTopOfSideBar/oneMinutePx
+
+        val newEventStartMinute=pointerTime-(eventDuration/2)
+
+        val currentTime: Calendar = Calendar.getInstance()
+        val destinationTime =currentTime.clone() as Calendar // کپی از currentTime
+        destinationTime.add(Calendar.DAY_OF_MONTH, visibleColumnDayOffset)
+
+
+
+        val minimumTimeStartCanReach: LocalDateTime = LocalDateTime.of(
+            currentTime.get(Calendar.YEAR),
+            currentTime.get(Calendar.MONTH),
+            currentTime.get(Calendar.DAY_OF_MONTH),
+            0,
+            0
+        )
+
+        var newEventStart=createTimeForSampleEvents(destinationTime, 0, 0, 0).plusMinutes(
+            newEventStartMinute.toLong()
+        )
+        val newEventEnd=newEventStart.plusMinutes(eventDuration)
+
+        if (newEventStart != null) {
+            newEventStart =
+                when {
+                    newEventStart.isAfter(minimumTimeStartCanReach) ->
+                        newEventStart
+
+                    !newEventStart.isAfter(minimumTimeStartCanReach) ->
+                        newEventStart.withHour(0).withMinute(0)
+                            .withDayOfMonth(eventDrugged.start.dayOfMonth)
+
+                    else -> return
+                }
+        }
+
+
+
+
+
+        if (!endDrug) {
+            if (offsetX < offsetXMargin) {
+                val changedEvent =
+                    eventDrugged.copy(
+                        start = newEventStart,
+                        end = newEventEnd,
+                        inSchedule = true,
+                        inPallet = true
+                    )
+
+                val updatedList = _dashboardUiState.value.eventList.toMutableList().apply {
+
+                    set(eventDruggedIndex, changedEvent)
+
+                }
+                _dashboardUiState.update { dashboardUiState ->
+                    dashboardUiState.copy(
+                        eventList = updatedList
+                    )
+                }
+            }else{
+                val changedEvent =
+                    eventDrugged.copy(
+                        start = newEventStart,
+                        end = newEventEnd,
+                        inSchedule = false,
+                        inPallet = true
+                    )
+
+                val updatedList = _dashboardUiState.value.eventList.toMutableList().apply {
+
+                    set(eventDruggedIndex, changedEvent)
+
+                }
+                _dashboardUiState.update { dashboardUiState ->
+                    dashboardUiState.copy(
+                        eventList = updatedList
+                    )
+                }
+            }
+        }
+        if (endDrug){
+            if (offsetX < offsetXMargin) {
+                val changedEvent =
+                    eventDrugged.copy(
+                        inPallet = false
+                    )
+
+                val updatedList = _dashboardUiState.value.eventList.toMutableList().apply {
+
+                    set(eventDruggedIndex, changedEvent)
+
+                }
+                _dashboardUiState.update { dashboardUiState ->
+                    dashboardUiState.copy(
+                        eventList = updatedList
+                    )
+                }
+                viewModelScope.launch {
+                    eventRepository.updateEvent(changedEvent)
+
+                }
+
+            }else{
+                val changedEvent =
+                    eventDrugged.copy(
+                        inPallet = true
+                    )
+
+                val updatedList = _dashboardUiState.value.eventList.toMutableList().apply {
+
+                    set(eventDruggedIndex, changedEvent)
+
+                }
+                _dashboardUiState.update { dashboardUiState ->
+                    dashboardUiState.copy(
+                        eventList = updatedList
+                    )
+                }
+            }
+        }
+
+
+
+
     }
 
 

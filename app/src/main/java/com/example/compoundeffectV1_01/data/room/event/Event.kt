@@ -15,6 +15,8 @@ data class Event(
     val start: LocalDateTime,
     val end: LocalDateTime,
     val description: String,
+    val inPallet:Boolean=false,
+    val inSchedule:Boolean=false,
     val selected:Boolean,
     val changed:Boolean=false,
 )
