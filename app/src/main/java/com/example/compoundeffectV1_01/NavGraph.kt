@@ -5,7 +5,7 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.example.compoundeffectV1_01.ui.dashboardScreen.DashboardScreen
+import com.example.compoundeffectV1_01.ui.scheduleScreen.ScheduleScreen
 
 @Composable
 fun NavGraph(
@@ -17,7 +17,7 @@ fun NavGraph(
         startDestination = DashboardRoute
     ) {
         composable(DashboardRoute){
-            DashboardScreen()
+            ScheduleScreen()
         }
     }
 }

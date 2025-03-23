@@ -1,21 +1,28 @@
 package com.example.compoundeffectV1_01.utils
 
 import android.annotation.SuppressLint
+import android.graphics.drawable.Icon
 import android.util.Log
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Route
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
-import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ParentDataModifier
 import androidx.compose.ui.unit.Density
+import com.example.compoundeffectV1_01.data.room.category.Category
 import com.example.compoundeffectV1_01.data.room.event.Event
+import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -23,10 +30,11 @@ import java.time.temporal.ChronoUnit
 import java.util.Calendar
 import kotlin.math.roundToInt
 
+
 @Composable
-fun LoadingScreen() {
+fun LoadingScreen(modifier:Modifier = Modifier) {
     Box(
-        modifier = Modifier.fillMaxSize(),
+        modifier = modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
         Text(text = "LoadingScreen")
@@ -34,6 +42,7 @@ fun LoadingScreen() {
 }
 
 
+// region کار با localDataTime
 @SuppressLint("DefaultLocale")
 fun timeInstanceToLocalDate(timeInstance: Calendar): LocalDateTime {
     val formattedDateTime = String.format(
@@ -55,8 +64,8 @@ fun createTimeForSampleEvents(
     minute: Int,
     second: Int
 ): LocalDateTime {
-    timeInstance.set(Calendar.HOUR_OF_DAY,hour)
-    timeInstance.set(Calendar.HOUR_OF_DAY,hour)
+    timeInstance.set(Calendar.HOUR_OF_DAY, hour)
+    timeInstance.set(Calendar.HOUR_OF_DAY, hour)
     return LocalDateTime.of(
         timeInstance.get(Calendar.YEAR),
         timeInstance.get(Calendar.MONTH) + 1, // چون ماه‌ها از 0 شروع می‌شوند
@@ -69,6 +78,13 @@ fun createTimeForSampleEvents(
 
 }
 
+val EventTimeFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("H:mm")
+val DayFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("E MM dd")
+val HourFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("H:00")
+
+// endregion
+
+// region تبدیل میلادی به شمسی
 
 fun convertToPersianDate(localDate: LocalDate): String {
     val year = localDate.year
@@ -138,18 +154,12 @@ fun getPersianMonthDays(year: Int, month: Int): Int {
 fun isPersianLeapYear(year: Int): Boolean {
     return (year % 33 % 4 == 1)
 }
+// endregion
 
-
-val EventTimeFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("H:mm")
-val DayFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("E MM dd")
-val HourFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("H:00")
-
-
-//extended functions
+// region extended functions
 fun Color.colorToString(): String {
     return "${red},${green},${blue},${alpha}"
 }
-
 fun String.stringToColor(): Color {
     val components = this.split(",").map { it.toFloat() }
 //    require(components.size == 4) { "String representation of color should have four components: red, green, blue, alpha" }
@@ -158,7 +168,14 @@ fun String.stringToColor(): Color {
 }
 
 
-// for Attaching Data to Composables
+
+
+
+
+
+// endregion
+
+// region اتصال رویدادها به صفحه schedul
 class EventDataModifier(
     val event: Event,
 ) : ParentDataModifier {
@@ -168,6 +185,7 @@ class EventDataModifier(
 }
 
 fun Modifier.eventData(event: Event) = this.then(EventDataModifier(event))
+// endregion
 
 
 fun currentTimeHeightPx(timeInstance: Calendar, hourHeight: Float): Int {
@@ -178,17 +196,189 @@ fun currentTimeHeightPx(timeInstance: Calendar, hourHeight: Float): Int {
 }
 
 
-// تابع محاسبه hourHeight بر اساس zoom
-fun calculateHourHeight(zoom: Float): Float {
-    val baseHeight = 86f // کمترین مقدار hourHeight
+fun calculateHourHeight(baseHeight: Float ,zoom: Float): Float {
+    // تابع محاسبه hourHeight بر اساس zoom
     val step = 20f // مقدار افزایش به ازای هر مرحله
     return (baseHeight + (zoom - 1f) * step).roundToInt().toFloat() // محاسبه hourHeight
+}
 
+fun calculateDayWidth(zoom: Float): Int {
+    val baseDayWidth = 500f // کمترین مقدار dayWidth
+    val step = 20f // مقدار افزایش به ازای هر مرحله
+    return (baseDayWidth + (zoom - 1f) * step).roundToInt()
 }
 
 @Composable
 fun eventHeightPx(event: Event, hourHeight: Float): Int {
     val eventDurationMinutes = ChronoUnit.MINUTES.between(event.start, event.end)
     return ((eventDurationMinutes / 60f) * hourHeight).roundToInt()
+}
+
+
+fun preparationEventListForSchedule(eventList: List<Event>): List<Event> {
+    val preparedEventList: MutableList<Event> = eventList.filter { it.inSchedule }.toMutableList()
+    preparedEventList.forEachIndexed { index, event ->
+        val otherEvents = preparedEventList.filter { it.id != event.id }
+        var otherEventDurationOverlap = 0
+
+        val overlapCount: Int = otherEvents.count { otherEvent ->
+            otherEvent.start.isBefore(event.start) &&
+                    otherEvent.start.isBefore(event.end) &&
+                    otherEvent.end.isAfter(event.start) &&
+                    otherEvent.end.isBefore(event.end)
+        }
+        val overlapCount2: Int = otherEvents.count { otherEvent ->
+            otherEvent.start.isBefore(event.start) &&
+                    otherEvent.start.isBefore(event.end) &&
+                    otherEvent.end.isAfter(event.start) &&
+                    otherEvent.end.isAfter(event.end)
+        }
+        val overlapCount3: Int = otherEvents.count { otherEvent ->
+        otherEvent.start.isEqual(event.start) &&
+                otherEvent.start.isBefore(event.end) &&
+                otherEvent.end.isAfter(event.start) &&
+                otherEvent.end.isAfter(event.end)
+    }
+        val overlapCount4: Int = otherEvents.count { otherEvent ->
+            otherEvent.start.isBefore(event.start) &&
+                    otherEvent.start.isBefore(event.end) &&
+                    otherEvent.end.isAfter(event.start) &&
+                    otherEvent.end.isEqual(event.end)
+        }
+        if (
+            !otherEvents.any { otherEvent ->
+                otherEventDurationOverlap = otherEvent.durationOverlap
+
+
+                otherEvent.start.isBefore(event.start) &&
+                        otherEvent.start.isBefore(event.end) &&
+                        otherEvent.end.isAfter(event.start) &&
+                        otherEvent.end.isAfter(event.end)
+            }||
+            !otherEvents.any { otherEvent ->
+                otherEventDurationOverlap = otherEvent.durationOverlap
+
+                        otherEvent.start.isBefore(event.start) &&
+                        otherEvent.start.isBefore(event.end) &&
+                        otherEvent.end.isAfter(event.start) &&
+                        otherEvent.end.isBefore(event.end)
+            } ||
+            !otherEvents.any { otherEvent ->
+                otherEventDurationOverlap = otherEvent.durationOverlap
+
+                otherEvent.start.isEqual(event.start) &&
+                        otherEvent.start.isBefore(event.end) &&
+                        otherEvent.end.isAfter(event.start) &&
+                        otherEvent.end.isAfter(event.end)
+            }||
+            !otherEvents.any { otherEvent ->
+                otherEventDurationOverlap = otherEvent.durationOverlap
+
+                otherEvent.start.isBefore(event.start) &&
+                        otherEvent.start.isBefore(event.end) &&
+                        otherEvent.end.isAfter(event.start) &&
+                        otherEvent.end.isEqual(event.end)
+            }
+
+        ) {
+
+            preparedEventList[index] = event.copy(durationOverlap = 0)
+
+        }
+        if (otherEvents.any { otherEvent ->
+                otherEventDurationOverlap = otherEvent.durationOverlap
+
+                otherEvent.start.isBefore(event.start) &&
+                        otherEvent.start.isBefore(event.end) &&
+                        otherEvent.end.isAfter(event.start) &&
+                        otherEvent.end.isAfter(event.end)
+            }){
+            preparedEventList[index] = event.copy(
+                durationOverlap = otherEventDurationOverlap +
+                    overlapCount+
+                    overlapCount2+
+                    overlapCount3+
+                    overlapCount4
+                )
+
+        }
+        if (otherEvents.any { otherEvent ->
+                otherEventDurationOverlap = otherEvent.durationOverlap
+
+                otherEvent.start.isBefore(event.start) &&
+                        otherEvent.start.isBefore(event.end) &&
+                        otherEvent.end.isAfter(event.start) &&
+                        otherEvent.end.isBefore(event.end)
+            } ){
+            preparedEventList[index] = event.copy(
+                durationOverlap = otherEventDurationOverlap +
+                        overlapCount+
+                        overlapCount2+
+                        overlapCount3+
+                        overlapCount4
+            )
+        }
+        if (otherEvents.any { otherEvent ->
+                otherEventDurationOverlap = otherEvent.durationOverlap
+
+                otherEvent.start.isEqual(event.start) &&
+                        otherEvent.start.isBefore(event.end) &&
+                        otherEvent.end.isAfter(event.start) &&
+                        otherEvent.end.isAfter(event.end)
+            }){
+            preparedEventList[index] = event.copy(
+                durationOverlap = otherEventDurationOverlap +
+                        overlapCount+
+                        overlapCount2+
+                        overlapCount3+
+                        overlapCount4
+            )
+        }
+        if (otherEvents.any { otherEvent ->
+                otherEventDurationOverlap = otherEvent.durationOverlap
+
+                otherEvent.start.isBefore(event.start) &&
+                        otherEvent.start.isBefore(event.end) &&
+                        otherEvent.end.isAfter(event.start) &&
+                        otherEvent.end.isEqual(event.end)
+            }){
+            preparedEventList[index] = event.copy(
+                durationOverlap = otherEventDurationOverlap +
+                        overlapCount+
+                        overlapCount2+
+                        overlapCount3+
+                        overlapCount4
+            )
+        }
+    }
+
+//    val sortedPreparedEventList: MutableList<Event> =
+//        preparedEventList.sortedByDescending { Duration.between(it.start, it.end) }.toMutableList()
+    return preparedEventList
+}
+
+fun sortCategoriesByTreeOrder(categoryList: List<Category>): List<Category> {
+    // دسته‌ها را بر اساس parentCategoryId گروه‌بندی می‌کنیم
+    val categoryMap = categoryList.groupBy { it.parentCategoryId }
+    // پیدا کردن ریشه‌های اصلی (دسته‌هایی که خودشان والد ندارند)
+    val rootCategories = categoryList.filter { it.parentCategoryId == -1 }
+
+
+    // تابع بازگشتی برای پیمایش درخت به روش Depth-First Search (DFS)
+    fun traverseTree(parentId: Int?): List<Category> {
+        val sortedList = mutableListOf<Category>()
+
+        // دریافت فرزندان این دسته
+        val children = categoryMap[parentId] ?: emptyList()
+
+        for (child in children) {
+            sortedList.add(child) // اضافه کردن دسته‌ی فعلی
+            sortedList.addAll(traverseTree(child.categoryId)) // پیمایش فرزندان این دسته
+        }
+        return sortedList
+    }
+
+    // پیمایش از تمام ریشه‌ها شروع می‌شود (نه فقط `null`)
+    return rootCategories.flatMap { traverseTree(it.categoryId) }
 }
 

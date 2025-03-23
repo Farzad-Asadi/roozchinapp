@@ -4,11 +4,14 @@ import android.content.Context
 import com.example.compoundeffectV1_01.data.room.AppDatabase
 import com.example.compoundeffectV1_01.data.room.appSystemInfo.AppSystemInfoRepository
 import com.example.compoundeffectV1_01.data.room.appSystemInfo.OfflineAppSystemInfoRepository
+import com.example.compoundeffectV1_01.data.room.category.CategoryRepository
+import com.example.compoundeffectV1_01.data.room.category.OfflineCategoryRepository
 import com.example.compoundeffectV1_01.data.room.event.EventRepository
 import com.example.compoundeffectV1_01.data.room.event.OfflineEventRepository
 
 interface AppContainer {
 
+    val categoryRepository: CategoryRepository
     val eventRepository: EventRepository
     val appSystemInfoRepository: AppSystemInfoRepository
 
@@ -16,6 +19,13 @@ interface AppContainer {
 
 
 class AppDataContainer(private val context: Context) : AppContainer {
+
+    override val categoryRepository: CategoryRepository by lazy {
+        OfflineCategoryRepository(
+            AppDatabase.getDatabase(context).categoryDao()
+
+        )
+    }
 
     override val eventRepository: EventRepository by lazy {
         OfflineEventRepository(
