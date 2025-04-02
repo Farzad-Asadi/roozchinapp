@@ -9,6 +9,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
@@ -22,7 +23,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentHeight
@@ -64,10 +64,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -80,19 +77,17 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.compoundeffectV1_01.AppViewModelProvider
 import com.example.compoundeffectV1_01.data.room.category.Category
 import com.example.compoundeffectV1_01.utils.LoadingScreen
 import com.example.compoundeffectV1_01.utils.colorsOfCategory
-import com.example.compoundeffectV1_01.utils.sortCategoriesByTreeOrder
 import com.example.compoundeffectV1_01.utils.stringToColor
 import com.example.compoundeffectV1_01.utils.topic_iconMap
-import kotlinx.coroutines.flow.combineTransform
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -142,15 +137,15 @@ fun CategoryScreen(
                     categoryList = categoryUiState.categoryList,
                     onClickBack = {
                         showAddCategory =
-                            false;onDismissRequest();viewModel.updateNewCategoryCategoryUiState(back = true)
+                            false;onDismissRequest();viewModel.onClickConfirmBackInNewCategory(back = true)
                     },
                     onClickConfirm = {
                         showAddCategory =
-                            false;onDismissRequest();viewModel.updateNewCategoryCategoryUiState(
+                            false;onDismissRequest();viewModel.onClickConfirmBackInNewCategory(
                         confirm = true
                     )
                     },
-                    onValueChangeName = { viewModel.updateNewCategoryCategoryUiState(name = it) },
+                    onValueChangeName = { viewModel.onClickConfirmBackInNewCategory(name = it) },
                     onClickChoseParent = { showAddParentInAddCategory = true },
                     onClickChoseIcon = { showAddIconInAddCategory = true },
                     onClickChoseColor = { showAddColorInAddCategory = true },
@@ -163,10 +158,12 @@ fun CategoryScreen(
                     onDismissRequest = { showAddParentInAddCategory = false },
                     content = {
                         AddParentInAddCategory(
-                            categoryList = categoryUiState.categoryList,
+                            sortedCategoryWhitGeneration = categoryUiState.sortedCategoryWhitGeneration,
+                            onClickCategoryExpand={categoryId: Int,isExtended :Boolean->
+                                viewModel.onClickExpandInCategoryListInCategoryScreen(categoryId,isExtended) },
                             onClickParentInAddParent = {
                                 showAddParentInAddCategory =
-                                    false; viewModel.updateNewCategoryCategoryUiState(parentId = it)
+                                    false; viewModel.onClickConfirmBackInNewCategory(parentId = it)
                             }
                         )
                     }
@@ -179,7 +176,7 @@ fun CategoryScreen(
                         AddIconInAddCategory(
                             onClickOnIcon = {
                                 showAddIconInAddCategory = false
-                                viewModel.updateNewCategoryCategoryUiState(icon = it)
+                                viewModel.onClickConfirmBackInNewCategory(icon = it)
                             }
                         )
                     }
@@ -192,7 +189,7 @@ fun CategoryScreen(
                         AddColorInAddCategory(
                             onClickColor = {
                                 showAddColorInAddCategory =
-                                    false; viewModel.updateNewCategoryCategoryUiState(color = it)
+                                    false; viewModel.onClickConfirmBackInNewCategory(color = it)
                             }
                         )
                     }
@@ -216,10 +213,14 @@ fun CategoryScreen(
             ) {
                 CategoryContent(
                     categoryList = categoryUiState.categoryList,
+                    sortedCategoryWhitGeneration = categoryUiState.sortedCategoryWhitGeneration,
                     resetKey = categoryUiState.resetKey,
                     categoryOffsetMap = categoryUiState.categoryOffset,
-                    onDragCategoryInList = {category: Category,offsetX :Float,offsetY :Float,endOfChangBranch:Boolean , endDrag:Boolean->
-                        viewModel.drugCategoryInCategoryContent(category,offsetX,offsetY,endOfChangBranch, endDrag) }
+                    onClickCategoryExpand = {categoryId: Int,isExtended :Boolean->
+                        viewModel.onClickExpandInCategoryListInCategoryScreen(categoryId,isExtended) },
+                    onDragCategoryInList = { category: Category, offsetX: Float, offsetY: Float, endDrag: Boolean ->
+                        viewModel.drugCategoryInCategoryContent(category, offsetX, offsetY, endDrag)
+                    }
                 )
             }
 
@@ -233,26 +234,19 @@ fun CategoryScreen(
 @Composable
 fun CategoryContent(
     categoryList: List<Category>,
+    sortedCategoryWhitGeneration: Map<Category, Int>,
     categoryOffsetMap: Map<Int?, Pair<Float, Float>>,
     modifier: Modifier = Modifier,
-    onDragCategoryInList: (category: Category, offsetX: Float, offsetY: Float,endOfChangBranch:Boolean, endDrag: Boolean) -> Unit,
-    resetKey:Boolean=false,
+    onClickCategoryExpand: (categoryId: Int,isExtended :Boolean) -> Unit,
+    onDragCategoryInList: (category: Category, offsetX: Float, offsetY: Float, endDrag: Boolean) -> Unit,
+    resetKey: Boolean = false,
 ) {
 
-    val sortedCategory= sortCategoriesByTreeOrder(categoryList)
+    val offsetValue = 0.06f
 
+    val itemToShowInList=sortedCategoryWhitGeneration.filterKeys { it.visible }
 
-
-
-
-
-
-    // گروه‌بندی دسته‌ها بر اساس parentCategoryId
-    val categoryMap = remember(categoryList) {
-        categoryList.groupBy { it.parentCategoryId }
-    }
-    // وضعیت باز و بسته بودن دسته‌ها
-    val expandedState = remember { mutableStateMapOf<Int?, Boolean>() }
+    Log.i("TEST", "--------------  ")
 
     Box(
         modifier = modifier
@@ -264,78 +258,170 @@ fun CategoryContent(
             .padding(8.dp)
     ) {
         LazyColumn(modifier = Modifier.fillMaxSize()) {
-            items(categoryMap[1] ?: emptyList()) { topCategory ->
-                CategoryItem(
-                    category = topCategory,
-                    categoryMap = categoryMap,
-                    categoryOffsetMap = categoryOffsetMap,
-                    expandedState = expandedState,
-                    level = 1,
-                    resetKey = resetKey,
-                    onDragCategoryInList = onDragCategoryInList
-                )
+            items(itemToShowInList.entries.toList(), key = { it.key.categoryId!! }) { (category, generation) ->
+
+
+
+
+
+                var offsetX :Float = categoryOffsetMap[category.categoryId]?.first ?:0f
+                var offsetY :Float = categoryOffsetMap[category.categoryId]?.second ?:0f
+
+                var categoryMenuExpand by rememberSaveable { mutableStateOf(false) }
+
+                modifier
+                    .fillMaxSize()
+                Column(
+                    modifier = Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null)
+
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .pointerInput(resetKey) {
+                                detectDragGesturesAfterLongPress(
+                                    onDragStart = {
+                                    },
+                                    onDrag = { change, dragAmount ->
+
+                                        change.consume()
+                                        offsetX += dragAmount.x
+                                        offsetY += dragAmount.y
+                                        onDragCategoryInList(category, offsetX, offsetY, false)
+
+                                    },
+                                    onDragCancel = {
+                                        onDragCategoryInList(category, offsetX, offsetY, true)
+
+                                    },
+                                    onDragEnd = {
+                                        onDragCategoryInList(category, offsetX, offsetY, true)
+
+                                    }
+                                )
+                            },
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Spacer(
+                            modifier = Modifier
+                                .height(30.dp)
+                                .then(
+                                    if (generation > 2) Modifier.weight(offsetValue * (generation - 2))
+                                    else Modifier
+                                )
+                                .wrapContentWidth(Alignment.End)
+
+
+                        )
+                        Icon(
+                            imageVector = category.icon,
+                            tint = category.color.stringToColor(),
+                            contentDescription = "icon",
+                            modifier = Modifier
+                                .size(55.dp)
+                                .weight(0.2f)
+                        )
+                        Text(
+                            text = category.name,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .weight(0.5f - (offsetValue * (generation - 1)))
+                                .wrapContentHeight(Alignment.CenterVertically),
+                        )
+                        if (category.expandable){
+                            IconButton(
+                                modifier = Modifier
+                                    .weight(0.2f)
+                                    .zIndex(1f),
+
+                                onClick = {
+                                    category.categoryId?.let { onClickCategoryExpand(it, category.isExtended) }
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = if (!category.isExtended) {
+                                        Icons.Filled.ExpandMore
+                                    } else {
+                                        Icons.Filled.ExpandLess
+                                    },
+                                    contentDescription = "Expand",
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(2.dp)
+                                )
+                            }
+                        }else{
+                            Spacer(
+                                modifier = Modifier.weight(0.2f),
+                            )
+                        }
+
+
+
+                        VerticalDivider(
+                            thickness = 1.dp,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.height(30.dp)
+                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .wrapContentSize(Alignment.TopStart)
+                                .weight(0.1f)
+                        ) {
+                            IconButton(
+                                onClick = { categoryMenuExpand = true }
+                            ) {
+                                Icon(
+                                    Icons.Default.MoreVert,
+                                    contentDescription = "Localized description"
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = categoryMenuExpand,
+                                onDismissRequest = { categoryMenuExpand = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Edit") },
+                                    onClick = { /* Handle edit! */ },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Outlined.Edit,
+                                            contentDescription = null
+                                        )
+                                    })
+                                DropdownMenuItem(
+                                    text = { Text("Settings") },
+                                    onClick = { /* Handle settings! */ },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Outlined.Settings,
+                                            contentDescription = null
+                                        )
+                                    })
+                                HorizontalDivider()
+                            }
+                        }
+
+
+                    }
+                    HorizontalDivider(
+                        thickness = 1.dp,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 4.dp, end = 12.dp)
+                    )
+
+                }
+
+
             }
         }
     }
 }
-
-@Composable
-fun CategoryItem(
-    category: Category,
-    categoryMap: Map<Int?, List<Category>>,
-    categoryOffsetMap: Map<Int?, Pair<Float, Float>>,
-    expandedState: MutableMap<Int?, Boolean>,
-    level: Int,
-    resetKey:Boolean=false,
-    onDragCategoryInList: (category: Category, offsetX: Float, offsetY: Float,endOfChangBranch:Boolean, endDrag: Boolean) -> Unit
-) {
-    val subCategories = categoryMap[category.categoryId] ?: emptyList()
-    val categoryOffsetPair = categoryOffsetMap[category.categoryId] ?: Pair(0f, 0f)
-
-    var isExpanded by remember { mutableStateOf(expandedState[category.categoryId] ?: true) }
-
-    Box(modifier = Modifier.fillMaxWidth()) {
-        LazyGirdItemsForCategoryContent(
-            category = category,
-            subCategoryCanExpand = subCategories.isNotEmpty(),
-            categoryExpand = isExpanded,
-            onClickCategoryExpand = {
-                isExpanded = !isExpanded
-                expandedState[category.categoryId] = isExpanded
-            },
-            resetKey = resetKey,
-            categoryOffsetPair = categoryOffsetPair,
-            categoryTreePosition = level,
-            onDragCategoryInList = onDragCategoryInList
-        )
-    }
-
-    if (isExpanded && subCategories.isNotEmpty()) {
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .heightIn(min = 50.dp, max = 1000.dp)
-        ) {
-            items(subCategories) { subCategory ->
-                CategoryItem(
-                    category = subCategory,
-                    categoryMap = categoryMap,
-                    categoryOffsetMap = categoryOffsetMap,
-                    expandedState = expandedState,
-                    level = level + 1,
-                    onDragCategoryInList = onDragCategoryInList
-                )
-            }
-        }
-    }
-}
-
-
-
-
-
-
-
 
 
 @Composable
@@ -652,26 +738,14 @@ fun AddCategory(
 
 @Composable
 fun AddParentInAddCategory(
-    categoryList: List<Category>,
+    sortedCategoryWhitGeneration: Map<Category, Int>,
+    onClickCategoryExpand: (categoryId: Int,isExtended :Boolean) -> Unit,
     onClickParentInAddParent: (categoryId: Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
 
-    val topCategoryList = categoryList.filter { it.parentCategoryId == 1 }
-    val topCategoryIdList: List<Int> = topCategoryList.mapNotNull { it.categoryId }
-
-    val sub1CategoryList = categoryList.filter { it.parentCategoryId in topCategoryIdList }
-    val sub1CategoryIdList: List<Int> = sub1CategoryList.mapNotNull { it.categoryId }
-
-    val sub2CategoryList = categoryList.filter { it.parentCategoryId in sub1CategoryIdList }
-    val sub2CategoryIdList: List<Int> = sub2CategoryList.mapNotNull { it.categoryId }
-
-    val sub3CategoryList = categoryList.filter { it.parentCategoryId in sub2CategoryIdList }
-    val sub3CategoryIdList: List<Int> = sub3CategoryList.mapNotNull { it.categoryId }
-
-    val sub4CategoryList = categoryList.filter { it.parentCategoryId in sub3CategoryIdList }
-    val sub4CategoryIdList: List<Int> = sub4CategoryList.mapNotNull { it.categoryId }
-
+    val offsetValue = 0.06f
+    val itemToShowInList=sortedCategoryWhitGeneration.filterKeys { it.visible }
 
     Column(
         modifier = modifier
@@ -692,150 +766,99 @@ fun AddParentInAddCategory(
                 .padding(8.dp),
         ) {
 
-            LazyColumn(                                     //topCategory
-                modifier = Modifier
-                    .fillMaxSize()
+
+                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    items(itemToShowInList.entries.toList()) { (category, generation) ->
+
+                        Log.i("TEST", "me.isExtended=${category.isExtended}")
 
 
-            ) {
-                items(topCategoryList) { topCategory ->
+                        var categoryMenuExpand by rememberSaveable { mutableStateOf(false) }
 
-                    var topCategoryExpand by rememberSaveable { mutableStateOf(false) }
-
-                    LazyGirdItemsForCategoryContent(
-                        category = topCategory,
-                        subCategoryCanExpand = sub1CategoryList.find { it.parentCategoryId == topCategory.categoryId } != null,
-                        categoryExpand = topCategoryExpand,
-                        onClickCategoryExpand = { topCategoryExpand = !topCategoryExpand },
-                        onClickParentInAddParent = { onClickParentInAddParent(it) }
-                    )
-
-                    if (sub1CategoryList.find { it.parentCategoryId == topCategory.categoryId } != null && topCategoryExpand) {
-
-                        LazyColumn(                                 //sub1Category
-                            modifier = Modifier
+                        Column(
+                            modifier = modifier
                                 .fillMaxSize()
-                                .heightIn(min = 50.dp, max = 1000.dp)
+
                         ) {
-                            items(sub1CategoryList.filter { it.parentCategoryId == topCategory.categoryId }) { sub1Category ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth(),
 
-                                var sub1CategoryExpand by rememberSaveable { mutableStateOf(false) }
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Spacer(
+                                    modifier = Modifier
+                                        .height(30.dp)
+                                        .then(
+                                            if (generation > 2) Modifier.weight(offsetValue * (generation - 2))
+                                            else Modifier
+                                        )
+                                        .wrapContentWidth(Alignment.End)
 
-                                LazyGirdItemsForCategoryContent(
-                                    category = sub1Category,
-                                    subCategoryCanExpand = sub2CategoryList.find { it.parentCategoryId == sub1Category.categoryId } != null,
-                                    categoryExpand = sub1CategoryExpand,
-                                    onClickCategoryExpand = {
-                                        sub1CategoryExpand = !sub1CategoryExpand
-                                    },
-                                    categoryTreePosition = 2,
-                                    onClickParentInAddParent = { onClickParentInAddParent(it) }
+
                                 )
-
-                                if (sub2CategoryList.find { it.parentCategoryId == sub1Category.categoryId } != null && sub1CategoryExpand) {
-
-                                    LazyColumn(                                 //sub2Category
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .heightIn(min = 50.dp, max = 1000.dp)
-                                    ) {
-                                        items(sub2CategoryList.filter { it.parentCategoryId == sub1Category.categoryId }) { sub2Category ->
-
-                                            var sub2CategoryExpand by rememberSaveable {
-                                                mutableStateOf(
-                                                    false
-                                                )
-                                            }
-                                            LazyGirdItemsForCategoryContent(
-                                                category = sub2Category,
-                                                subCategoryCanExpand = sub3CategoryList.find { it.parentCategoryId == sub2Category.categoryId } != null,
-                                                categoryExpand = sub2CategoryExpand,
-                                                onClickCategoryExpand = {
-                                                    sub2CategoryExpand = !sub2CategoryExpand
-                                                },
-                                                categoryTreePosition = 3,
-                                                onClickParentInAddParent = { onClickParentInAddParent(it) }
-                                            )
-
-                                            if (sub3CategoryList.find { it.parentCategoryId == sub2Category.categoryId } != null && sub2CategoryExpand) {
-
-                                                LazyColumn(                                 //sub3Category
-                                                    modifier = Modifier
-                                                        .fillMaxSize()
-                                                        .heightIn(
-                                                            min = 50.dp,
-                                                            max = 1000.dp
-                                                        )
-                                                ) {
-                                                    items(sub3CategoryList.filter { it.parentCategoryId == sub2Category.categoryId }) { sub3Category ->
-
-                                                        var sub3CategoryExpand by rememberSaveable {
-                                                            mutableStateOf(
-                                                                false
-                                                            )
-                                                        }
-                                                        LazyGirdItemsForCategoryContent(
-                                                            category = sub3Category,
-                                                            subCategoryCanExpand = sub4CategoryList.find { it.parentCategoryId == sub3Category.categoryId } != null,
-                                                            categoryExpand = sub3CategoryExpand,
-                                                            onClickCategoryExpand = {
-                                                                sub3CategoryExpand = !sub3CategoryExpand
-                                                            },
-                                                            categoryTreePosition = 4,
-                                                            onClickParentInAddParent = { onClickParentInAddParent(it) }
-                                                        )
-                                                        if (sub4CategoryList.find { it.parentCategoryId == sub3Category.categoryId } != null && sub3CategoryExpand) {
-
-                                                            LazyColumn(                                 //sub4Category
-                                                                modifier = Modifier
-                                                                    .fillMaxSize()
-                                                                    .heightIn(
-                                                                        min = 50.dp,
-                                                                        max = 1000.dp
-                                                                    )
-                                                            ) {
-                                                                items(sub4CategoryList.filter { it.parentCategoryId == sub3Category.categoryId }) { sub4Category ->
-
-                                                                    var sub4CategoryExpand by rememberSaveable {
-                                                                        mutableStateOf(
-                                                                            false
-                                                                        )
-                                                                    }
-                                                                    LazyGirdItemsForCategoryContent(
-                                                                        category = sub4Category,
-                                                                        subCategoryCanExpand = false,
-                                                                        categoryExpand = sub4CategoryExpand,
-                                                                        onClickCategoryExpand = {
-                                                                            sub4CategoryExpand =
-                                                                                !sub4CategoryExpand
-                                                                        },
-                                                                        categoryTreePosition = 5,
-                                                                        onClickParentInAddParent = { onClickParentInAddParent(it) }
-                                                                    )
-
-                                                                }
-
-                                                            }
-                                                        }
-
-
-                                                    }
-                                                }
-
-                                            }
+                                Icon(
+                                    imageVector = category.icon,
+                                    tint = category.color.stringToColor(),
+                                    contentDescription = "icon",
+                                    modifier = Modifier
+                                        .size(55.dp)
+                                        .weight(0.2f)
+                                )
+                                Text(
+                                    text = category.name,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier
+                                        .weight(0.5f - (offsetValue * (generation - 1)))
+                                        .wrapContentHeight(Alignment.CenterVertically),
+                                )
+                                if (category.expandable){
+                                    IconButton(
+                                        modifier = Modifier.weight(0.2f),
+                                        onClick = {
+                                            category.categoryId?.let { onClickCategoryExpand(it, category.isExtended) }
                                         }
-
-
+                                    ) {
+                                        Icon(
+                                            imageVector = if (!category.isExtended) {
+                                                Icons.Filled.ExpandMore
+                                            } else {
+                                                Icons.Filled.ExpandLess
+                                            },
+                                            contentDescription = "Expand",
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .padding(2.dp)
+                                        )
                                     }
+                                }else{
+                                    Spacer(
+                                        modifier = Modifier.weight(0.2f),
+                                    )
                                 }
 
+
+
+
                             }
+                            HorizontalDivider(
+                                thickness = 1.dp,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 4.dp, end = 12.dp)
+                            )
+
                         }
+
 
                     }
                 }
 
-            }
+
+
         }
     }
 }
@@ -847,10 +870,10 @@ fun LazyGirdItemsForCategoryContent(
     categoryExpand: Boolean,
     onClickCategoryExpand: () -> Unit,
     modifier: Modifier = Modifier,
-    resetKey:Boolean=false,
-    categoryOffsetPair:Pair<Float, Float>? =null,
+    resetKey: Boolean = false,
+    categoryOffsetPair: Pair<Float, Float>? = null,
     categoryTreePosition: Int = 1,
-    onDragCategoryInList:((category: Category, offsetX :Float, offsetY :Float ,endOfChangBranch:Boolean, endDrag:Boolean)->Unit)?= null,
+    onDragCategoryInList: ((category: Category, offsetX: Float, offsetY: Float, endOfChangBranch: Boolean, endDrag: Boolean) -> Unit)? = null,
     onClickParentInAddParent: ((categoryId: Int) -> Unit)? = null,
 
     ) {
@@ -863,14 +886,14 @@ fun LazyGirdItemsForCategoryContent(
     val weightOffset = when (categoryTreePosition) {
         1 -> 0f
         2 -> offsetValue
-        3 -> offsetValue*2
-        4 -> offsetValue*3
-        5 -> offsetValue*4
+        3 -> offsetValue * 2
+        4 -> offsetValue * 3
+        5 -> offsetValue * 4
         else -> 0f
     }
 
-    var offsetX =categoryOffsetPair?.first
-    var offsetY =categoryOffsetPair?.second
+    var offsetX = categoryOffsetPair?.first
+    var offsetY = categoryOffsetPair?.second
 
 //    Log.i("TEST", "resetKey=${resetKey}")
 
@@ -885,22 +908,40 @@ fun LazyGirdItemsForCategoryContent(
                     if (offsetX != null && offsetY != null) {
                         detectDragGesturesAfterLongPress(
                             onDragStart = {},
-                            onDrag = {change, dragAmount ->
+                            onDrag = { change, dragAmount ->
 
                                 change.consume()
                                 offsetX += dragAmount.x
                                 offsetY += dragAmount.y
 
-                                onDragCategoryInList(category, offsetX, offsetY,subCategoryCanExpand ?: true,false)
+                                onDragCategoryInList(
+                                    category,
+                                    offsetX,
+                                    offsetY,
+                                    subCategoryCanExpand ?: true,
+                                    false
+                                )
 
                             },
                             onDragCancel = {
 
-                                onDragCategoryInList(category, offsetX, offsetY,subCategoryCanExpand ?: true,true)
+                                onDragCategoryInList(
+                                    category,
+                                    offsetX,
+                                    offsetY,
+                                    subCategoryCanExpand ?: true,
+                                    true
+                                )
 
                             },
                             onDragEnd = {
-                                onDragCategoryInList(category, offsetX, offsetY,subCategoryCanExpand ?: true,true)
+                                onDragCategoryInList(
+                                    category,
+                                    offsetX,
+                                    offsetY,
+                                    subCategoryCanExpand ?: true,
+                                    true
+                                )
 
                             }
                         )
@@ -918,12 +959,11 @@ fun LazyGirdItemsForCategoryContent(
                     if (onClickParentInAddParent != null) {
                         category.categoryId?.let { onClickParentInAddParent(it) }
                     }
-                }
-                 ,
+                },
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            if (categoryTreePosition>=2){
+            if (categoryTreePosition >= 2) {
                 VerticalDivider(
                     thickness = 1.dp,
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -933,7 +973,7 @@ fun LazyGirdItemsForCategoryContent(
                         .wrapContentWidth(Alignment.End)
                 )
             }
-            if (categoryTreePosition>=3){
+            if (categoryTreePosition >= 3) {
                 VerticalDivider(
                     thickness = 1.dp,
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -943,7 +983,7 @@ fun LazyGirdItemsForCategoryContent(
                         .wrapContentWidth(Alignment.End)
                 )
             }
-            if (categoryTreePosition>=4){
+            if (categoryTreePosition >= 4) {
                 VerticalDivider(
                     thickness = 1.dp,
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -953,7 +993,7 @@ fun LazyGirdItemsForCategoryContent(
                         .wrapContentWidth(Alignment.End)
                 )
             }
-            if (categoryTreePosition>=5){
+            if (categoryTreePosition >= 5) {
                 VerticalDivider(
                     thickness = 1.dp,
                     color = MaterialTheme.colorScheme.onPrimaryContainer,

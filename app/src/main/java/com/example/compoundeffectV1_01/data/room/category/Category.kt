@@ -17,6 +17,9 @@ data class Category(
     val icon: ImageVector ,
     val color: String ,
     val description: String,
+    val expandable:Boolean = false,
+    val isExtended: Boolean = true,
+    val visible: Boolean = true
 )
 
 data class CategoryWithChildren(

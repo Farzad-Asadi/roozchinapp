@@ -11,13 +11,10 @@ composeBom = "2025.03.00"
 androidx-room = "2.6.1"
 com-google-devtools-ksp="1.9.24-1.0.20"
 kotlin_coroutines_version = "1.7.0"
-persiandate = "1.6.1"
-persianDateTime = "1.4.0"
-persiandateVersion = "1.0.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
-ehsania-persiandate = { module = "com.github.ehsania:PersianDate", version.ref = "persiandateVersion" }
+
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
@@ -37,8 +34,7 @@ kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-cor
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "androidx-room" }
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "androidx-room" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "androidx-room" }
-persian-date-time = { module = "com.github.mfathi91:persian-date-time", version.ref = "persianDateTime" }
-persiandate = { module = "com.github.samanzamani:PersianDate", version.ref = "persiandate" }
+
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

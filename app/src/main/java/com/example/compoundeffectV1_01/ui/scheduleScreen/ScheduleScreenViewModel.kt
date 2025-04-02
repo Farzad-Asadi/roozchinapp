@@ -601,7 +601,7 @@ class ScheduleScreenViewModel(
 
         val minimumTimeStartCanReach: LocalDateTime = LocalDateTime.of(
             currentTime.get(Calendar.YEAR),
-            currentTime.get(Calendar.MONTH),
+            currentTime.get(Calendar.MONTH)+ 1,
             currentTime.get(Calendar.DAY_OF_MONTH),
             0,
             0

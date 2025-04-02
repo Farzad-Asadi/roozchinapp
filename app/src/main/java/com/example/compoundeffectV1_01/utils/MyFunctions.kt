@@ -1,35 +1,23 @@
 package com.example.compoundeffectV1_01.utils
 
 import android.annotation.SuppressLint
-import android.graphics.drawable.Icon
 import android.util.Log
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Route
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ParentDataModifier
 import androidx.compose.ui.unit.Density
-import com.example.compoundeffectV1_01.data.room.category.Category
 import com.example.compoundeffectV1_01.data.room.event.Event
-import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.Calendar
 import kotlin.math.roundToInt
-
 
 @Composable
 fun LoadingScreen(modifier:Modifier = Modifier) {
@@ -87,40 +75,29 @@ val HourFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("H:00")
 // region تبدیل میلادی به شمسی
 
 fun convertToPersianDate(localDate: LocalDate): String {
+
     val year = localDate.year
     val month = localDate.monthValue
     val day = localDate.dayOfMonth
 
-    // آرایه‌ای برای تعداد روزهای هر ماه در سال‌های غیرکبیسه و کبیسه
+    // آرایه تعداد روزهای هر ماه میلادی (سال کبیسه بررسی شده)
     val monthDays = arrayOf(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
+    if (isGregorianLeapYear(year)) monthDays[1] = 29
 
-    // محاسبه تعداد روزهای گذشته از ابتدای سال میلادی
+    // محاسبه تعداد روزهای سپری‌شده از ابتدای سال میلادی
     var dayOfYear = day
-    for (i in 0 until month - 1) {
+    for (i in 0 until (month - 1)) {
         dayOfYear += monthDays[i]
     }
 
-    // بررسی سال کبیسه میلادی
-    if (isGregorianLeapYear(year) && month > 2) {
-        dayOfYear += 1
-    }
+    // تبدیل سال میلادی به شمسی
+    val persianYear = if (dayOfYear <= 79) year - 622 else year - 621
 
-    // محاسبه سال شمسی
-    val persianYear = if (dayOfYear <= 79) {
-        year - 622
-    } else {
-        year - 621
-    }
-
-    // محاسبه روزهای گذشته از ابتدای سال شمسی
+    // محاسبه روزهای سپری‌شده از ابتدای سال شمسی
     val persianDayOfYear = if (dayOfYear > 79) {
         dayOfYear - 79
     } else {
-        if (isGregorianLeapYear(year - 1)) {
-            dayOfYear + 287
-        } else {
-            dayOfYear + 286
-        }
+        if (isGregorianLeapYear(year - 1)) dayOfYear + 287 else dayOfYear + 286
     }
 
     // محاسبه ماه و روز شمسی
@@ -134,25 +111,24 @@ fun convertToPersianDate(localDate: LocalDate): String {
     return "$persianYear/$persianMonth/$persianDay"
 }
 
-// تابع برای بررسی سال کبیسه میلادی
+// بررسی سال کبیسه میلادی
 fun isGregorianLeapYear(year: Int): Boolean {
     return (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)
 }
 
-// تابع برای تعداد روزهای هر ماه در سال شمسی
+// تعداد روزهای هر ماه شمسی
 fun getPersianMonthDays(year: Int, month: Int): Int {
-    return if (month <= 6) {
-        31
-    } else if (month <= 11) {
-        30
-    } else {
-        if (isPersianLeapYear(year)) 30 else 29
+    return when {
+        month <= 6 -> 31
+        month <= 11 -> 30
+        else -> if (isPersianLeapYear(year)) 30 else 29
     }
 }
 
-// تابع برای بررسی سال کبیسه شمسی
+// بررسی سال کبیسه شمسی
 fun isPersianLeapYear(year: Int): Boolean {
-    return (year % 33 % 4 == 1)
+
+    return (((year + 2346) * 683) % 2820) < 683
 }
 // endregion
 
@@ -357,28 +333,16 @@ fun preparationEventListForSchedule(eventList: List<Event>): List<Event> {
     return preparedEventList
 }
 
-fun sortCategoriesByTreeOrder(categoryList: List<Category>): List<Category> {
-    // دسته‌ها را بر اساس parentCategoryId گروه‌بندی می‌کنیم
-    val categoryMap = categoryList.groupBy { it.parentCategoryId }
-    // پیدا کردن ریشه‌های اصلی (دسته‌هایی که خودشان والد ندارند)
-    val rootCategories = categoryList.filter { it.parentCategoryId == -1 }
 
 
-    // تابع بازگشتی برای پیمایش درخت به روش Depth-First Search (DFS)
-    fun traverseTree(parentId: Int?): List<Category> {
-        val sortedList = mutableListOf<Category>()
 
-        // دریافت فرزندان این دسته
-        val children = categoryMap[parentId] ?: emptyList()
 
-        for (child in children) {
-            sortedList.add(child) // اضافه کردن دسته‌ی فعلی
-            sortedList.addAll(traverseTree(child.categoryId)) // پیمایش فرزندان این دسته
-        }
-        return sortedList
-    }
 
-    // پیمایش از تمام ریشه‌ها شروع می‌شود (نه فقط `null`)
-    return rootCategories.flatMap { traverseTree(it.categoryId) }
-}
+
+
+
+
+
+
+
 

@@ -3,9 +3,18 @@ package com.example.compoundeffectV1_01
 import android.app.Application
 import android.content.Context
 import android.content.SharedPreferences
+import android.util.Log
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.AccountTree
+import androidx.compose.material.icons.filled.AddAPhoto
+import androidx.compose.material.icons.filled.Agriculture
+import androidx.compose.material.icons.filled.Boy
+import androidx.compose.material.icons.filled.House
+import androidx.compose.material.icons.filled.Kitchen
 import androidx.compose.material.icons.filled.Route
+import androidx.compose.material.icons.filled.Shower
+import androidx.compose.material.icons.filled.Sports
 import androidx.compose.ui.graphics.Color
 import com.example.compoundeffectV1_01.data.AppContainer
 import com.example.compoundeffectV1_01.data.AppDataContainer
@@ -47,6 +56,7 @@ class CompoundEffectApplication : Application() {
         if (isFirstRun) {
 
             val currentTime: Calendar = Calendar.getInstance()
+            Log.i("TEST", "currentTime=$currentTime")
             val sampleEvents = arrayOf(
                 Event(
                     id = 1,
@@ -120,21 +130,62 @@ class CompoundEffectApplication : Application() {
                 ),
             )
 
-            val appSystemInfo=AppSystemInfo()
+            val appSystemInfo = AppSystemInfo()
 
 
-
-
-            val rootCategory = Category(
-                categoryId = null, // اجازه دهید Room شناسه را ایجاد کند
-                name = "ریشه اصلی",
-                parentCategoryId = -1,
-                icon = Icons.Filled.AccountTree,
-                color = Color(0xFF000000).colorToString(),
-                description = "Root category"
+            val sampleCategory = arrayOf(
+                Category(
+                    categoryId = null, // اجازه دهید Room شناسه را ایجاد کند
+                    name = "ریشه اصلی",
+                    parentCategoryId = -1,
+                    icon = Icons.Filled.AccountTree,
+                    color = Color(0xFF000000).colorToString(),
+                    description = "Root category"
+                ),
+                Category(
+                    categoryId = null,
+                    name = "home",
+                    parentCategoryId = 1,
+                    icon = Icons.Filled.House,
+                    color = Color(0xFF9C27B0).colorToString(),
+                    description = "Root category"
+                ),
+                Category(
+                    categoryId = null,
+                    name = "clean",
+                    parentCategoryId = 2,
+                    icon = Icons.Filled.Shower,
+                    color = Color(0xFFCDDC39).colorToString(),
+                    description = "Root category"
+                ),
+                Category(
+                    categoryId = null,
+                    name = "kitchen",
+                    parentCategoryId = 3,
+                    icon = Icons.Filled.Kitchen,
+                    color = Color(0xFFE91E63).colorToString(),
+                    description = "Root category"
+                ),
+                Category(
+                    categoryId = null,
+                    name = "me",
+                    parentCategoryId = 1,
+                    icon = Icons.Filled.AccountCircle,
+                    color = Color(0xFF2196F3).colorToString(),
+                    description = "Root category"
+                ),
+                Category(
+                    categoryId = null,
+                    name = "sport",
+                    parentCategoryId = 5,
+                    icon = Icons.Filled.Sports,
+                    color = Color(0xFF4CAF50).colorToString(),
+                    description = "Root category"
+                ),
             )
+
             GlobalScope.launch {
-                database.categoryDao().insertCategory(rootCategory)
+                database.categoryDao().insertCategory(*sampleCategory)
                 database.eventDao().insertEvent(*sampleEvents)
                 database.systemDao().insertAppSystemInfo(appSystemInfo)
             }
