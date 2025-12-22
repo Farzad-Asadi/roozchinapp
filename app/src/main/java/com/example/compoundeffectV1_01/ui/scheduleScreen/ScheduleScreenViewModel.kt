@@ -2,14 +2,11 @@ package com.example.compoundeffectV1_01.ui.scheduleScreen
 
 
 import android.util.Log
-import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.compoundeffectV1_01.data.room.appSystemInfo.AppSystemInfo
-import com.example.compoundeffectV1_01.data.room.appSystemInfo.AppSystemInfoRepository
-import com.example.compoundeffectV1_01.data.room.event.Event
-import com.example.compoundeffectV1_01.data.room.event.EventRepository
-import com.example.compoundeffectV1_01.utils.colorToString
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.appSystemInfo.AppSystemInfoRepository
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.event.Event
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.event.EventRepository
 import com.example.compoundeffectV1_01.utils.createTimeForSampleEvents
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow

@@ -1,4 +1,4 @@
-package com.example.compoundeffectV1_01.data.room.appSystemInfo
+package com.example.compoundeffectV1_01.data.dataBaseRoom.tables.appSystemInfo
 
 import androidx.room.Dao
 import androidx.room.Delete

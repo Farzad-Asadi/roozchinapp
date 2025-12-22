@@ -1,4 +1,4 @@
-package com.example.compoundeffectV1_01.data.room.category
+package com.example.compoundeffectV1_01.data.dataBaseRoom.tables.category
 
 import androidx.room.Dao
 import androidx.room.Delete
@@ -40,4 +40,13 @@ interface CategoryDao {
 
     @Query("SELECT * FROM category")
     fun observeAll(): Flow<List<CategoryEntity>>
+
+
+
+    //for seeder
+    @Query("SELECT COUNT(*) FROM category")
+    suspend fun count(): Int
+
+
+
 }

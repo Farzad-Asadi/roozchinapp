@@ -13,6 +13,7 @@ com-google-devtools-ksp="1.9.24-1.0.20"
 kotlin_coroutines_version = "1.7.0"
 hilt = "2.51.1"
 hiltExt = "1.2.0"
+javapoet = "1.13.0"
 
 
 
@@ -43,10 +44,14 @@ androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = 
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "androidx-room" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "androidx-room" }
 
-hilt-android = { module = "com.google.dagger:hilt-android", version.ref = "hilt" }
-hilt-compiler = { module = "com.google.dagger:hilt-compiler", version.ref = "hilt" }
+
 androidx-hilt-navigation-compose = { module = "androidx.hilt:hilt-navigation-compose", version = "1.2.0" }
 androidx-hilt-compiler = { module = "androidx.hilt:hilt-compiler", version.ref = "hiltExt" }
+
+javapoet = { module = "com.squareup:javapoet", version.ref = "javapoet" }
+
+hilt-android = { module = "com.google.dagger:hilt-android", version.ref = "hilt" }
+hilt-android-compiler = { module = "com.google.dagger:hilt-android-compiler", version.ref = "hilt" }
 
 
 

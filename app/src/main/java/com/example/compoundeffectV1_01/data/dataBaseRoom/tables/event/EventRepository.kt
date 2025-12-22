@@ -1,4 +1,4 @@
-package com.example.compoundeffectV1_01.data.room.event
+package com.example.compoundeffectV1_01.data.dataBaseRoom.tables.event
 
 import kotlinx.coroutines.flow.Flow
 import java.time.LocalDateTime

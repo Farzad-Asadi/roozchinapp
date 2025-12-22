@@ -74,7 +74,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.compoundeffectV1_01.AppViewModelProvider
-import com.example.compoundeffectV1_01.data.room.event.Event
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.event.Event
 import com.example.compoundeffectV1_01.utils.EventTimeFormatter
 import com.example.compoundeffectV1_01.utils.HourFormatter
 import com.example.compoundeffectV1_01.utils.LoadingScreen

@@ -1,4 +1,4 @@
-package com.example.compoundeffectV1_01.data.room.category
+package com.example.compoundeffectV1_01.data.dataBaseRoom.tables.category
 
 import kotlinx.coroutines.flow.Flow
 

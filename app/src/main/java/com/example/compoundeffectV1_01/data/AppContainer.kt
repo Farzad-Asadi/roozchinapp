@@ -1,13 +1,13 @@
 package com.example.compoundeffectV1_01.data
 
 import android.content.Context
-import com.example.compoundeffectV1_01.data.room.AppDatabase
-import com.example.compoundeffectV1_01.data.room.appSystemInfo.AppSystemInfoRepository
-import com.example.compoundeffectV1_01.data.room.appSystemInfo.OfflineAppSystemInfoRepository
-import com.example.compoundeffectV1_01.data.room.category.CategoryRepository
-import com.example.compoundeffectV1_01.data.room.category.CategoryRepositoryImpl
-import com.example.compoundeffectV1_01.data.room.event.EventRepository
-import com.example.compoundeffectV1_01.data.room.event.OfflineEventRepository
+import com.example.compoundeffectV1_01.data.dataBaseRoom.appDataBase.AppDatabase
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.appSystemInfo.AppSystemInfoRepository
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.appSystemInfo.OfflineAppSystemInfoRepository
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.category.CategoryRepository
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.category.CategoryRepositoryImpl
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.event.EventRepository
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.event.OfflineEventRepository
 
 interface AppContainer {
 

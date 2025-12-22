@@ -1,4 +1,4 @@
-package com.example.compoundeffectV1_01.data.room.typeConvertor
+package com.example.compoundeffectV1_01.data.dataBaseRoom.typeConvertor
 
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.room.TypeConverter

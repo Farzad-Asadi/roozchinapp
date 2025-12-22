@@ -1,15 +1,13 @@
 package com.example.compoundeffectV1_01.ui.mainScreenUi
 
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddBox
-import androidx.compose.material.icons.filled.Addchart
 import androidx.compose.material.icons.filled.LibraryAdd
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.compoundeffectV1_01.data.room.appSystemInfo.AppSystemInfoRepository
-import com.example.compoundeffectV1_01.data.room.event.EventRepository
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.appSystemInfo.AppSystemInfoRepository
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.event.EventRepository
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow

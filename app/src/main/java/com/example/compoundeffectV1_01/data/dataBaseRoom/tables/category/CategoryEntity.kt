@@ -1,6 +1,5 @@
-package com.example.compoundeffectV1_01.data.room.category
+package com.example.compoundeffectV1_01.data.dataBaseRoom.tables.category
 
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.room.Embedded
 import androidx.room.Entity
 import androidx.room.PrimaryKey
@@ -14,7 +13,7 @@ data class CategoryEntity(
 
     val name: String,
     val parentCategoryId: Int?=null,
-    val icon: ImageVector ,
+    val iconName: String,
     val color: String ,
     val description: String,
     val expandable:Boolean = false,

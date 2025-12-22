@@ -1,10 +1,7 @@
 package com.example.compoundeffectV1_01.data.modules
 
-
-import com.example.compoundeffectV1_01.data.dataStore.AppPreferences
-import com.example.compoundeffectV1_01.data.dataStore.AppPreferencesImpl
-import com.example.compoundeffectV1_01.data.room.category.CategoryRepository
-import com.example.compoundeffectV1_01.data.room.category.CategoryRepositoryImpl
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.category.CategoryRepository
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.category.CategoryRepositoryImpl
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -24,10 +21,4 @@ abstract class RepositoryModule {
 
 
 
-
-
-    //DataStore
-    @Binds
-    @Singleton
-    abstract fun bindAppPreferences(impl: AppPreferencesImpl): AppPreferences
 }

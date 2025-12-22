@@ -86,7 +86,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.compoundeffectV1_01.AppViewModelProvider
-import com.example.compoundeffectV1_01.data.room.category.CategoryEntity
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.category.CategoryEntity
+import com.example.compoundeffectV1_01.data.dataBaseRoom.typeConvertor.iconNameToImageVector
 import com.example.compoundeffectV1_01.utils.LoadingScreen
 import com.example.compoundeffectV1_01.utils.colorsOfCategory
 import com.example.compoundeffectV1_01.utils.stringToColor
@@ -181,14 +182,16 @@ fun CategoryScreen(
                     onDismissRequest = { showAddIconInAddCategory = false },
                     content = {
                         AddIconInAddCategory(
-                            onClickOnIcon = {
+                            onClickOnIcon = { iconName ->
                                 showAddIconInAddCategory = false
-                                viewModel.handleAddCategory(icon = it)
+                                viewModel.handleAddCategory(iconName = iconName)
                             }
                         )
                     }
                 )
             }
+
+
             if (showAddColorInAddCategory) {
                 BasicAlertDialog(
                     onDismissRequest = { showAddColorInAddCategory = false },
@@ -324,7 +327,7 @@ fun CategoryContent(
 
                         )
                         Icon(
-                            imageVector = category.icon,
+                            imageVector = iconNameToImageVector(category.iconName),
                             tint = category.color.stringToColor(),
                             contentDescription = "icon",
                             modifier = Modifier
@@ -581,10 +584,13 @@ fun AddCategory(
                 verticalArrangement = Arrangement.SpaceAround,
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+
+
+
                 Icon(                   //parent Icon
-                    imageVector = categoryEntityList.firstOrNull {
+                    imageVector =iconNameToImageVector(categoryEntityList.firstOrNull {
                         it.categoryId == newCategoryEntity?.parentCategoryId
-                    }?.icon ?: Icons.Filled.AccountTree,
+                    }?.iconName ?: "AccountTree"),
                     tint = categoryEntityList.firstOrNull {
                         it.categoryId == newCategoryEntity?.parentCategoryId
                     }?.color?.stringToColor() ?: Color(0xFF000000),
@@ -601,7 +607,8 @@ fun AddCategory(
                         }
                 )
                 Icon(                   //icon icon
-                    imageVector = newCategoryEntity?.icon ?: Icons.Filled.QuestionMark,
+                    imageVector =iconNameToImageVector(
+                    newCategoryEntity?.iconName ?: "QuestionMark"),
                     tint = newCategoryEntity?.color?.stringToColor() ?: Color(0xFF000000),
                     contentDescription = "Route",
                     modifier = Modifier
@@ -823,7 +830,7 @@ fun AddParentInAddCategory(
 
                             )
                             Icon(
-                                imageVector = category.icon,
+                                imageVector = iconNameToImageVector(category.iconName),
                                 tint = category.color.stringToColor(),
                                 contentDescription = "icon",
                                 modifier = Modifier
@@ -1029,7 +1036,7 @@ fun LazyGirdItemsForCategoryContent(
                 )
             }
             Icon(
-                imageVector = categoryEntity.icon,
+                imageVector =iconNameToImageVector(categoryEntity.iconName),
                 tint = categoryEntity.color.stringToColor(),
                 contentDescription = "icon",
                 modifier = Modifier
@@ -1126,7 +1133,8 @@ fun LazyGirdItemsForCategoryContent(
 
 @Composable
 fun AddIconInAddCategory(
-    onClickOnIcon: (icon: ImageVector) -> Unit,
+    onClickOnIcon: (iconName: String) -> Unit,
+
     modifier: Modifier = Modifier,
 ) {
     val topicIconMap = topic_iconMap.minus("ForAppOnly")
@@ -1217,7 +1225,7 @@ fun AddIconInAddCategory(
                             items(imageVectorsListForThisTopic) {
                                 IconButton(
                                     modifier = Modifier,
-                                    onClick = { onClickOnIcon(it) }
+                                    onClick = { onClickOnIcon(it.name) }
                                 ) {
                                     Icon(
                                         imageVector = it,
@@ -1233,7 +1241,7 @@ fun AddIconInAddCategory(
                             items(imageVectorsListForThisTopic.take(4)) {
                                 IconButton(
                                     modifier = Modifier,
-                                    onClick = { onClickOnIcon(it) }
+                                    onClick = { onClickOnIcon(it.name) }
                                 ) {
                                     Icon(
                                         imageVector = it,

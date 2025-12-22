@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.jetbrains.kotlin.android)
     alias(libs.plugins.hilt)
     alias(libs.plugins.com.google.devtools.ksp)
+    kotlin("kapt")
 }
 
 android {
@@ -51,6 +52,23 @@ android {
     }
 }
 
+configurations.matching {
+    it.name.contains("kapt", ignoreCase = true) ||
+            it.name.contains("ksp", ignoreCase = true) ||
+            it.name.contains("annotationProcessor", ignoreCase = true)
+}.configureEach {
+    resolutionStrategy.force("com.squareup:javapoet:1.13.0")
+}
+
+configurations.all {
+    resolutionStrategy.force(
+        "org.jetbrains.kotlin:kotlin-stdlib:1.9.24",
+        "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.24",
+        "org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.24",
+    )
+}
+
+
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -94,13 +112,14 @@ dependencies {
 
     //hilt
     implementation(libs.hilt.android)
-    ksp(libs.hilt.compiler)
+    kapt(libs.hilt.android.compiler)
     implementation(libs.androidx.hilt.navigation.compose)
+
 
 
     implementation("androidx.datastore:datastore-preferences:1.0.0")
 
-
+    implementation("com.squareup:javapoet:1.13.0")
 
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")

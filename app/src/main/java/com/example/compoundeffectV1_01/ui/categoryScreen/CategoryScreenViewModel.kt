@@ -8,10 +8,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.compoundeffectV1_01.data.room.appSystemInfo.AppSystemInfoRepository
-import com.example.compoundeffectV1_01.data.room.category.CategoryEntity
-import com.example.compoundeffectV1_01.data.room.category.CategoryRepository
-import com.example.compoundeffectV1_01.data.room.event.EventRepository
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.appSystemInfo.AppSystemInfoRepository
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.category.CategoryEntity
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.category.CategoryRepository
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.event.EventRepository
 import com.example.compoundeffectV1_01.utils.colorToString
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -78,7 +78,7 @@ class CategoryScreenViewModel(
     fun handleAddCategory(
         name: String = "",
         parentId: Int? = null,
-        icon: ImageVector? = null,
+        iconName: String? = null,
         color: Color? = null,
         siblingPositionTop: Boolean? = null,
         back: Boolean = false,
@@ -101,11 +101,6 @@ class CategoryScreenViewModel(
                 0
             }
 
-//        Log.i("TEST", "siblingPositionTop=${siblingPositionTop}")
-//        Log.i("TEST", "siblingIndex=${siblingIndex}")
-//
-//        Log.i("TEST", "siblingListOfCategory=${siblingListOfCategory}")
-//        Log.i("TEST", "---------------------------------------")
 
 
         if (_categoryUiState.value.newCategoryEntity != null) {
@@ -113,7 +108,7 @@ class CategoryScreenViewModel(
                 name = if (name != "") name else _categoryUiState.value.newCategoryEntity!!.name,
                 parentCategoryId = parentId
                     ?: _categoryUiState.value.newCategoryEntity!!.parentCategoryId,
-                icon = icon ?: _categoryUiState.value.newCategoryEntity!!.icon,
+                iconName = iconName ?: _categoryUiState.value.newCategoryEntity!!.iconName,
                 color = color?.colorToString() ?: _categoryUiState.value.newCategoryEntity!!.color,
                 siblingIndex = siblingIndex ?: _categoryUiState.value.newCategoryEntity!!.siblingIndex
             )
@@ -611,7 +606,7 @@ class CategoryScreenViewModel(
         val newCategoryEntity = CategoryEntity(
             name = "",
             parentCategoryId = 1,
-            icon = Icons.Filled.QuestionMark,
+            iconName = "QuestionMark",
             color = Color(0xFF000000).colorToString(),
             description = "",
             siblingIndex = 0
