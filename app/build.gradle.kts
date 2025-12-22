@@ -115,6 +115,9 @@ dependencies {
     kapt(libs.hilt.android.compiler)
     implementation(libs.androidx.hilt.navigation.compose)
 
+    //lazy Reorderable
+    implementation(libs.reorderable)
+
 
 
     implementation("androidx.datastore:datastore-preferences:1.0.0")

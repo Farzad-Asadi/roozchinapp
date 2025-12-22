@@ -7,6 +7,30 @@ import javax.inject.Inject
 class CategoryRepositoryImpl @Inject constructor(
     private val categoryDao: CategoryDao
 ) : CategoryRepository {
+
+
+
+    override fun observeAll(): Flow<List<CategoryEntity>> = categoryDao.observeAll()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     override suspend fun insertCategory(vararg categoryEntity: CategoryEntity) =
         categoryDao.insertCategory(*categoryEntity)
 

@@ -5,6 +5,21 @@ import kotlinx.coroutines.flow.Flow
 
 interface CategoryRepository {
 
+
+    fun observeAll(): Flow<List<CategoryEntity>>
+
+
+
+
+
+
+
+
+
+
+
+
+
     suspend fun insertCategory(vararg categoryEntity: CategoryEntity)
 
     suspend fun deleteCategory(categoryEntity: CategoryEntity)

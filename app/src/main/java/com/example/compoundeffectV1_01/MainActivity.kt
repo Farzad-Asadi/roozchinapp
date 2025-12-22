@@ -5,7 +5,10 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.navigation.compose.rememberNavController
 import com.example.compoundeffectV1_01.ui.mainScreenUi.MainScreen
+import com.example.compoundeffectV1_01.ui.navigation.AppNavGraph
 import com.example.compoundeffectV1_01.ui.theme.AppTheme
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -13,10 +16,16 @@ import dagger.hilt.android.AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         enableEdgeToEdge()
+
         setContent {
-            AppTheme(dynamicColor = false) {
-                MainScreen()
+            val navController = rememberNavController()
+
+            AppTheme(dynamicColor = false)  {
+                Surface {
+                    AppNavGraph(navController = navController)
+                }
             }
         }
     }
