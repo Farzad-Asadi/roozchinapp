@@ -1,6 +1,5 @@
 package com.example.compoundeffectV1_01.ui.categoryScreen
 
-import android.util.Log
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FiniteAnimationSpec
@@ -9,7 +8,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
@@ -23,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentHeight
@@ -37,6 +36,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.ArrowBackIosNew
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Circle
@@ -45,6 +46,7 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.QuestionMark
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.BasicAlertDialog
@@ -77,6 +79,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -88,6 +91,7 @@ import com.example.compoundeffectV1_01.utils.LoadingScreen
 import com.example.compoundeffectV1_01.utils.colorsOfCategory
 import com.example.compoundeffectV1_01.utils.stringToColor
 import com.example.compoundeffectV1_01.utils.topic_iconMap
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -99,7 +103,6 @@ fun CategoryScreen(
 ) {
     // region متغییرها
     val categoryUiState by viewModel.categoryUiState.collectAsState()
-
 
     val sheetStateForAddCategory = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -117,6 +120,9 @@ fun CategoryScreen(
     val animationSpecForFade: FiniteAnimationSpec<Float> = tween(durationMillis = 500)
     val animationSpecForExpand: FiniteAnimationSpec<IntSize> = tween(durationMillis = 500)
     // endregion
+
+
+
 
     Box(
         modifier = modifier.fillMaxSize()
@@ -137,16 +143,17 @@ fun CategoryScreen(
                     categoryList = categoryUiState.categoryList,
                     onClickBack = {
                         showAddCategory =
-                            false;onDismissRequest();viewModel.onClickConfirmBackInNewCategory(back = true)
+                            false;onDismissRequest();viewModel.handleAddCategory(back = true)
                     },
                     onClickConfirm = {
                         showAddCategory =
-                            false;onDismissRequest();viewModel.onClickConfirmBackInNewCategory(
+                            false;onDismissRequest();viewModel.handleAddCategory(
                         confirm = true
                     )
                     },
-                    onValueChangeName = { viewModel.onClickConfirmBackInNewCategory(name = it) },
+                    onValueChangeName = { viewModel.handleAddCategory(name = it) },
                     onClickChoseParent = { showAddParentInAddCategory = true },
+                    onClickChoseSiblingPosition = {viewModel.handleAddCategory(siblingPositionTop = it)},
                     onClickChoseIcon = { showAddIconInAddCategory = true },
                     onClickChoseColor = { showAddColorInAddCategory = true },
                     onClickChoseDescription = { showAddDescriptionInAddCategory = true }
@@ -162,8 +169,8 @@ fun CategoryScreen(
                             onClickCategoryExpand={categoryId: Int,isExtended :Boolean->
                                 viewModel.onClickExpandInCategoryListInCategoryScreen(categoryId,isExtended) },
                             onClickParentInAddParent = {
-                                showAddParentInAddCategory =
-                                    false; viewModel.onClickConfirmBackInNewCategory(parentId = it)
+                                showAddParentInAddCategory = false
+                                viewModel.handleAddCategory(parentId = it)
                             }
                         )
                     }
@@ -176,7 +183,7 @@ fun CategoryScreen(
                         AddIconInAddCategory(
                             onClickOnIcon = {
                                 showAddIconInAddCategory = false
-                                viewModel.onClickConfirmBackInNewCategory(icon = it)
+                                viewModel.handleAddCategory(icon = it)
                             }
                         )
                     }
@@ -189,7 +196,7 @@ fun CategoryScreen(
                         AddColorInAddCategory(
                             onClickColor = {
                                 showAddColorInAddCategory =
-                                    false; viewModel.onClickConfirmBackInNewCategory(color = it)
+                                    false; viewModel.handleAddCategory(color = it)
                             }
                         )
                     }
@@ -220,7 +227,8 @@ fun CategoryScreen(
                         viewModel.onClickExpandInCategoryListInCategoryScreen(categoryId,isExtended) },
                     onDragCategoryInList = { category: Category, offsetX: Float, offsetY: Float, endDrag: Boolean ->
                         viewModel.drugCategoryInCategoryContent(category, offsetX, offsetY, endDrag)
-                    }
+                    },
+                    onClickDeleteCategory = {viewModel.onClickDeleteCategory(it)}
                 )
             }
 
@@ -239,14 +247,17 @@ fun CategoryContent(
     modifier: Modifier = Modifier,
     onClickCategoryExpand: (categoryId: Int,isExtended :Boolean) -> Unit,
     onDragCategoryInList: (category: Category, offsetX: Float, offsetY: Float, endDrag: Boolean) -> Unit,
+    onClickDeleteCategory : (category: Category) -> Unit,
     resetKey: Boolean = false,
 ) {
+
 
     val offsetValue = 0.06f
 
     val itemToShowInList=sortedCategoryWhitGeneration.filterKeys { it.visible }
 
-    Log.i("TEST", "--------------  ")
+
+
 
     Box(
         modifier = modifier
@@ -258,21 +269,18 @@ fun CategoryContent(
             .padding(8.dp)
     ) {
         LazyColumn(modifier = Modifier.fillMaxSize()) {
-            items(itemToShowInList.entries.toList(), key = { it.key.categoryId!! }) { (category, generation) ->
-
-
-
-
+            items(itemToShowInList.entries.toList()) { (category, generation) ->
 
                 var offsetX :Float = categoryOffsetMap[category.categoryId]?.first ?:0f
                 var offsetY :Float = categoryOffsetMap[category.categoryId]?.second ?:0f
 
                 var categoryMenuExpand by rememberSaveable { mutableStateOf(false) }
 
-                modifier
-                    .fillMaxSize()
+
                 Column(
-                    modifier = Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null)
+                    modifier = Modifier
+                        .animateItem(fadeInSpec = null, fadeOutSpec = null)
+
 
                 ) {
                     Row(
@@ -299,7 +307,8 @@ fun CategoryContent(
 
                                     }
                                 )
-                            },
+                            }
+                            .offset { IntOffset(offsetX.roundToInt(), offsetY.roundToInt()) },
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
@@ -393,11 +402,11 @@ fun CategoryContent(
                                         )
                                     })
                                 DropdownMenuItem(
-                                    text = { Text("Settings") },
-                                    onClick = { /* Handle settings! */ },
+                                    text = { Text("Delete") },
+                                    onClick = { onClickDeleteCategory(category) },
                                     leadingIcon = {
                                         Icon(
-                                            Icons.Outlined.Settings,
+                                            Icons.Outlined.Delete,
                                             contentDescription = null
                                         )
                                     })
@@ -432,6 +441,7 @@ fun AddCategory(
     onClickConfirm: () -> Unit,
     onValueChangeName: (name: String) -> Unit,
     onClickChoseParent: (parentCategoryId: Int) -> Unit,
+    onClickChoseSiblingPosition: (siblingPositionTop: Boolean) -> Unit,
     onClickChoseIcon: () -> Unit,
     onClickChoseColor: () -> Unit,
     onClickChoseDescription: () -> Unit,
@@ -439,6 +449,8 @@ fun AddCategory(
 ) {
 
     val context = LocalContext.current
+    var siblingPositionTop by rememberSaveable { mutableStateOf(false) }
+    onClickChoseSiblingPosition(siblingPositionTop)
 
     Column(
         modifier = modifier
@@ -585,6 +597,7 @@ fun AddCategory(
                                 it.categoryId == newCategory?.parentCategoryId
                             }?.categoryId ?: 1
                             onClickChoseParent(parentCategoryId)
+
                         }
                 )
                 Icon(                   //icon icon
@@ -626,12 +639,7 @@ fun AddCategory(
                     modifier = Modifier
                         .weight(0.25f)
                         .fillMaxWidth()
-                        .clickable {
-                            val parentCategoryId = categoryList.firstOrNull {
-                                it.categoryId == newCategory?.parentCategoryId
-                            }?.categoryId ?: 1
-                            onClickChoseParent(parentCategoryId)
-                        },
+                        ,
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
@@ -639,7 +647,14 @@ fun AddCategory(
                         text = categoryList.firstOrNull {
                             it.categoryId == newCategory?.parentCategoryId
                         }?.name ?: "ریشه اصلی",
-                        modifier = Modifier.weight(0.8f),
+                        modifier = Modifier
+                            .weight(0.6f)
+                            .clickable {
+                                val parentCategoryId = categoryList.firstOrNull {
+                                    it.categoryId == newCategory?.parentCategoryId
+                                }?.categoryId ?: 1
+                                onClickChoseParent(parentCategoryId)
+                            },
                         fontSize = 22.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -652,6 +667,20 @@ fun AddCategory(
                         maxLines = 1,
                         fontSize = 22.sp
                     )
+                    VerticalDivider()
+                    IconButton(
+                        modifier = Modifier,
+                        onClick = {siblingPositionTop=!siblingPositionTop ; onClickChoseSiblingPosition(siblingPositionTop)}
+                    ) {
+                        Icon(
+                            imageVector = if (siblingPositionTop)Icons.Filled.ArrowUpward else Icons.Filled.ArrowDownward,
+                            contentDescription = "siblingPosition",
+                            modifier = Modifier
+                                .weight(0.2f)
+                                .fillMaxWidth(0.6f)
+                        )
+                    }
+
                 }
                 Spacer(
                     modifier = Modifier
@@ -766,96 +795,92 @@ fun AddParentInAddCategory(
                 .padding(8.dp),
         ) {
 
+            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                items(itemToShowInList.entries.toList()) { (category, generation) ->
 
-                LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    items(itemToShowInList.entries.toList()) { (category, generation) ->
+                    Column(
+                        modifier = Modifier
+                            .animateItem(fadeInSpec = null, fadeOutSpec = null)
 
-                        Log.i("TEST", "me.isExtended=${category.isExtended}")
 
-
-                        var categoryMenuExpand by rememberSaveable { mutableStateOf(false) }
-
-                        Column(
-                            modifier = modifier
-                                .fillMaxSize()
-
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { category.categoryId?.let { onClickParentInAddParent(it) } },
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
                         ) {
-                            Row(
+                            Spacer(
                                 modifier = Modifier
-                                    .fillMaxWidth(),
+                                    .height(30.dp)
+                                    .then(
+                                        if (generation > 2) Modifier.weight(offsetValue * (generation - 2))
+                                        else Modifier
+                                    )
+                                    .wrapContentWidth(Alignment.End)
 
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                            ) {
-                                Spacer(
+
+                            )
+                            Icon(
+                                imageVector = category.icon,
+                                tint = category.color.stringToColor(),
+                                contentDescription = "icon",
+                                modifier = Modifier
+                                    .size(55.dp)
+                                    .weight(0.2f)
+                            )
+                            Text(
+                                text = category.name,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier
+                                    .weight(0.5f - (offsetValue * (generation - 1)))
+                                    .wrapContentHeight(Alignment.CenterVertically),
+                            )
+                            if (category.expandable){
+                                IconButton(
                                     modifier = Modifier
-                                        .height(30.dp)
-                                        .then(
-                                            if (generation > 2) Modifier.weight(offsetValue * (generation - 2))
-                                            else Modifier
-                                        )
-                                        .wrapContentWidth(Alignment.End)
-
-
-                                )
-                                Icon(
-                                    imageVector = category.icon,
-                                    tint = category.color.stringToColor(),
-                                    contentDescription = "icon",
-                                    modifier = Modifier
-                                        .size(55.dp)
                                         .weight(0.2f)
-                                )
-                                Text(
-                                    text = category.name,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier
-                                        .weight(0.5f - (offsetValue * (generation - 1)))
-                                        .wrapContentHeight(Alignment.CenterVertically),
-                                )
-                                if (category.expandable){
-                                    IconButton(
-                                        modifier = Modifier.weight(0.2f),
-                                        onClick = {
-                                            category.categoryId?.let { onClickCategoryExpand(it, category.isExtended) }
-                                        }
-                                    ) {
-                                        Icon(
-                                            imageVector = if (!category.isExtended) {
-                                                Icons.Filled.ExpandMore
-                                            } else {
-                                                Icons.Filled.ExpandLess
-                                            },
-                                            contentDescription = "Expand",
-                                            modifier = Modifier
-                                                .fillMaxSize()
-                                                .padding(2.dp)
-                                        )
+                                        .zIndex(1f),
+
+                                    onClick = {
+                                        category.categoryId?.let { onClickCategoryExpand(it, category.isExtended) }
                                     }
-                                }else{
-                                    Spacer(
-                                        modifier = Modifier.weight(0.2f),
+                                ) {
+                                    Icon(
+                                        imageVector = if (!category.isExtended) {
+                                            Icons.Filled.ExpandMore
+                                        } else {
+                                            Icons.Filled.ExpandLess
+                                        },
+                                        contentDescription = "Expand",
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .padding(2.dp)
                                     )
                                 }
-
-
-
-
+                            }else{
+                                Spacer(
+                                    modifier = Modifier.weight(0.2f),
+                                )
                             }
-                            HorizontalDivider(
-                                thickness = 1.dp,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(start = 4.dp, end = 12.dp)
-                            )
+
 
                         }
-
+                        HorizontalDivider(
+                            thickness = 1.dp,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 4.dp, end = 12.dp)
+                        )
 
                     }
+
+
                 }
+            }
 
 
 
@@ -895,7 +920,7 @@ fun LazyGirdItemsForCategoryContent(
     var offsetX = categoryOffsetPair?.first
     var offsetY = categoryOffsetPair?.second
 
-//    Log.i("TEST", "resetKey=${resetKey}")
+
 
 
     Column(

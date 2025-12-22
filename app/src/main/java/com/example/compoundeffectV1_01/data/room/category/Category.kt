@@ -19,7 +19,8 @@ data class Category(
     val description: String,
     val expandable:Boolean = false,
     val isExtended: Boolean = true,
-    val visible: Boolean = true
+    val visible: Boolean = true,
+    val siblingIndex: Int = 0
 )
 
 data class CategoryWithChildren(
