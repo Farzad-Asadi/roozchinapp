@@ -148,6 +148,28 @@ class CategoryViewModel2 @Inject constructor(
 
 
 
+    fun renameCategory(categoryId: Int, newName: String) {
+        val name = newName.trim()
+        if (name.isBlank()) return
+
+        viewModelScope.launch {
+            val current = uiState.value.categories.firstOrNull { it.categoryId == categoryId } ?: return@launch
+            categoryRepository.updateCategory(current.copy(name = name))
+        }
+    }
+    fun updateCategoryIcon(categoryId: Int, iconName: String) {
+        viewModelScope.launch {
+            val current = uiState.value.categories.firstOrNull { it.categoryId == categoryId } ?: return@launch
+            categoryRepository.updateCategory(current.copy(iconName = iconName))
+        }
+    }
+    fun updateCategoryColor(categoryId: Int, colorHex: String) {
+        viewModelScope.launch {
+            val current = uiState.value.categories.firstOrNull { it.categoryId == categoryId } ?: return@launch
+            categoryRepository.updateCategory(current.copy(color = colorHex))
+        }
+    }
+
 
 
 
@@ -378,6 +400,55 @@ class CategoryViewModel2 @Inject constructor(
         return FlattenResult(items, levelById)
     }
 
+    fun deleteCategoryPromoteChildren(categoryId: Int) {
+        viewModelScope.launch {
+            val all = uiState.value.categories
+            val target = all.firstOrNull { it.categoryId == categoryId } ?: return@launch
+
+            val parentOfTarget = target.parentCategoryId
+            val children = all.filter { it.parentCategoryId == categoryId }
+
+            // 1) بچه‌ها رو به parentِ کتگوری حذف‌شده وصل کن
+            // siblingIndex جدید: بعد از آخرین بچه‌های parentOfTarget
+            val baseIndex = all.count { it.parentCategoryId == parentOfTarget }
+
+            children.forEachIndexed { i, child ->
+                categoryRepository.updateCategory(
+                    child.copy(
+                        parentCategoryId = parentOfTarget,
+                        siblingIndex = baseIndex + i
+                    )
+                )
+            }
+
+            // 2) خود کتگوری حذف شود
+            categoryRepository.deleteCategory(target)
+
+            // 3) مرتب‌سازی siblingIndex برای parent قبلی (جای خالی پر شود)
+            reorderSiblings(parentOfTarget)
+
+            // 4) مرتب‌سازی siblingIndex برای parent جدید (بعد از promote)
+            reorderSiblings(parentOfTarget)
+        }
+    }
+
+    private suspend fun reorderSiblings(parentId: Int?) {
+        val siblings = uiState.value.categories
+            .filter { it.parentCategoryId == parentId }
+            .sortedBy { it.siblingIndex }
+
+        siblings.forEachIndexed { idx, e ->
+            if (e.siblingIndex != idx) {
+                categoryRepository.updateCategory(e.copy(siblingIndex = idx))
+            }
+        }
+    }
+
+
+
+
+
+
 
 
 
@@ -429,6 +500,12 @@ data class CategoryDraft2(
     val iconName: String = "QuestionMark",
     val color: String =  "#2196F3",  // آبی متریال
     val description: String = ""
+)
+
+data class TaskMiniUi(
+    val id: Int,
+    val title: String,
+    val isDone: Boolean = false
 )
 
 
