@@ -4,8 +4,10 @@ import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.appSystemInfo.Ap
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.appSystemInfo.AppSystemInfoRepositoryImpl
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.category.CategoryRepository
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.category.CategoryRepositoryImpl
-import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.event.EventRepository
-import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.event.EventRepositoryImpl
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskRepository
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskRepositoryImpl
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.TaskScheduleRepository
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.TaskScheduleRepositoryImpl
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -23,9 +25,14 @@ abstract class RepositoryModule {
     ): CategoryRepository
 
     @Binds @Singleton
-    abstract fun bindEventRepository(
-        impl: EventRepositoryImpl
-    ): EventRepository
+    abstract fun bindTaskRepository(
+        impl: TaskRepositoryImpl
+    ): TaskRepository
+
+    @Binds @Singleton
+    abstract fun bindTaskScheduleRepository(
+        impl: TaskScheduleRepositoryImpl
+    ): TaskScheduleRepository
 
     @Binds @Singleton
     abstract fun bindAppSystemInfoRepository(

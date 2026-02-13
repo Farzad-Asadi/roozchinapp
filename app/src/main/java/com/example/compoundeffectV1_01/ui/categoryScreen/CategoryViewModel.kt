@@ -5,21 +5,35 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.category.CategoryEntity
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.category.CategoryRepository
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.Task
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskRepository
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskWithSchedule
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.ScheduleMode
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.TaskSchedule
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.TaskScheduleRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.time.LocalDate
+import java.time.LocalTime
 import javax.inject.Inject
 
 @HiltViewModel
-class CategoryViewModel2 @Inject constructor(
+class CategoryViewModel @Inject constructor(
     private val categoryRepository: CategoryRepository,
+    private val taskRepo: TaskRepository,
+    private val scheduleRepo: TaskScheduleRepository,
 ) : ViewModel() {
 
 
@@ -66,42 +80,54 @@ class CategoryViewModel2 @Inject constructor(
                 initialValue = FlattenResult(emptyList(), emptyMap())
             )
 
+    private val _taskDraft = MutableStateFlow(TaskDraft())
+    val taskDraft = _taskDraft.asStateFlow()
 
+    private val _menuCategoryId = MutableStateFlow<Int?>(null)
+    val menuCategoryId = _menuCategoryId.asStateFlow()
 
-
-
-
-    fun addCategoryQuick() {
-        viewModelScope.launch {
-            categoryRepository.insertCategory(
-                CategoryEntity(
-                    name = "New Category",
-                    parentCategoryId = 1,
-                    iconName = "QuestionMark",
-                    color = "#000000",
-                    description = "",
-                    siblingIndex = 0
-                )
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val tasksForMenuCategory: StateFlow<List<Task>> =
+        _menuCategoryId
+            .flatMapLatest { id ->
+                if (id == null) flowOf(emptyList())
+                else taskRepo.observeTasksByCategory(id)
+            }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5_000),
+                initialValue = emptyList()
             )
-        }
-    }
 
-    fun canAddChildTo(parentId: Int): Boolean {
-        val parentLevel = uiState.value.levelById[parentId] ?: 1
-        return parentLevel < 4
-    }
+    private val _editingTaskId = MutableStateFlow<Int?>(null)
+    val editingTaskId = _editingTaskId.asStateFlow()
 
+    private val _scheduleDraft = MutableStateFlow(ScheduleDraft())
+    val scheduleDraft = _scheduleDraft.asStateFlow()
 
-    fun setDraftParent(parentId: Int) {
-        val parentLevel = uiState.value.levelById[parentId] ?: 1
-        if (parentLevel >= 4) {
-            // بعداً snackbar می‌زنیم؛ فعلاً ignore
-            return
-        }
-        // set draft parent
-    }
+    private val _scheduleConfirmedForNewTask = MutableStateFlow(false)
 
+    // ✅ لیست تسک‌ها + schedule
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val tasksWithScheduleForMenu: StateFlow<List<TaskWithSchedule>> =
+        menuCategoryId
+            .flatMapLatest { id ->
+                if (id == null) flowOf(emptyList())
+                else taskRepo.observeTasksWithScheduleByCategory(id)
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    // ✅ شمارش scheduled (دو روش)
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val scheduledCountForMenu: StateFlow<Int> =
+        menuCategoryId
+            .flatMapLatest { id ->
+                if (id == null) flowOf(0)
+                else taskRepo.observeScheduledCountByCategory(id)
+                // یا اگر اون Query رو نذاشتی:
+                // else taskRepository.observeTasksWithScheduleByCategory(id).map { list -> list.count { it.schedule != null } }
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
 
 
 
@@ -172,6 +198,129 @@ class CategoryViewModel2 @Inject constructor(
 
 
 
+    fun startAddTask(categoryId: Int, categoryColor: String) {
+        _taskDraft.value = TaskDraft(categoryId = categoryId)
+        _scheduleDraft.value = ScheduleDraft()          // ✅ ریست
+        _scheduleConfirmedForNewTask.value = false
+    }
+    fun setTaskName(v: String) = _taskDraft.update { it.copy(name = v) }
+    fun setTaskPriority(p: Int) = _taskDraft.update { it.copy(priority = p) }
+    fun setTaskCompleted(v: Boolean) = _taskDraft.update { it.copy(isCompleted = v) }
+    fun setTaskNote(v: String) = _taskDraft.update { it.copy(note = v) }
+    fun createTaskForCategory(categoryColor: String) {
+        val d = _taskDraft.value
+        if (d.name.isBlank()) return
+
+        viewModelScope.launch {
+            val newTask = Task(
+                id = null,
+                name = d.name.trim(),
+                color = categoryColor,
+                description = d.note,
+                inPallet = false,
+                inSchedule = false,
+                durationOverlap = 0,
+                selected = false,
+                changed = false,
+                categoryId = d.categoryId,
+                isCompleted = d.isCompleted,
+                priority = d.priority
+            )
+
+            // ✅ 1) insert و گرفتن id
+            val newId = withContext(kotlinx.coroutines.Dispatchers.IO) {
+                taskRepo.insertTaskAndReturnId(newTask)
+            }
+
+            // ✅ 2) اگر کاربر Schedule رو OK کرده بود، همون لحظه ذخیره کن
+            if (_scheduleConfirmedForNewTask.value) {
+                val sd = _scheduleDraft.value
+
+                fun LocalTime.toMinuteOfDay(): Int = this.hour * 60 + this.minute
+                // یا: this.toSecondOfDay() / 60
+
+                val schedule = TaskSchedule(
+                    id = null,
+                    taskId = newId,
+                    title = sd.title.trim().ifBlank { null },
+                    mode = sd.mode,
+
+                    dateEpochDay = if (sd.mode == ScheduleMode.TIME_RANGE) sd.date.toEpochDay() else null,
+                    startMinuteOfDay = if (sd.mode == ScheduleMode.TIME_RANGE) sd.start.toMinuteOfDay() else null,
+                    endMinuteOfDay = if (sd.mode == ScheduleMode.TIME_RANGE) sd.end.toMinuteOfDay() else null,
+
+                    durationMinutes = if (sd.mode == ScheduleMode.AMOUNT_OF_TIME) sd.durationMinutes else null,
+                    repeating = sd.repeating
+                )
+
+                withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    scheduleRepo.upsert(schedule)
+                }
+            }
+
+
+            // ✅ پاکسازی‌ها
+            resetTaskDraft()
+            _scheduleDraft.value = ScheduleDraft()
+            _scheduleConfirmedForNewTask.value = false
+        }
+    }
+    private fun resetTaskDraft() {
+        _taskDraft.value = TaskDraft()
+    }
+
+
+
+    fun setScheduleTitle(v: String) = _scheduleDraft.update { it.copy(title = v) }
+    fun setScheduleMode(m: ScheduleMode) = _scheduleDraft.update { it.copy(mode = m) }
+    fun setScheduleDate(d: LocalDate) = _scheduleDraft.update { it.copy(date = d) }
+    fun setScheduleStart(t: LocalTime) = _scheduleDraft.update { it.copy(start = t) }
+    fun setScheduleEnd(t: LocalTime) = _scheduleDraft.update { it.copy(end = t) }
+    fun setScheduleDuration(min: Int) = _scheduleDraft.update { it.copy(durationMinutes = min.coerceAtLeast(1)) }
+    fun setScheduleRepeating(v: Boolean) = _scheduleDraft.update { it.copy(repeating = v) }
+    fun saveScheduleForCurrentTask() {
+        val taskId = _editingTaskId.value ?: return
+
+        viewModelScope.launch {
+            val d = _scheduleDraft.value
+
+            fun java.time.LocalTime.toMinuteOfDay(): Int = this.hour * 60 + this.minute
+
+            // (اختیاری) اعتبارسنجی برای TIME_RANGE
+            if (d.mode == ScheduleMode.TIME_RANGE) {
+                val s = d.start.toMinuteOfDay()
+                val e = d.end.toMinuteOfDay()
+                if (e <= s) return@launch // یا اینجا خطا/اسنک‌بار بده
+            }
+
+            val schedule = TaskSchedule(
+                id = null, // اگر upsert بر اساس taskId unique باشه، null هم اوکیه
+                taskId = taskId,
+                title = d.title.trim().ifBlank { null },
+                mode = d.mode,
+
+                dateEpochDay = if (d.mode == ScheduleMode.TIME_RANGE) d.date.toEpochDay() else null,
+                startMinuteOfDay = if (d.mode == ScheduleMode.TIME_RANGE) d.start.toMinuteOfDay() else null,
+                endMinuteOfDay = if (d.mode == ScheduleMode.TIME_RANGE) d.end.toMinuteOfDay() else null,
+
+                durationMinutes = if (d.mode == ScheduleMode.AMOUNT_OF_TIME) d.durationMinutes else null,
+                repeating = d.repeating
+            )
+
+            withContext(kotlinx.coroutines.Dispatchers.IO) {
+                scheduleRepo.upsert(schedule)
+            }
+        }
+    }
+
+    fun markScheduleConfirmedForNewTask() {
+        _scheduleConfirmedForNewTask.value = true
+    }
+    fun resetScheduleConfirmedForNewTask() {
+        _scheduleConfirmedForNewTask.value = false
+    }
+
+
 
 
 
@@ -185,7 +334,9 @@ class CategoryViewModel2 @Inject constructor(
     }
 
 
-
+    fun setMenuCategoryId(id: Int?) {
+        _menuCategoryId.value = id
+    }
 
 
     fun reorderWithinSameParent(parentId: Int?, orderedIds: List<Int>) {
@@ -445,7 +596,69 @@ class CategoryViewModel2 @Inject constructor(
     }
 
 
+    fun startEditTask(taskId: Int) {
+        viewModelScope.launch {
+            val t = taskRepo.getTaskById(taskId) ?: return@launch
 
+            _editingTaskId.value = taskId
+            _taskDraft.value = TaskDraft(
+                name = t.name,
+                categoryId = t.categoryId,
+                priority = t.priority,
+                isCompleted = t.isCompleted,
+                note = t.description
+            )
+
+            val sch = scheduleRepo.getByTaskId(taskId)
+
+            fun minuteOfDayToLocalTime(min: Int): java.time.LocalTime =
+                java.time.LocalTime.of(min / 60, min % 60)
+
+            _scheduleDraft.value =
+                if (sch == null) {
+                    ScheduleDraft()
+                } else {
+                    ScheduleDraft(
+                        title = sch.title.orEmpty(),
+                        mode = sch.mode,
+
+                        date = sch.dateEpochDay?.let(java.time.LocalDate::ofEpochDay) ?: java.time.LocalDate.now(),
+                        start = sch.startMinuteOfDay?.let(::minuteOfDayToLocalTime) ?: java.time.LocalTime.of(20, 0),
+                        end = sch.endMinuteOfDay?.let(::minuteOfDayToLocalTime) ?: java.time.LocalTime.of(21, 0),
+
+                        durationMinutes = sch.durationMinutes ?: 60,
+                        repeating = sch.repeating
+                    )
+                }
+        }
+    }
+
+
+    fun finishEditTask() {
+        _editingTaskId.value = null
+        _taskDraft.value = TaskDraft()
+    }
+
+    fun saveEditedTask(categoryColor: String) {
+        val taskId = _editingTaskId.value ?: return
+        val d = _taskDraft.value
+        if (d.name.isBlank()) return
+
+        viewModelScope.launch {
+            val current = taskRepo.getTaskById(taskId) ?: return@launch
+            val updated = current.copy(
+                name = d.name.trim(),
+                description = d.note,
+                isCompleted = d.isCompleted,
+                priority = d.priority,
+                color = categoryColor // اگر می‌خوای رنگ task مثل category بماند
+            )
+            withContext(kotlinx.coroutines.Dispatchers.IO) {
+                taskRepo.updateTask(updated)
+            }
+            finishEditTask()
+        }
+    }
 
 
 
@@ -505,8 +718,27 @@ data class CategoryDraft2(
 data class TaskMiniUi(
     val id: Int,
     val title: String,
-    val isDone: Boolean = false
+    val isDone: Boolean = false,
+    val hasSchedule: Boolean = false
 )
 
+data class TaskDraft(
+    val name: String = "",
+    val categoryId: Int? = null,
+    val priority: Int = 0,
+    val isCompleted: Boolean = false,
+    val note: String = ""
+)
 
+data class ScheduleDraft(
+    val title: String = "",
+    val mode: ScheduleMode = ScheduleMode.TIME_RANGE,
+
+    val date: LocalDate = LocalDate.now(),
+    val start: LocalTime = LocalTime.of(20, 0),
+    val end: LocalTime = LocalTime.of(21, 0),
+
+    val durationMinutes: Int = 60,
+    val repeating: Boolean = false
+)
 

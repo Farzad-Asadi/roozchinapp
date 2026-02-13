@@ -9,7 +9,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import com.example.compoundeffectV1_01.ui.categoryScreen.CategoryScreen2
+import com.example.compoundeffectV1_01.ui.categoryScreen.CategoryScreen
 import com.example.compoundeffectV1_01.ui.scheduleScreen.ScheduleScreen2
 
 
@@ -25,30 +25,18 @@ fun AppNavGraph(
         modifier = modifier
     ) {
         composable(AppRoutes.Category2) {
-            CategoryScreen2(
-                onNavigateToSchedule = {
-                    navController.navigate(AppRoutes.Schedule2) {
-                        launchSingleTop = true
-                        restoreState = true
-                        popUpTo(AppRoutes.Category2) { saveState = true }
-                    }
-                }
+            CategoryScreen(
+                onNavigateToSchedule = {} // فعلاً اگر جایی استفاده می‌کنی، خالی
             )
         }
-
         composable(AppRoutes.Schedule2) {
             ScheduleScreen2(
-                onNavigateToCategory = {
-                    navController.navigate(AppRoutes.Category2) {
-                        launchSingleTop = true
-                        restoreState = true
-                        popUpTo(AppRoutes.Category2) { saveState = true }
-                    }
-                }
+
             )
         }
     }
 }
+
 
 
 
@@ -75,13 +63,14 @@ data class AppBottomBarDestination(
 )
 val bottomBarDestinations = listOf(
     AppBottomBarDestination(
-        route = AppRoutes.Category2,
-        label = "Category",
-        icon = Icons.Filled.Category
-    ),
-    AppBottomBarDestination(
         route = AppRoutes.Schedule2,
         label = "Schedule",
         icon = Icons.Filled.Schedule
     ),
+    AppBottomBarDestination(
+        route = AppRoutes.Category2,
+        label = "Category",
+        icon = Icons.Filled.Category
+    ),
+
 )

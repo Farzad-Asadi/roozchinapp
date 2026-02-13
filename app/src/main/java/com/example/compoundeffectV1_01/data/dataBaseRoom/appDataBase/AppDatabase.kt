@@ -9,24 +9,36 @@ import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.appSystemInfo.Ap
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.appSystemInfo.SystemDao
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.category.CategoryEntity
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.category.CategoryDao
-import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.event.Event
-import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.event.EventDao
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskDao
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.Task
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.TaskSchedule
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.TaskScheduleDao
+import com.example.compoundeffectV1_01.data.dataBaseRoom.typeConvertor.ScheduleConverters
 import com.example.compoundeffectV1_01.data.dataBaseRoom.typeConvertor.TypeConverter
 
 
 @Database(
     entities =
-    [CategoryEntity::class,
-        Event::class,
-        AppSystemInfo::class],
+    [
+        CategoryEntity::class,
+        Task::class,
+        AppSystemInfo::class,
+        TaskSchedule::class,
+
+    ],
 
     version = 1, exportSchema = false)
-@TypeConverters(TypeConverter::class)
+@TypeConverters(
+    TypeConverter::class,
+    ScheduleConverters::class
+
+)
 abstract class AppDatabase : RoomDatabase() {
 
 
     abstract fun categoryDao(): CategoryDao
-    abstract fun eventDao(): EventDao
+    abstract fun taskDao(): TaskDao
+    abstract fun taskScheduleDao(): TaskScheduleDao
     abstract fun systemDao(): SystemDao
 
 

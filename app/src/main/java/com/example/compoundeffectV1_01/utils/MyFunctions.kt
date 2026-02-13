@@ -10,7 +10,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ParentDataModifier
 import androidx.compose.ui.unit.Density
-import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.event.Event
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -150,17 +149,17 @@ fun String.stringToColor(): Color {
 
 // endregion
 
-// region اتصال رویدادها به صفحه schedul
-class EventDataModifier(
-    val event: Event,
-) : ParentDataModifier {
-    override fun Density.modifyParentData(parentData: Any?): Any {
-        return event
-    }
-}
-
-fun Modifier.eventData(event: Event) = this.then(EventDataModifier(event))
-// endregion
+//// region اتصال رویدادها به صفحه schedul
+//class EventDataModifier(
+//    val event: Event,
+//) : ParentDataModifier {
+//    override fun Density.modifyParentData(parentData: Any?): Any {
+//        return event
+//    }
+//}
+//
+//fun Modifier.eventData(event: Event) = this.then(EventDataModifier(event))
+//// endregion
 
 
 fun currentTimeHeightPx(timeInstance: Calendar, hourHeight: Float): Int {
@@ -183,155 +182,155 @@ fun calculateDayWidth(zoom: Float): Int {
     return (baseDayWidth + (zoom - 1f) * step).roundToInt()
 }
 
-@Composable
-fun eventHeightPx(event: Event, hourHeight: Float): Int {
-    val eventDurationMinutes = ChronoUnit.MINUTES.between(event.start, event.end)
-    return ((eventDurationMinutes / 60f) * hourHeight).roundToInt()
-}
-
-
-fun preparationEventListForSchedule(eventList: List<Event>): List<Event> {
-    val preparedEventList: MutableList<Event> = eventList.filter { it.inSchedule }.toMutableList()
-    preparedEventList.forEachIndexed { index, event ->
-        val otherEvents = preparedEventList.filter { it.id != event.id }
-        var otherEventDurationOverlap = 0
-
-        val overlapCount: Int = otherEvents.count { otherEvent ->
-            otherEvent.start.isBefore(event.start) &&
-                    otherEvent.start.isBefore(event.end) &&
-                    otherEvent.end.isAfter(event.start) &&
-                    otherEvent.end.isBefore(event.end)
-        }
-        val overlapCount2: Int = otherEvents.count { otherEvent ->
-            otherEvent.start.isBefore(event.start) &&
-                    otherEvent.start.isBefore(event.end) &&
-                    otherEvent.end.isAfter(event.start) &&
-                    otherEvent.end.isAfter(event.end)
-        }
-        val overlapCount3: Int = otherEvents.count { otherEvent ->
-        otherEvent.start.isEqual(event.start) &&
-                otherEvent.start.isBefore(event.end) &&
-                otherEvent.end.isAfter(event.start) &&
-                otherEvent.end.isAfter(event.end)
-    }
-        val overlapCount4: Int = otherEvents.count { otherEvent ->
-            otherEvent.start.isBefore(event.start) &&
-                    otherEvent.start.isBefore(event.end) &&
-                    otherEvent.end.isAfter(event.start) &&
-                    otherEvent.end.isEqual(event.end)
-        }
-        if (
-            !otherEvents.any { otherEvent ->
-                otherEventDurationOverlap = otherEvent.durationOverlap
-
-
-                otherEvent.start.isBefore(event.start) &&
-                        otherEvent.start.isBefore(event.end) &&
-                        otherEvent.end.isAfter(event.start) &&
-                        otherEvent.end.isAfter(event.end)
-            }||
-            !otherEvents.any { otherEvent ->
-                otherEventDurationOverlap = otherEvent.durationOverlap
-
-                        otherEvent.start.isBefore(event.start) &&
-                        otherEvent.start.isBefore(event.end) &&
-                        otherEvent.end.isAfter(event.start) &&
-                        otherEvent.end.isBefore(event.end)
-            } ||
-            !otherEvents.any { otherEvent ->
-                otherEventDurationOverlap = otherEvent.durationOverlap
-
-                otherEvent.start.isEqual(event.start) &&
-                        otherEvent.start.isBefore(event.end) &&
-                        otherEvent.end.isAfter(event.start) &&
-                        otherEvent.end.isAfter(event.end)
-            }||
-            !otherEvents.any { otherEvent ->
-                otherEventDurationOverlap = otherEvent.durationOverlap
-
-                otherEvent.start.isBefore(event.start) &&
-                        otherEvent.start.isBefore(event.end) &&
-                        otherEvent.end.isAfter(event.start) &&
-                        otherEvent.end.isEqual(event.end)
-            }
-
-        ) {
-
-            preparedEventList[index] = event.copy(durationOverlap = 0)
-
-        }
-        if (otherEvents.any { otherEvent ->
-                otherEventDurationOverlap = otherEvent.durationOverlap
-
-                otherEvent.start.isBefore(event.start) &&
-                        otherEvent.start.isBefore(event.end) &&
-                        otherEvent.end.isAfter(event.start) &&
-                        otherEvent.end.isAfter(event.end)
-            }){
-            preparedEventList[index] = event.copy(
-                durationOverlap = otherEventDurationOverlap +
-                    overlapCount+
-                    overlapCount2+
-                    overlapCount3+
-                    overlapCount4
-                )
-
-        }
-        if (otherEvents.any { otherEvent ->
-                otherEventDurationOverlap = otherEvent.durationOverlap
-
-                otherEvent.start.isBefore(event.start) &&
-                        otherEvent.start.isBefore(event.end) &&
-                        otherEvent.end.isAfter(event.start) &&
-                        otherEvent.end.isBefore(event.end)
-            } ){
-            preparedEventList[index] = event.copy(
-                durationOverlap = otherEventDurationOverlap +
-                        overlapCount+
-                        overlapCount2+
-                        overlapCount3+
-                        overlapCount4
-            )
-        }
-        if (otherEvents.any { otherEvent ->
-                otherEventDurationOverlap = otherEvent.durationOverlap
-
-                otherEvent.start.isEqual(event.start) &&
-                        otherEvent.start.isBefore(event.end) &&
-                        otherEvent.end.isAfter(event.start) &&
-                        otherEvent.end.isAfter(event.end)
-            }){
-            preparedEventList[index] = event.copy(
-                durationOverlap = otherEventDurationOverlap +
-                        overlapCount+
-                        overlapCount2+
-                        overlapCount3+
-                        overlapCount4
-            )
-        }
-        if (otherEvents.any { otherEvent ->
-                otherEventDurationOverlap = otherEvent.durationOverlap
-
-                otherEvent.start.isBefore(event.start) &&
-                        otherEvent.start.isBefore(event.end) &&
-                        otherEvent.end.isAfter(event.start) &&
-                        otherEvent.end.isEqual(event.end)
-            }){
-            preparedEventList[index] = event.copy(
-                durationOverlap = otherEventDurationOverlap +
-                        overlapCount+
-                        overlapCount2+
-                        overlapCount3+
-                        overlapCount4
-            )
-        }
-    }
-
-//    val sortedPreparedEventList: MutableList<Event> =
-//        preparedEventList.sortedByDescending { Duration.between(it.start, it.end) }.toMutableList()
-    return preparedEventList
-}
-
+//@Composable
+//fun eventHeightPx(event: Event, hourHeight: Float): Int {
+//    val eventDurationMinutes = ChronoUnit.MINUTES.between(event.start, event.end)
+//    return ((eventDurationMinutes / 60f) * hourHeight).roundToInt()
+//}
+//
+//
+//fun preparationEventListForSchedule(eventList: List<Event>): List<Event> {
+//    val preparedEventList: MutableList<Event> = eventList.filter { it.inSchedule }.toMutableList()
+//    preparedEventList.forEachIndexed { index, event ->
+//        val otherEvents = preparedEventList.filter { it.id != event.id }
+//        var otherEventDurationOverlap = 0
+//
+//        val overlapCount: Int = otherEvents.count { otherEvent ->
+//            otherEvent.start.isBefore(event.start) &&
+//                    otherEvent.start.isBefore(event.end) &&
+//                    otherEvent.end.isAfter(event.start) &&
+//                    otherEvent.end.isBefore(event.end)
+//        }
+//        val overlapCount2: Int = otherEvents.count { otherEvent ->
+//            otherEvent.start.isBefore(event.start) &&
+//                    otherEvent.start.isBefore(event.end) &&
+//                    otherEvent.end.isAfter(event.start) &&
+//                    otherEvent.end.isAfter(event.end)
+//        }
+//        val overlapCount3: Int = otherEvents.count { otherEvent ->
+//        otherEvent.start.isEqual(event.start) &&
+//                otherEvent.start.isBefore(event.end) &&
+//                otherEvent.end.isAfter(event.start) &&
+//                otherEvent.end.isAfter(event.end)
+//    }
+//        val overlapCount4: Int = otherEvents.count { otherEvent ->
+//            otherEvent.start.isBefore(event.start) &&
+//                    otherEvent.start.isBefore(event.end) &&
+//                    otherEvent.end.isAfter(event.start) &&
+//                    otherEvent.end.isEqual(event.end)
+//        }
+//        if (
+//            !otherEvents.any { otherEvent ->
+//                otherEventDurationOverlap = otherEvent.durationOverlap
+//
+//
+//                otherEvent.start.isBefore(event.start) &&
+//                        otherEvent.start.isBefore(event.end) &&
+//                        otherEvent.end.isAfter(event.start) &&
+//                        otherEvent.end.isAfter(event.end)
+//            }||
+//            !otherEvents.any { otherEvent ->
+//                otherEventDurationOverlap = otherEvent.durationOverlap
+//
+//                        otherEvent.start.isBefore(event.start) &&
+//                        otherEvent.start.isBefore(event.end) &&
+//                        otherEvent.end.isAfter(event.start) &&
+//                        otherEvent.end.isBefore(event.end)
+//            } ||
+//            !otherEvents.any { otherEvent ->
+//                otherEventDurationOverlap = otherEvent.durationOverlap
+//
+//                otherEvent.start.isEqual(event.start) &&
+//                        otherEvent.start.isBefore(event.end) &&
+//                        otherEvent.end.isAfter(event.start) &&
+//                        otherEvent.end.isAfter(event.end)
+//            }||
+//            !otherEvents.any { otherEvent ->
+//                otherEventDurationOverlap = otherEvent.durationOverlap
+//
+//                otherEvent.start.isBefore(event.start) &&
+//                        otherEvent.start.isBefore(event.end) &&
+//                        otherEvent.end.isAfter(event.start) &&
+//                        otherEvent.end.isEqual(event.end)
+//            }
+//
+//        ) {
+//
+//            preparedEventList[index] = event.copy(durationOverlap = 0)
+//
+//        }
+//        if (otherEvents.any { otherEvent ->
+//                otherEventDurationOverlap = otherEvent.durationOverlap
+//
+//                otherEvent.start.isBefore(event.start) &&
+//                        otherEvent.start.isBefore(event.end) &&
+//                        otherEvent.end.isAfter(event.start) &&
+//                        otherEvent.end.isAfter(event.end)
+//            }){
+//            preparedEventList[index] = event.copy(
+//                durationOverlap = otherEventDurationOverlap +
+//                    overlapCount+
+//                    overlapCount2+
+//                    overlapCount3+
+//                    overlapCount4
+//                )
+//
+//        }
+//        if (otherEvents.any { otherEvent ->
+//                otherEventDurationOverlap = otherEvent.durationOverlap
+//
+//                otherEvent.start.isBefore(event.start) &&
+//                        otherEvent.start.isBefore(event.end) &&
+//                        otherEvent.end.isAfter(event.start) &&
+//                        otherEvent.end.isBefore(event.end)
+//            } ){
+//            preparedEventList[index] = event.copy(
+//                durationOverlap = otherEventDurationOverlap +
+//                        overlapCount+
+//                        overlapCount2+
+//                        overlapCount3+
+//                        overlapCount4
+//            )
+//        }
+//        if (otherEvents.any { otherEvent ->
+//                otherEventDurationOverlap = otherEvent.durationOverlap
+//
+//                otherEvent.start.isEqual(event.start) &&
+//                        otherEvent.start.isBefore(event.end) &&
+//                        otherEvent.end.isAfter(event.start) &&
+//                        otherEvent.end.isAfter(event.end)
+//            }){
+//            preparedEventList[index] = event.copy(
+//                durationOverlap = otherEventDurationOverlap +
+//                        overlapCount+
+//                        overlapCount2+
+//                        overlapCount3+
+//                        overlapCount4
+//            )
+//        }
+//        if (otherEvents.any { otherEvent ->
+//                otherEventDurationOverlap = otherEvent.durationOverlap
+//
+//                otherEvent.start.isBefore(event.start) &&
+//                        otherEvent.start.isBefore(event.end) &&
+//                        otherEvent.end.isAfter(event.start) &&
+//                        otherEvent.end.isEqual(event.end)
+//            }){
+//            preparedEventList[index] = event.copy(
+//                durationOverlap = otherEventDurationOverlap +
+//                        overlapCount+
+//                        overlapCount2+
+//                        overlapCount3+
+//                        overlapCount4
+//            )
+//        }
+//    }
+//
+////    val sortedPreparedEventList: MutableList<Event> =
+////        preparedEventList.sortedByDescending { Duration.between(it.start, it.end) }.toMutableList()
+//    return preparedEventList
+//}
+//
 
 
 

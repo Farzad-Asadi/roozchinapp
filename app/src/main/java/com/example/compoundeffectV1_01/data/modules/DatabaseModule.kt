@@ -1,11 +1,11 @@
 package com.example.compoundeffectV1_01.data.modules
 
 import android.content.Context
-import androidx.room.Room
 import com.example.compoundeffectV1_01.data.dataBaseRoom.appDataBase.AppDatabase
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.appSystemInfo.SystemDao
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.category.CategoryDao
-import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.event.EventDao
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskDao
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.TaskScheduleDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -28,7 +28,8 @@ object DatabaseModule {
 
 
     @Provides fun provideCategoryDao(db: AppDatabase): CategoryDao = db.categoryDao()
-    @Provides fun provideEventDao(db: AppDatabase): EventDao = db.eventDao()
+    @Provides fun provideEventDao(db: AppDatabase): TaskDao = db.taskDao()
+    @Provides fun provideTaskScheduleDao(db: AppDatabase): TaskScheduleDao = db.taskScheduleDao()
     @Provides fun provideSystemDao(db: AppDatabase): SystemDao = db.systemDao()
 
 

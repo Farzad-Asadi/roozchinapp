@@ -7,7 +7,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.appSystemInfo.AppSystemInfoRepository
-import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.event.EventRepository
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,7 +18,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class MainScreenViewModel @Inject constructor(
-    private val eventRepository: EventRepository,
+    private val taskRepository: TaskRepository,
     private val appSystemInfoRepository: AppSystemInfoRepository
 ) : ViewModel() {
 
@@ -72,11 +72,7 @@ class MainScreenViewModel @Inject constructor(
 
             val job2 = async {
 
-                val eventList = eventRepository.getAllEvents()
-                _mainUiState.update { mainUiState ->
-                    mainUiState.copy(
-                    )
-                }
+
             }
             job2.await()
 

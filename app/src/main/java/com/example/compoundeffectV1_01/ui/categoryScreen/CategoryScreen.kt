@@ -1,16 +1,13 @@
 package com.example.compoundeffectV1_01.ui.categoryScreen
 
-import android.widget.Toast
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.FiniteAnimationSpec
-import androidx.compose.animation.core.tween
+import android.annotation.SuppressLint
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,1307 +17,1855 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.wrapContentHeight
-import androidx.compose.foundation.layout.wrapContentSize
-import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountTree
-import androidx.compose.material.icons.filled.ArrowBackIosNew
-import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Circle
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Done
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.QuestionMark
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material3.BasicAlertDialog
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.material3.VerticalDivider
-import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.category.CategoryEntity
-import com.example.compoundeffectV1_01.data.dataBaseRoom.typeConvertor.iconNameToImageVector
-import com.example.compoundeffectV1_01.utils.LoadingScreen
-import com.example.compoundeffectV1_01.utils.colorsOfCategory
-import com.example.compoundeffectV1_01.utils.stringToColor
-import com.example.compoundeffectV1_01.utils.topic_iconMap
-import kotlin.math.roundToInt
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.ScheduleMode
+import com.example.compoundeffectV1_01.utils.DimmedDialog
+import com.example.compoundeffectV1_01.utils.IconOption
+import com.example.compoundeffectV1_01.utils.buildColorOptions
+import com.example.compoundeffectV1_01.utils.buildIconSections
+import com.example.compoundeffectV1_01.utils.colorFromHex
+import com.example.compoundeffectV1_01.utils.iconFromKey
+import org.burnoutcrew.reorderable.ReorderableItem
+import org.burnoutcrew.reorderable.detectReorderAfterLongPress
+import org.burnoutcrew.reorderable.rememberReorderableLazyListState
+import org.burnoutcrew.reorderable.reorderable
+import java.time.LocalTime
 
+@SuppressLint("SuspiciousIndentation")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CategoryScreen(
-    modifier: Modifier = Modifier,
-    fabClicked: String?,
-    onDismissRequest: () -> Unit,
-    viewModel: CategoryScreenViewModel = hiltViewModel()
+    onNavigateToSchedule: () -> Unit, // فعلاً استفاده نمی‌کنیم، بعداً به bottom bar وصل می‌کنیم
+    viewModel: CategoryViewModel = hiltViewModel()
 ) {
-    // region متغییرها
-    val categoryUiState by viewModel.categoryUiState.collectAsState()
+    val state by viewModel.uiState.collectAsState()
+    val draft by viewModel.draft.collectAsState()
+    val createResult by viewModel.createResult.collectAsState()
+    val pickerFlatten by viewModel.parentPickerItems.collectAsState()
+    val editingTaskId by viewModel.editingTaskId.collectAsState()
+    val taskDraft by viewModel.taskDraft.collectAsState()
+    val scheduleDraft by viewModel.scheduleDraft.collectAsState()
+    val menuCategoryId by viewModel.menuCategoryId.collectAsState()
+    val tasksForMenu by viewModel.tasksForMenuCategory.collectAsState()
+    val tasksWithSchedule by viewModel.tasksWithScheduleForMenu.collectAsState()
+    val scheduledCount by viewModel.scheduledCountForMenu.collectAsState()
 
-    val sheetStateForAddCategory = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
+
+    var showPickParent by rememberSaveable { mutableStateOf(false) }
     var showAddCategory by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(fabClicked) {
-        if (fabClicked == "گروه بندی") {
-            showAddCategory = true
+    var isDragging by remember { mutableStateOf(false) }
+
+    var showIconPicker by rememberSaveable { mutableStateOf(false) }
+    var showColorPicker by rememberSaveable { mutableStateOf(false) }
+
+    var nameError by rememberSaveable { mutableStateOf<String?>(null) }
+
+    val parentEntity = state.categories.firstOrNull { it.categoryId == draft.parentId }
+
+
+
+    var showDeleteConfirm by rememberSaveable { mutableStateOf(false) }
+    val menuCategory = state.categories.firstOrNull { it.categoryId == menuCategoryId }
+
+
+    var showRenameDialog by rememberSaveable { mutableStateOf(false) }
+    var renameText by rememberSaveable { mutableStateOf("") }
+    var renameError by rememberSaveable { mutableStateOf<String?>(null) }
+    var showEditIconPicker by rememberSaveable { mutableStateOf(false) }
+    var showEditColorPicker by rememberSaveable { mutableStateOf(false) }
+
+    var showAddTaskDialog by rememberSaveable { mutableStateOf(false) }
+    var tasksExpanded by rememberSaveable(menuCategoryId) { mutableStateOf(false) }
+
+    var showScheduleDialog by rememberSaveable { mutableStateOf(false) }
+
+
+    LaunchedEffect(createResult) {
+        nameError = (createResult as? CategoryViewModel.CreateResult.Error)?.message
+    }
+
+    LaunchedEffect(createResult) {
+        when (createResult) {
+            is CategoryViewModel.CreateResult.Success -> {
+                showAddCategory = false
+                showPickParent = false
+                showIconPicker = false
+                showColorPicker = false
+                viewModel.resetDraft()
+            }
+
+            else -> Unit
         }
     }
-    var showAddParentInAddCategory by rememberSaveable { mutableStateOf(false) }
-    var showAddIconInAddCategory by rememberSaveable { mutableStateOf(false) }
-    var showAddColorInAddCategory by rememberSaveable { mutableStateOf(false) }
-    var showAddDescriptionInAddCategory by rememberSaveable { mutableStateOf(false) }
 
-    val animationSpecForFade: FiniteAnimationSpec<Float> = tween(durationMillis = 500)
-    val animationSpecForExpand: FiniteAnimationSpec<IntSize> = tween(durationMillis = 500)
-    // endregion
+    LaunchedEffect(menuCategoryId, tasksForMenu.size) {
+        if (menuCategoryId != null && tasksForMenu.isNotEmpty()) {
+            tasksExpanded = true // ✅ وقتی تسک آمد، اتومات باز شود
+        }
+    }
 
 
 
-
-    Box(
-        modifier = modifier.fillMaxSize()
-    ) {
-        if (categoryUiState.isDataLoaded) {
-
-            AnimatedVisibility(
-                visible = showAddCategory,
-                enter = slideInVertically(
-                    initialOffsetY = { it } // شروع از پایین
-                ) + fadeIn(animationSpec = animationSpecForFade),
-                exit = slideOutVertically(
-                    targetOffsetY = { it } // خروج به پایین
-                ) + fadeOut(animationSpec = animationSpecForFade)
+    Scaffold(
+//        topBar = { TopAppBar(title = { Text("CategoryScreen2") }) },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = { showAddCategory = true }
             ) {
-                AddCategory(
-                    newCategoryEntity = categoryUiState.newCategoryEntity,
-                    categoryEntityList = categoryUiState.categoryEntityList,
-                    onClickBack = {
-                        showAddCategory =
-                            false;onDismissRequest();viewModel.handleAddCategory(back = true)
-                    },
-                    onClickConfirm = {
-                        showAddCategory =
-                            false;onDismissRequest();viewModel.handleAddCategory(
-                        confirm = true
+                Icon(Icons.Filled.Add, contentDescription = "Add Category")
+            }
+
+
+        },
+        floatingActionButtonPosition = androidx.compose.material3.FabPosition.Start
+
+        // bottomBar فعلاً از Navigation foundation میاد، بعداً یکدستش می‌کنیم
+    ) { padding ->
+
+        Column(modifier = Modifier.padding(padding)) {
+            val visibleItems = state.renderItems.filter { it.isVisible }
+
+            // ✅ لیست لوکال برای UI (مثل بامبو)
+            var dragging by remember { mutableStateOf(false) }
+
+            val listState = remember { mutableStateOf(state.renderItems) }
+
+            // parent قبلی و parent موقت جدید
+            val fromParentId = remember { mutableStateOf<Int?>(null) }
+            val pendingParentId = remember { mutableStateOf<Int?>(null) }
+
+            val pendingParentById =
+                remember { mutableStateMapOf<Int, Int?>() } // draggedId -> newParentId
+            val dragOffsetXById =
+                remember { mutableStateMapOf<Int, Float>() }  // draggedId -> accumulatedX
+            val threshold = 70f
+
+            val lastReparentAtById = remember { mutableStateMapOf<Int, Long>() }
+            val reparentDelayMs = 200L
+
+            val childrenByParent = remember(state.categories) {
+                state.categories
+                    .filter { it.categoryId != null }
+                    .groupBy { it.parentCategoryId }
+                    .mapValues { entry -> entry.value.mapNotNull { it.categoryId } }
+            }
+
+            fun isDescendantOfDragged(candidateParentId: Int, draggedId: Int): Boolean {
+                // آیا candidateParentId داخل زیر درخت draggedId است؟
+                val stack = ArrayDeque<Int>()
+                stack.add(draggedId)
+
+                while (stack.isNotEmpty()) {
+                    val cur = stack.removeLast()
+                    val children = childrenByParent[cur] ?: emptyList()
+                    if (candidateParentId in children) return true
+                    children.forEach { stack.add(it) }
+                }
+                return false
+            }
+
+
+            fun effectiveParentId(item: CategoryRenderItem): Int? {
+                val id = item.category.categoryId ?: return item.category.parentCategoryId
+                return pendingParentById[id] ?: item.category.parentCategoryId
+            }
+
+
+            // وقتی درگ نداریم، با state.sync شو
+            LaunchedEffect(state.renderItems) {
+                if (!dragging) listState.value = state.renderItems
+            }
+
+            val draggingKey = remember { mutableStateOf<Int?>(null) }
+
+            val reorderState = rememberReorderableLazyListState(
+                onMove = { from, to ->
+                    dragging = true
+
+                    val draggedId = from.key as? Int ?: return@rememberReorderableLazyListState
+
+                    val list = listState.value.toMutableList()
+                    val fromIndex = from.index
+                    val toIndex = to.index.coerceIn(0, list.lastIndex)
+                    if (fromIndex !in list.indices || toIndex !in list.indices) return@rememberReorderableLazyListState
+                    if (fromIndex == toIndex) return@rememberReorderableLazyListState
+
+                    val toItem = list[toIndex]
+
+                    val moved = list.removeAt(fromIndex)
+                    list.add(toIndex, moved)
+                    listState.value = list
+
+                    // ✅ parent موقت = parentِ مقصد (عمودی)
+                    val targetParent = effectiveParentId(toItem) // همون fun(item)
+                    pendingParentById[draggedId] = targetParent
+                },
+                onDragEnd = { _, _ ->
+                    dragging = false
+
+                    val draggedId = draggingKey.value ?: return@rememberReorderableLazyListState
+
+                    val oldParent = fromParentId.value
+                    val newParent = pendingParentById[draggedId]
+
+                    viewModel.applyDragResult(
+                        draggedId = draggedId,
+                        oldParentId = oldParent,
+                        newParentId = newParent,
+                        currentList = listState.value
                     )
-                    },
-                    onValueChangeName = { viewModel.handleAddCategory(name = it) },
-                    onClickChoseParent = { showAddParentInAddCategory = true },
-                    onClickChoseSiblingPosition = {viewModel.handleAddCategory(siblingPositionTop = it)},
-                    onClickChoseIcon = { showAddIconInAddCategory = true },
-                    onClickChoseColor = { showAddColorInAddCategory = true },
-                    onClickChoseDescription = { showAddDescriptionInAddCategory = true }
-                )
-            }
 
-            if (showAddParentInAddCategory) {
-                BasicAlertDialog(
-                    onDismissRequest = { showAddParentInAddCategory = false },
-                    content = {
-                        AddParentInAddCategory(
-                            sortedCategoryEntityWhitGeneration = categoryUiState.sortedCategoryEntityWhitGeneration,
-                            onClickCategoryExpand={categoryId: Int,isExtended :Boolean->
-                                viewModel.onClickExpandInCategoryListInCategoryScreen(categoryId,isExtended) },
-                            onClickParentInAddParent = {
-                                showAddParentInAddCategory = false
-                                viewModel.handleAddCategory(parentId = it)
-                            }
-                        )
-                    }
-                )
-            }
-            if (showAddIconInAddCategory) {
-                BasicAlertDialog(
-                    onDismissRequest = { showAddIconInAddCategory = false },
-                    content = {
-                        AddIconInAddCategory(
-                            onClickOnIcon = { iconName ->
-                                showAddIconInAddCategory = false
-                                viewModel.handleAddCategory(iconName = iconName)
-                            }
-                        )
-                    }
-                )
-            }
+                    viewModel.onDragEndRestoreExpand()
+
+                    draggingKey.value = null
+                    fromParentId.value = null
+
+                    pendingParentById.clear()
+                    dragOffsetXById.clear()
+                    lastReparentAtById.clear()
+
+                }
 
 
-            if (showAddColorInAddCategory) {
-                BasicAlertDialog(
-                    onDismissRequest = { showAddColorInAddCategory = false },
-                    content = {
-                        AddColorInAddCategory(
-                            onClickColor = {
-                                showAddColorInAddCategory =
-                                    false; viewModel.handleAddCategory(color = it)
-                            }
-                        )
-                    }
-                )
-            }
-            if (showAddDescriptionInAddCategory) {
-                BasicAlertDialog(
-                    onDismissRequest = { showAddDescriptionInAddCategory = false },
-                    content = {
-                        AddDescriptionInAddCategory()
-                    }
-                )
-            }
-
-            if (
-                !showAddCategory &&
-                !showAddParentInAddCategory &&
-                !showAddIconInAddCategory &&
-                !showAddColorInAddCategory &&
-                !showAddDescriptionInAddCategory
-            ) {
-                CategoryContent(
-                    categoryEntityList = categoryUiState.categoryEntityList,
-                    sortedCategoryEntityWhitGeneration = categoryUiState.sortedCategoryEntityWhitGeneration,
-                    resetKey = categoryUiState.resetKey,
-                    categoryOffsetMap = categoryUiState.categoryOffset,
-                    onClickCategoryExpand = {categoryId: Int,isExtended :Boolean->
-                        viewModel.onClickExpandInCategoryListInCategoryScreen(categoryId,isExtended) },
-                    onDragCategoryInList = { categoryEntity: CategoryEntity, offsetX: Float, offsetY: Float, endDrag: Boolean ->
-                        viewModel.drugCategoryInCategoryContent(categoryEntity, offsetX, offsetY, endDrag)
-                    },
-                    onClickDeleteCategory = {viewModel.onClickDeleteCategory(it)}
-                )
-            }
-
-        } else {
-            LoadingScreen(modifier = Modifier)
-        }
-    }
-}
-
-
-@Composable
-fun CategoryContent(
-    categoryEntityList: List<CategoryEntity>,
-    sortedCategoryEntityWhitGeneration: Map<CategoryEntity, Int>,
-    categoryOffsetMap: Map<Int?, Pair<Float, Float>>,
-    modifier: Modifier = Modifier,
-    onClickCategoryExpand: (categoryId: Int,isExtended :Boolean) -> Unit,
-    onDragCategoryInList: (categoryEntity: CategoryEntity, offsetX: Float, offsetY: Float, endDrag: Boolean) -> Unit,
-    onClickDeleteCategory : (categoryEntity: CategoryEntity) -> Unit,
-    resetKey: Boolean = false,
-) {
-
-
-    val offsetValue = 0.06f
-
-    val itemToShowInList=sortedCategoryEntityWhitGeneration.filterKeys { it.visible }
-
-
-
-
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(
-                color = MaterialTheme.colorScheme.primaryContainer,
-                shape = RectangleShape
             )
-            .padding(8.dp)
-    ) {
-        LazyColumn(modifier = Modifier.fillMaxSize()) {
-            items(itemToShowInList.entries.toList()) { (category, generation) ->
 
-                var offsetX :Float = categoryOffsetMap[category.categoryId]?.first ?:0f
-                var offsetY :Float = categoryOffsetMap[category.categoryId]?.second ?:0f
+            // ✅ collapse/restore هنگام شروع/پایان درگ (مثل قبل)
+            LaunchedEffect(reorderState.draggingItemKey) {
+                val key = reorderState.draggingItemKey as? Int
+                if (key != null) {
+                    draggingKey.value = key
+                    fromParentId.value =
+                        listState.value.firstOrNull { it.category.categoryId == key }?.category?.parentCategoryId
+                    pendingParentId.value = null
+                    viewModel.onDragStartMaybeCollapse(key)
+                }
+            }
 
-                var categoryMenuExpand by rememberSaveable { mutableStateOf(false) }
+            val allById = remember(state.renderItems) {
+                state.renderItems.associateBy { it.category.categoryId }
+            }
 
+            // کمک: دسترسی سریع به آیتم‌ها با id (از لیست واقعی uiState)
+            val entityById = remember(state.categories) {
+                state.categories.associateBy { it.categoryId }
+            }
 
-                Column(
-                    modifier = Modifier
-                        .animateItem(fadeInSpec = null, fadeOutSpec = null)
+            // parent موثر: اگر pending داریم از آن استفاده کن
+            fun effectiveParentId(id: Int): Int? {
+                return pendingParentById[id] ?: entityById[id]?.parentCategoryId
+            }
 
-
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .pointerInput(resetKey) {
-                                detectDragGesturesAfterLongPress(
-                                    onDragStart = {
-                                    },
-                                    onDrag = { change, dragAmount ->
-
-                                        change.consume()
-                                        offsetX += dragAmount.x
-                                        offsetY += dragAmount.y
-                                        onDragCategoryInList(category, offsetX, offsetY, false)
-
-                                    },
-                                    onDragCancel = {
-                                        onDragCategoryInList(category, offsetX, offsetY, true)
-
-                                    },
-                                    onDragEnd = {
-                                        onDragCategoryInList(category, offsetX, offsetY, true)
-
-                                    }
-                                )
-                            }
-                            .offset { IntOffset(offsetX.roundToInt(), offsetY.roundToInt()) },
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Spacer(
-                            modifier = Modifier
-                                .height(30.dp)
-                                .then(
-                                    if (generation > 2) Modifier.weight(offsetValue * (generation - 2))
-                                    else Modifier
-                                )
-                                .wrapContentWidth(Alignment.End)
+            // محاسبه level بر اساس parent موثر (حداکثر 4)
+            fun effectiveLevel(id: Int): Int {
+                var level = 1
+                var curParent = effectiveParentId(id)
+                var guard = 0
+                while (curParent != null && curParent != -1 && guard < 10) {
+                    level++
+                    val next = effectiveParentId(curParent)
+                    curParent = next
+                    guard++
+                }
+                return level.coerceAtMost(4)
+            }
 
 
-                        )
-                        Icon(
-                            imageVector = iconNameToImageVector(category.iconName),
-                            tint = category.color.stringToColor(),
-                            contentDescription = "icon",
-                            modifier = Modifier
-                                .size(55.dp)
-                                .weight(0.2f)
-                        )
-                        Text(
-                            text = category.name,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier
-                                .weight(0.5f - (offsetValue * (generation - 1)))
-                                .wrapContentHeight(Alignment.CenterVertically),
-                        )
-                        if (category.expandable){
-                            IconButton(
-                                modifier = Modifier
-                                    .weight(0.2f)
-                                    .zIndex(1f),
+            fun tryIndent(id: Int) {
+                // child شدن: parent = آیتم قبلی بالای خودش در همون لیست که level < 4
+                val list = listState.value
+                val idx = list.indexOfFirst { it.category.categoryId == id }
+                if (idx <= 0) return
+                val prev = list[idx - 1]
+                val prevId = prev.category.categoryId ?: return
 
-                                onClick = {
-                                    category.categoryId?.let { onClickCategoryExpand(it, category.isExtended) }
-                                }
-                            ) {
-                                Icon(
-                                    imageVector = if (!category.isExtended) {
-                                        Icons.Filled.ExpandMore
-                                    } else {
-                                        Icons.Filled.ExpandLess
-                                    },
-                                    contentDescription = "Expand",
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(2.dp)
-                                )
-                            }
-                        }else{
-                            Spacer(
-                                modifier = Modifier.weight(0.2f),
-                            )
-                        }
+                val parentLevel = effectiveLevel(prevId)
+                if (parentLevel >= 4) return
 
 
+                // ✅ جلوگیری از cycle: نباید زیر بچه‌ی خودش بره
+                if (isDescendantOfDragged(candidateParentId = prevId, draggedId = id)) return
 
-                        VerticalDivider(
-                            thickness = 1.dp,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.height(30.dp)
-                        )
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .wrapContentSize(Alignment.TopStart)
-                                .weight(0.1f)
+
+                if (effectiveLevel(prevId) >= 4) return
+                pendingParentById[id] = prevId
+            }
+
+            fun tryOutdent(id: Int) {
+                val current = allById[id] ?: return
+                val currentParent = pendingParentById[id] ?: current.category.parentCategoryId
+                if (currentParent == null) return
+
+                val parentItem = allById[currentParent] ?: return
+                val newParent = parentItem.category.parentCategoryId
+                pendingParentById[id] = newParent
+            }
+
+            val onHorizontalReparentHint: (Int, Float) -> Unit = reparent@{ id, deltaX ->
+                val acc = (dragOffsetXById[id] ?: 0f) + deltaX
+                dragOffsetXById[id] = acc
+
+                val now = android.os.SystemClock.uptimeMillis()
+                val last = lastReparentAtById[id] ?: 0L
+                val canStep = (now - last) >= reparentDelayMs
+                if (!canStep) return@reparent
+
+                if (acc >= threshold) {
+                    dragOffsetXById[id] = 0f
+                    lastReparentAtById[id] = now
+                    tryIndent(id)   // +1 level
+                } else if (acc <= -threshold) {
+                    dragOffsetXById[id] = 0f
+                    lastReparentAtById[id] = now
+                    tryOutdent(id)  // -1 level
+                }
+            }
+
+            val currentDraggingId = reorderState.draggingItemKey as? Int
+            val isDragActive = currentDraggingId != null
+
+
+            LazyColumn(
+                state = reorderState.listState, // ✅ مهم
+                modifier = Modifier
+                    .fillMaxSize()
+                    .reorderable(reorderState)
+            ) {
+                items(
+                    items = listState.value,
+                    key = { it.category.categoryId ?: it.hashCode() }
+                ) { item ->
+                    val id = item.category.categoryId ?: return@items
+
+                    ReorderableItem(reorderState, key = id) { _ ->
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = item.isVisible,
+                            enter = fadeIn() + expandVertically(),
+                            exit = fadeOut() + shrinkVertically()
                         ) {
-                            IconButton(
-                                onClick = { categoryMenuExpand = true }
-                            ) {
-                                Icon(
-                                    Icons.Default.MoreVert,
-                                    contentDescription = "Localized description"
-                                )
-                            }
-                            DropdownMenu(
-                                expanded = categoryMenuExpand,
-                                onDismissRequest = { categoryMenuExpand = false }
-                            ) {
-                                DropdownMenuItem(
-                                    text = { Text("Edit") },
-                                    onClick = { /* Handle edit! */ },
-                                    leadingIcon = {
-                                        Icon(
-                                            Icons.Outlined.Edit,
-                                            contentDescription = null
-                                        )
-                                    })
-                                DropdownMenuItem(
-                                    text = { Text("Delete") },
-                                    onClick = { onClickDeleteCategory(category) },
-                                    leadingIcon = {
-                                        Icon(
-                                            Icons.Outlined.Delete,
-                                            contentDescription = null
-                                        )
-                                    })
-                                HorizontalDivider()
-                            }
+
+                            val rowDragModifier = Modifier
+                                .pointerInput(id, draggingKey.value) {
+                                    awaitPointerEventScope {
+                                        while (true) {
+                                            val event = awaitPointerEvent()
+                                            val change = event.changes.firstOrNull() ?: continue
+                                            if (draggingKey.value == id && change.pressed) {
+                                                val dx = change.positionChange().x
+                                                if (dx != 0f) onHorizontalReparentHint(id, dx)
+                                            }
+                                        }
+                                    }
+                                }
+                                .detectReorderAfterLongPress(reorderState) // ✅ کل ردیف draggable
+
+
+                            CategoryRow2(
+                                item = item,
+                                computedLevel = effectiveLevel(id),
+                                onToggleExpand = viewModel::toggleExpand,
+                                modifier = rowDragModifier,
+                                onOpenMenu = { id -> viewModel.setMenuCategoryId(id) }
+                            )
+
+                            HorizontalDivider(thickness = 0.5.dp) // ✅ خط باریک
                         }
-
-
                     }
-                    HorizontalDivider(
-                        thickness = 1.dp,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(start = 4.dp, end = 12.dp)
-                    )
-
                 }
 
-
             }
+
         }
+
     }
-}
 
 
-@Composable
-fun AddCategory(
-    newCategoryEntity: CategoryEntity?,
-    categoryEntityList: List<CategoryEntity>,
-    onClickBack: () -> Unit,
-    onClickConfirm: () -> Unit,
-    onValueChangeName: (name: String) -> Unit,
-    onClickChoseParent: (parentCategoryId: Int) -> Unit,
-    onClickChoseSiblingPosition: (siblingPositionTop: Boolean) -> Unit,
-    onClickChoseIcon: () -> Unit,
-    onClickChoseColor: () -> Unit,
-    onClickChoseDescription: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-
-    val context = LocalContext.current
-    var siblingPositionTop by rememberSaveable { mutableStateOf(false) }
-    onClickChoseSiblingPosition(siblingPositionTop)
-
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                shape = RectangleShape
-            ),
-
-        ) {
-        Row(
-            // back - confirm
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(0.1f)
-                .shadow(
-                    elevation = 8.dp, // ارتفاع سایه
-                    shape = RectangleShape
-                )
-                .background(
-                    color = MaterialTheme.colorScheme.surface,
-                    shape = RectangleShape
-                ),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Start,
-        ) {
-            IconButton(
-                onClick = { onClickBack() },
-                modifier = Modifier.weight(0.15f)
-            ) {
-                Icon(
-                    Icons.Filled.ArrowBackIosNew,
-                    contentDescription = "Back",
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(2.dp)
-                )
+    if (showAddCategory) {
+        AddCategoryDialog2(
+            draft = draft,
+            parentName = state.categories.firstOrNull { it.categoryId == draft.parentId }?.name
+                ?: "ریشه اصلی",
+            parentIconName = parentEntity?.iconName ?: "Category",
+            parentColorHex = parentEntity?.color ?: "#9E9E9E",
+            onDismiss = {
+                showAddCategory = false
+                viewModel.resetDraft()
+            },
+            onPickParent = { showPickParent = true },
+            onPickIcon = { showIconPicker = true },   // ✅
+            onPickColor = { showColorPicker = true }, // ✅
+            onNameChange = viewModel::setDraftName,
+            onDescriptionChange = { desc ->
+                // اگر draft.description را در VM نداری، فعلاً همینجا نگه دار یا یک setter اضافه کن
+                // پیشنهاد: viewModel.setDraftDescription(desc)
+            },
+            onConfirm = {
+                viewModel.createCategoryFromDraft()
             }
-            Text(
-                text = "گروه جدید",
-                modifier = Modifier
-                    .weight(0.7f),
-                fontSize = 22.sp
-            )
-            IconButton(
-                modifier = Modifier.weight(0.15f),
-                onClick = {
-                    if (newCategoryEntity?.name == "") {
-                        Toast.makeText(context, "لطفا یک نام وارد کنید", Toast.LENGTH_SHORT).show()
-                    } else {
-                        onClickConfirm()
-                    }
-                }
-            ) {
-                Icon(
-                    Icons.Filled.Check,
-                    contentDescription = "Confirm",
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(2.dp)
-                )
+
+        )
+    }
+
+    if (showAddCategory && showPickParent) {
+        PickParentDialogSmall(
+            items = pickerFlatten.items,      // ✅ به جای state.renderItems
+            levelById = pickerFlatten.levelById,
+            onDismiss = { showPickParent = false },
+            onPick = { parentId ->
+                val ok = viewModel.trySetDraftParent(parentId)
+                if (ok) showPickParent = false
             }
-        }
-        Row(
-            // chose name
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(0.1f)
-                .shadow(
-                    elevation = 8.dp,
-                    shape = RectangleShape
-                )
-                .background(
-                    color = MaterialTheme.colorScheme.surface,
-                    shape = RectangleShape
-                ),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Start,
-        ) {
-
-            Icon(
-                Icons.Filled.Category,
-                contentDescription = "Category",
-                modifier = Modifier
-                    .weight(0.15f)
-                    .size(30.dp)
-
-            )
-
-            TextField(
-                value = newCategoryEntity?.name ?: "",
-                onValueChange = { onValueChangeName(it) },
-                label = { Text("نام گروه") },
-                singleLine = true,
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.Transparent, // رنگ زمینه هنگام فوکوس
-                    unfocusedContainerColor = Color.Transparent, // رنگ زمینه هنگام عدم فوکوس
-                    disabledContainerColor = Color.Transparent, // رنگ زمینه هنگام غیرفعال بودن
-                    focusedIndicatorColor = Color.Transparent, // خط زیرین هنگام فوکوس
-                    unfocusedIndicatorColor = Color.Transparent, // خط زیرین هنگام عدم فوکوس
-                    disabledIndicatorColor = Color.Transparent, // خط زیرین هنگام غیرفعال بودن
-                    focusedLabelColor = MaterialTheme.colorScheme.primary, // رنگ label هنگام فوکوس
-                    unfocusedLabelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f) // رنگ label هنگام عدم فوکوس
-                ),
-                modifier = Modifier.weight(0.85f)
-            )
+        )
+    }
 
 
-        }
-
-
-        Row(
-            //parent-icon-color - description
-
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(0.4f)
-                .background(
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    shape = RectangleShape
-                ),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center,
-        ) {
-            Column(                     //Icons
-                modifier = Modifier
-                    .weight(0.15f),
-                verticalArrangement = Arrangement.SpaceAround,
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-
-
-
-                Icon(                   //parent Icon
-                    imageVector =iconNameToImageVector(categoryEntityList.firstOrNull {
-                        it.categoryId == newCategoryEntity?.parentCategoryId
-                    }?.iconName ?: "AccountTree"),
-                    tint = categoryEntityList.firstOrNull {
-                        it.categoryId == newCategoryEntity?.parentCategoryId
-                    }?.color?.stringToColor() ?: Color(0xFF000000),
-                    contentDescription = "AccountTree",
-                    modifier = Modifier
-                        .weight(0.25f)
-                        .fillMaxWidth(0.6f)
-                        .clickable {
-                            val parentCategoryId = categoryEntityList.firstOrNull {
-                                it.categoryId == newCategoryEntity?.parentCategoryId
-                            }?.categoryId ?: 1
-                            onClickChoseParent(parentCategoryId)
-
-                        }
-                )
-                Icon(                   //icon icon
-                    imageVector =iconNameToImageVector(
-                    newCategoryEntity?.iconName ?: "QuestionMark"),
-                    tint = newCategoryEntity?.color?.stringToColor() ?: Color(0xFF000000),
-                    contentDescription = "Route",
-                    modifier = Modifier
-                        .weight(0.25f)
-                        .fillMaxWidth(0.6f)
-                        .clickable { onClickChoseIcon() }
-                )
-                Icon(                   //color icon
-                    imageVector = Icons.Filled.Circle,
-                    tint = newCategoryEntity?.color?.stringToColor() ?: Color(0xFF000000),
-                    contentDescription = "Circle",
-                    modifier = Modifier
-                        .weight(0.25f)
-                        .fillMaxWidth(0.6f)
-                        .clickable { onClickChoseColor() }
-                )
-                Icon(                   //add description icon
-                    Icons.Filled.Description,
-                    contentDescription = "Description",
-                    modifier = Modifier
-                        .weight(0.25f)
-                        .fillMaxWidth(0.6f)
-                        .clickable { onClickChoseDescription() }
-                )
+    if (showAddCategory && showIconPicker) {
+        ChooseIconDialog(
+            selectedKey = draft.iconName,
+            onDismiss = { showIconPicker = false },
+            onPick = { opt ->
+                viewModel.setDraftIconName(opt.key)
+                showIconPicker = false
             }
-            Column(                       //name of Icons
-                modifier = Modifier
-                    .weight(0.85f),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
+        )
+    }
 
-                Row(
-                    // chose parent
-                    modifier = Modifier
-                        .weight(0.25f)
-                        .fillMaxWidth()
-                        ,
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Text(
-                        text = categoryEntityList.firstOrNull {
-                            it.categoryId == newCategoryEntity?.parentCategoryId
-                        }?.name ?: "ریشه اصلی",
-                        modifier = Modifier
-                            .weight(0.6f)
-                            .clickable {
-                                val parentCategoryId = categoryEntityList.firstOrNull {
-                                    it.categoryId == newCategoryEntity?.parentCategoryId
-                                }?.categoryId ?: 1
-                                onClickChoseParent(parentCategoryId)
-                            },
-                        fontSize = 22.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+    if (showAddCategory && showColorPicker) {
+        ChooseColorDialog(
+            initialHex = draft.color,
+            onDismiss = { showColorPicker = false },
+            onConfirm = { hex ->
+                viewModel.setDraftColor(hex)
+                showColorPicker = false
+            }
+        )
+    }
+
+    if (menuCategory != null) {
+
+        CategoryOptionsSideSheet(
+            category = menuCategory,
+            onDismiss = { viewModel.setMenuCategoryId(null) },
+            onClickPickIcon = { showEditIconPicker = true },
+            onClickPickColor = { showEditColorPicker = true },
+            onClickRename = {
+                showRenameDialog = true
+                renameText = menuCategory.name
+                renameError = null
+            },
+            onClickEditDescription = {
+                // یک دیالوگ برای description
+            },
+            onClickDelete = {
+                showDeleteConfirm = true
+            },
+            tasks = tasksWithSchedule.map { tws ->
+                TaskMiniUi(
+                    id = tws.task.id ?: -1,
+                    title = tws.task.name,
+                    isDone = tws.task.isCompleted,
+                    hasSchedule = (tws.schedule != null)
+                )
+            },
+            onAddTask = {
+                val cat = menuCategory ?: return@CategoryOptionsSideSheet
+                viewModel.startAddTask(cat.categoryId!!, cat.color)
+                showAddTaskDialog = true
+            },
+            tasksExpanded = tasksExpanded,
+            onToggleTasksExpand = { tasksExpanded = !tasksExpanded },
+            onClickTask = { taskId ->
+                viewModel.startEditTask(taskId)
+            },
+            scheduledCount=scheduledCount
+
+        )
+    }
+
+    if (showDeleteConfirm && menuCategoryId != null) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Delete category?") },
+            text = { Text("Are you sure you want to delete this category?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    val id = menuCategoryId ?: return@TextButton
+                    viewModel.deleteCategoryPromoteChildren(id)
+                    showDeleteConfirm = false
+                    viewModel.setMenuCategoryId(null)
+                }) { Text("Delete") }
+
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    if (showRenameDialog && menuCategoryId != null) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showRenameDialog = false },
+            title = { Text("Rename") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = renameText,
+                        onValueChange = {
+                            renameText = it
+                            if (renameError != null) renameError = null
+                        },
+                        singleLine = true,
+                        label = { Text("Name") },
+                        isError = renameError != null
                     )
-                    Text(
-                        text = "والد",
-                        modifier = Modifier
-                            .padding(end = 18.dp)
-                            .weight(0.2f),
-                        maxLines = 1,
-                        fontSize = 22.sp
-                    )
-                    VerticalDivider()
-                    IconButton(
-                        modifier = Modifier,
-                        onClick = {siblingPositionTop=!siblingPositionTop ; onClickChoseSiblingPosition(siblingPositionTop)}
-                    ) {
-                        Icon(
-                            imageVector = if (siblingPositionTop)Icons.Filled.ArrowUpward else Icons.Filled.ArrowDownward,
-                            contentDescription = "siblingPosition",
-                            modifier = Modifier
-                                .weight(0.2f)
-                                .fillMaxWidth(0.6f)
+                    if (renameError != null) {
+                        Text(
+                            text = renameError!!,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.padding(top = 6.dp)
                         )
                     }
-
                 }
-                Spacer(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(1.dp)
-                        .padding(start = 4.dp, end = 12.dp)
-                        .background(
-                            color = MaterialTheme.colorScheme.outlineVariant,
-                            shape = RectangleShape
-                        ),
-                )
-                Text(
-                    text = "آیکون",
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(0.25f)
-                        .padding(end = 22.dp)
-                        .clickable { onClickChoseIcon() }
-                        .wrapContentHeight(Alignment.CenterVertically),
-                    fontSize = 22.sp
-
-                )
-                Spacer(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(1.dp)
-                        .padding(start = 4.dp, end = 12.dp)
-                        .background(
-                            color = MaterialTheme.colorScheme.outlineVariant,
-                            shape = RectangleShape
-                        ),
-                )
-                Text(
-                    text = "رنگ",
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(0.25f)
-                        .padding(end = 22.dp)
-                        .clickable { onClickChoseColor() }
-                        .wrapContentHeight(Alignment.CenterVertically),
-                    fontSize = 22.sp
-                )
-                Spacer(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(1.dp)
-                        .padding(start = 4.dp, end = 12.dp)
-                        .background(
-                            color = MaterialTheme.colorScheme.outlineVariant,
-                            shape = RectangleShape
-                        ),
-                )
-                Text(
-                    text = "اضافه کردن توضیحات",
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(0.25f)
-                        .padding(end = 22.dp)
-                        .clickable { onClickChoseDescription() }
-                        .wrapContentHeight(Alignment.CenterVertically),
-                    fontSize = 22.sp
-                )
-                Spacer(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(1.dp)
-                        .padding(start = 4.dp, end = 12.dp)
-                        .background(
-                            color = MaterialTheme.colorScheme.outlineVariant,
-                            shape = RectangleShape
-                        ),
-                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val trimmed = renameText.trim()
+                    if (trimmed.isBlank()) {
+                        renameError = "نام نمی‌تواند خالی باشد"
+                        return@TextButton
+                    }
+                    viewModel.renameCategory(menuCategoryId!!, trimmed)
+                    showRenameDialog = false
+                }) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRenameDialog = false }) { Text("Cancel") }
             }
-        }
-        Spacer(
-            modifier = Modifier
-                .fillMaxSize()
-                .weight(0.5f),
         )
-
     }
+
+    if (menuCategoryId != null && showEditIconPicker) {
+        val current = state.categories.firstOrNull { it.categoryId == menuCategoryId } ?: return
+
+            ChooseIconDialog(
+                selectedKey = current.iconName,
+                onDismiss = { showEditIconPicker = false },
+                onPick = { opt ->
+                    viewModel.updateCategoryIcon(menuCategoryId!!, opt.key)
+                    showEditIconPicker = false
+                }
+            )
+    }
+
+    if (menuCategoryId != null && showEditColorPicker) {
+        val current = state.categories.firstOrNull { it.categoryId == menuCategoryId } ?: return
+
+            ChooseColorDialog(
+                initialHex = current.color,
+                onDismiss = { showEditColorPicker = false },
+                onConfirm = { hex ->
+                    viewModel.updateCategoryColor(menuCategoryId!!, hex)
+                    showEditColorPicker = false
+                }
+            )
+    }
+
+    if (showAddTaskDialog && menuCategory != null) {
+        AddTaskDialog(
+            addTaskMod = true,
+            categoryName = menuCategory.name,
+            categoryIconName = menuCategory.iconName,
+            categoryColorHex = menuCategory.color,
+            draft = taskDraft,
+            onDismiss = { showAddTaskDialog = false },
+            onNameChange = viewModel::setTaskName,
+            onPriorityChange = viewModel::setTaskPriority,
+            onCompletedToggle = viewModel::setTaskCompleted,
+            onNoteChange = viewModel::setTaskNote,
+            onConfirm = {
+                viewModel.createTaskForCategory(menuCategory.color)
+                showAddTaskDialog = false
+            },
+            onOpenSchedule = { showScheduleDialog = true }
+        )
+    }
+
+    if (editingTaskId != null && menuCategory != null) {
+        AddTaskDialog(
+            addTaskMod = false,
+            categoryName = menuCategory.name,
+            categoryIconName = menuCategory.iconName,
+            categoryColorHex = menuCategory.color,
+            draft = taskDraft,
+            onDismiss = { viewModel.finishEditTask() },
+            onNameChange = viewModel::setTaskName,
+            onPriorityChange = viewModel::setTaskPriority,
+            onCompletedToggle = viewModel::setTaskCompleted,
+            onNoteChange = viewModel::setTaskNote,
+            onConfirm = {
+                viewModel.saveEditedTask(menuCategory.color)
+            },
+            onOpenSchedule = { showScheduleDialog = true }
+        )
+    }
+    if (showScheduleDialog && menuCategory != null) {
+        TaskScheduleDialog(
+            taskName = taskDraft.name.ifBlank { "Task" },
+            draft = scheduleDraft,
+            onDismiss = { showScheduleDialog = false },
+            onTitleChange = viewModel::setScheduleTitle,
+            onModeChange = viewModel::setScheduleMode,
+            onStartChange = viewModel::setScheduleStart,
+            onEndChange = viewModel::setScheduleEnd,
+            onDurationChange = viewModel::setScheduleDuration,
+            onRepeatingChange = viewModel::setScheduleRepeating,
+            onConfirm = {
+                viewModel.markScheduleConfirmedForNewTask()
+                viewModel.saveScheduleForCurrentTask()
+                showScheduleDialog = false
+            }
+        )
+    }
+
 
 }
 
 @Composable
-fun AddParentInAddCategory(
-    sortedCategoryEntityWhitGeneration: Map<CategoryEntity, Int>,
-    onClickCategoryExpand: (categoryId: Int,isExtended :Boolean) -> Unit,
-    onClickParentInAddParent: (categoryId: Int) -> Unit,
-    modifier: Modifier = Modifier,
+fun AddCategoryDialog2(
+    draft: CategoryDraft2,
+    parentName: String,
+    parentIconName: String,   // ✅ جدید
+    parentColorHex: String,
+    onDismiss: () -> Unit,
+    onPickParent: () -> Unit,
+    onPickIcon: () -> Unit,   // ✅ جدید
+    onPickColor: () -> Unit,  // ✅ جدید
+    onNameChange: (String) -> Unit,
+    onDescriptionChange: (String) -> Unit, // ✅ جدید (فعلاً اگر نداری، می‌تونی خالی پاس بدی)
+    onConfirm: () -> Unit,
 ) {
-
-    val offsetValue = 0.06f
-    val itemToShowInList=sortedCategoryEntityWhitGeneration.filterKeys { it.visible }
-
-    Column(
-        modifier = modifier
-            .fillMaxWidth(0.9f)
-            .fillMaxHeight(0.8f)
-            .background(
-                color = MaterialTheme.colorScheme.primaryContainer,
-                shape = RoundedCornerShape(12.dp)
-            ),
+    DimmedDialog(
+        onDismiss = onDismiss,
+        modifier = Modifier
+            .fillMaxWidth(0.92f)
+            .fillMaxHeight(0.85f)
+            .background(MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.extraLarge),
+        dimAlpha = 0.6f,
+        dismissOnBackdropClick = true
     ) {
-        Box(
-            modifier = modifier
-                .fillMaxSize()
-                .background(
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    shape = RectangleShape
+        Column(modifier = Modifier.fillMaxSize()) {
+
+            // --- Top bar داخل دیالوگ (مثل عکس) ---
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                TextButton(onClick = onDismiss) { Text("Back") }
+                Text(text = "New category", style = MaterialTheme.typography.titleLarge)
+                TextButton(onClick = onConfirm) { Text("✓") }
+            }
+
+            HorizontalDivider()
+
+            // --- محتوا ---
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+            ) {
+
+                // Name*
+                OutlinedTextField(
+                    value = draft.name,
+                    onValueChange = onNameChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Name *") },
+                    singleLine = true
                 )
-                .padding(8.dp),
+
+                Spacer(Modifier.size(10.dp))
+
+                // Parent row (مثل عکس یک ردیف ساده)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onPickParent() }
+                        .padding(vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Parent", modifier = Modifier.weight(1f))
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = iconFromKey(parentIconName),
+                            contentDescription = parentIconName,
+                            tint = colorFromHex(parentColorHex),
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(parentName, style = MaterialTheme.typography.titleMedium)
+                    }
+                }
+
+
+                HorizontalDivider()
+
+                // Icon row
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onPickIcon() }
+                        .padding(vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Icon", modifier = Modifier.weight(1f))
+
+                    Icon(
+                        imageVector = iconFromKey(draft.iconName),
+                        contentDescription = draft.iconName,
+                        tint = colorFromHex(draft.color),   // ✅ مهم
+                        modifier = Modifier.size(24.dp)
+                    )
+
+                }
+
+
+                HorizontalDivider()
+
+                // Color row
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onPickColor() }
+                        .padding(vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Color", modifier = Modifier.weight(1f))
+
+                    Box(
+                        modifier = Modifier
+                            .size(22.dp)
+                            .border(1.dp, Color.Black.copy(alpha = 0.15f), CircleShape)
+                            .background(colorFromHex(draft.color), CircleShape)
+                    )
+                }
+
+                HorizontalDivider()
+
+                Spacer(Modifier.size(10.dp))
+
+                // Description (اختیاری)
+                OutlinedTextField(
+                    value = draft.description,
+                    onValueChange = onDescriptionChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Add description") },
+                    minLines = 2
+                )
+
+                Spacer(Modifier.weight(1f))
+
+                // (اختیاری) نمایش parentId برای دیباگ
+                Text(
+                    text = "ParentId: ${draft.parentId}",
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            }
+        }
+    }
+}
+
+
+@Composable
+private fun CategoryRow2(
+    item: CategoryRenderItem,
+    computedLevel: Int,
+    onToggleExpand: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    onOpenMenu: (Int) -> Unit, // ✅ جدید
+) {
+    val id = item.category.categoryId ?: return
+    val indent = (computedLevel - 1).coerceAtLeast(0) * 16
+    val bg = containerColorForLevel(computedLevel)
+
+    ListItem(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(start = indent.dp),
+        colors = ListItemDefaults.colors(containerColor = bg),
+        leadingContent = {
+            Icon(
+                imageVector = iconFromKey(item.category.iconName),
+                contentDescription = null,
+                tint = colorFromHex(item.category.color),
+                modifier = Modifier.size(30.dp)
+            )
+        },
+        headlineContent = { Text(item.category.name) },
+        trailingContent = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                val canHaveChildren = computedLevel < 4
+                if (item.hasChildren && canHaveChildren) {
+                    IconButton(onClick = { onToggleExpand(id) }) {
+                        Icon(
+                            imageVector = if (item.isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                            contentDescription = "expand"
+                        )
+                    }
+                }
+
+                IconButton(onClick = { onOpenMenu(id) }) { // ✅ مستقیم SideSheet
+                    Icon(Icons.Filled.MoreVert, contentDescription = "menu")
+                }
+            }
+        }
+    )
+}
+
+
+@Composable
+fun PickParentDialogSmall(
+    items: List<CategoryRenderItem>,
+    levelById: Map<Int, Int>,
+    onDismiss: () -> Unit,
+    onPick: (parentId: Int) -> Unit,
+) {
+    DimmedDialog(
+        onDismiss = onDismiss,
+        modifier = Modifier
+            .fillMaxWidth(0.86f)
+            .fillMaxHeight(0.65f) // کوچکتر از قبلی
+            .background(MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.extraLarge),
+        dimAlpha = 0.4f, // کمی کمتر چون روی دیالوگ دیگر میاد
+        dismissOnBackdropClick = true
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(12.dp)
         ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                TextButton(onClick = onDismiss) { Text("Close") }
+                Text("انتخاب والد", style = MaterialTheme.typography.titleMedium)
+                Spacer(modifier = Modifier.size(48.dp)) // برای بالانس
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(top = 8.dp, bottom = 8.dp))
 
             LazyColumn(modifier = Modifier.fillMaxSize()) {
-                items(itemToShowInList.entries.toList()) { (category, generation) ->
+                items(items, key = { it.category.categoryId ?: it.hashCode() }) { item ->
+                    val id = item.category.categoryId ?: return@items
 
-                    Column(
-                        modifier = Modifier
-                            .animateItem(fadeInSpec = null, fadeOutSpec = null)
+                    // level واقعی/نمایشی (از map بهتره)
+                    val level = levelById[id] ?: item.level
 
+                    // همون قانون قبلی: والد نباید سطح 4 باشه
+                    val enabled = level < 4
 
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { category.categoryId?.let { onClickParentInAddParent(it) } },
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                        ) {
-                            Spacer(
-                                modifier = Modifier
-                                    .height(30.dp)
-                                    .then(
-                                        if (generation > 2) Modifier.weight(offsetValue * (generation - 2))
-                                        else Modifier
-                                    )
-                                    .wrapContentWidth(Alignment.End)
+                    ParentPickerRow(
+                        item = item,
+                        computedLevel = level,
+                        enabled = enabled,
+                        onPick = { onPick(id) }
+                    )
 
-
-                            )
-                            Icon(
-                                imageVector = iconNameToImageVector(category.iconName),
-                                tint = category.color.stringToColor(),
-                                contentDescription = "icon",
-                                modifier = Modifier
-                                    .size(55.dp)
-                                    .weight(0.2f)
-                            )
-                            Text(
-                                text = category.name,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier
-                                    .weight(0.5f - (offsetValue * (generation - 1)))
-                                    .wrapContentHeight(Alignment.CenterVertically),
-                            )
-                            if (category.expandable){
-                                IconButton(
-                                    modifier = Modifier
-                                        .weight(0.2f)
-                                        .zIndex(1f),
-
-                                    onClick = {
-                                        category.categoryId?.let { onClickCategoryExpand(it, category.isExtended) }
-                                    }
-                                ) {
-                                    Icon(
-                                        imageVector = if (!category.isExtended) {
-                                            Icons.Filled.ExpandMore
-                                        } else {
-                                            Icons.Filled.ExpandLess
-                                        },
-                                        contentDescription = "Expand",
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .padding(2.dp)
-                                    )
-                                }
-                            }else{
-                                Spacer(
-                                    modifier = Modifier.weight(0.2f),
-                                )
-                            }
-
-
-                        }
-                        HorizontalDivider(
-                            thickness = 1.dp,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(start = 4.dp, end = 12.dp)
-                        )
-
-                    }
-
-
+                    HorizontalDivider(thickness = 0.5.dp) // مثل صفحه اصلی
                 }
             }
-
-
 
         }
     }
 }
 
-@Composable
-fun LazyGirdItemsForCategoryContent(
-    categoryEntity: CategoryEntity,
-    subCategoryCanExpand: Boolean?,
-    categoryExpand: Boolean,
-    onClickCategoryExpand: () -> Unit,
-    modifier: Modifier = Modifier,
-    resetKey: Boolean = false,
-    categoryOffsetPair: Pair<Float, Float>? = null,
-    categoryTreePosition: Int = 1,
-    onDragCategoryInList: ((categoryEntity: CategoryEntity, offsetX: Float, offsetY: Float, endOfChangBranch: Boolean, endDrag: Boolean) -> Unit)? = null,
-    onClickParentInAddParent: ((categoryId: Int) -> Unit)? = null,
-
-    ) {
-
-
-    var categoryMenuExpand by rememberSaveable { mutableStateOf(false) }
-
-
-    val offsetValue = 0.01f
-    val weightOffset = when (categoryTreePosition) {
-        1 -> 0f
-        2 -> offsetValue
-        3 -> offsetValue * 2
-        4 -> offsetValue * 3
-        5 -> offsetValue * 4
-        else -> 0f
-    }
-
-    var offsetX = categoryOffsetPair?.first
-    var offsetY = categoryOffsetPair?.second
-
-
-
-
-    Column(
-
-        modifier = modifier
-            .fillMaxSize()
-
-            .pointerInput(resetKey) {
-                if (onDragCategoryInList != null) {
-                    if (offsetX != null && offsetY != null) {
-                        detectDragGesturesAfterLongPress(
-                            onDragStart = {},
-                            onDrag = { change, dragAmount ->
-
-                                change.consume()
-                                offsetX += dragAmount.x
-                                offsetY += dragAmount.y
-
-                                onDragCategoryInList(
-                                    categoryEntity,
-                                    offsetX,
-                                    offsetY,
-                                    subCategoryCanExpand ?: true,
-                                    false
-                                )
-
-                            },
-                            onDragCancel = {
-
-                                onDragCategoryInList(
-                                    categoryEntity,
-                                    offsetX,
-                                    offsetY,
-                                    subCategoryCanExpand ?: true,
-                                    true
-                                )
-
-                            },
-                            onDragEnd = {
-                                onDragCategoryInList(
-                                    categoryEntity,
-                                    offsetX,
-                                    offsetY,
-                                    subCategoryCanExpand ?: true,
-                                    true
-                                )
-
-                            }
-                        )
-                    }
-                }
-            }
-
-
-    ) {
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable {
-                    if (onClickParentInAddParent != null) {
-                        categoryEntity.categoryId?.let { onClickParentInAddParent(it) }
-                    }
-                },
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            if (categoryTreePosition >= 2) {
-                VerticalDivider(
-                    thickness = 1.dp,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier
-                        .height(30.dp)
-                        .weight(0.1f + weightOffset)
-                        .wrapContentWidth(Alignment.End)
-                )
-            }
-            if (categoryTreePosition >= 3) {
-                VerticalDivider(
-                    thickness = 1.dp,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier
-                        .height(30.dp)
-                        .weight(0.1f + weightOffset)
-                        .wrapContentWidth(Alignment.End)
-                )
-            }
-            if (categoryTreePosition >= 4) {
-                VerticalDivider(
-                    thickness = 1.dp,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier
-                        .height(30.dp)
-                        .weight(0.1f + weightOffset)
-                        .wrapContentWidth(Alignment.End)
-                )
-            }
-            if (categoryTreePosition >= 5) {
-                VerticalDivider(
-                    thickness = 1.dp,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier
-                        .height(30.dp)
-                        .weight(0.1f + weightOffset)
-                        .wrapContentWidth(Alignment.End)
-                )
-            }
-            Icon(
-                imageVector =iconNameToImageVector(categoryEntity.iconName),
-                tint = categoryEntity.color.stringToColor(),
-                contentDescription = "icon",
-                modifier = Modifier
-                    .size(55.dp)
-                    .weight(0.2f)
-
-
-            )
-            Text(
-                text = categoryEntity.name,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .weight(0.4f - weightOffset)
-                    .wrapContentHeight(Alignment.CenterVertically),
-            )
-            IconButton(
-                enabled = subCategoryCanExpand ?: false,
-                modifier = Modifier.weight(0.2f),
-                onClick = { onClickCategoryExpand() }
-            ) {
-                Icon(
-                    imageVector = if (!categoryExpand) {
-                        Icons.Filled.ExpandMore
-                    } else {
-                        Icons.Filled.ExpandLess
-                    },
-                    contentDescription = "Expand",
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(2.dp)
-                )
-            }
-
-            if (onClickParentInAddParent == null) {
-                VerticalDivider(
-                    thickness = 1.dp,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.height(30.dp)
-                )
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .wrapContentSize(Alignment.TopStart)
-                        .weight(0.1f)
-                ) {
-                    IconButton(
-                        onClick = { categoryMenuExpand = true }
-                    ) {
-                        Icon(
-                            Icons.Default.MoreVert,
-                            contentDescription = "Localized description"
-                        )
-                    }
-                    DropdownMenu(
-                        expanded = categoryMenuExpand,
-                        onDismissRequest = { categoryMenuExpand = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("Edit") },
-                            onClick = { /* Handle edit! */ },
-                            leadingIcon = {
-                                Icon(
-                                    Icons.Outlined.Edit,
-                                    contentDescription = null
-                                )
-                            })
-                        DropdownMenuItem(
-                            text = { Text("Settings") },
-                            onClick = { /* Handle settings! */ },
-                            leadingIcon = {
-                                Icon(
-                                    Icons.Outlined.Settings,
-                                    contentDescription = null
-                                )
-                            })
-                        HorizontalDivider()
-                    }
-                }
-            }
-
-
-        }
-        HorizontalDivider(
-            thickness = 1.dp,
-            color = MaterialTheme.colorScheme.onPrimaryContainer,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 4.dp, end = 12.dp)
-        )
-
-    }
-}
 
 @Composable
-fun AddIconInAddCategory(
-    onClickOnIcon: (iconName: String) -> Unit,
-
-    modifier: Modifier = Modifier,
+fun ChooseIconDialog(
+    selectedKey: String,
+    onDismiss: () -> Unit,
+    onPick: (IconOption) -> Unit,
 ) {
-    val topicIconMap = topic_iconMap.minus("ForAppOnly")
+    val sections = remember { buildIconSections() }
+    val expanded = remember {
+        mutableStateMapOf<String, Boolean>().apply {
+            sections.forEach { put(it.title, true) } // همه باز باشند مثل عکس
+        }
+    }
 
+    DimmedDialog(
+        onDismiss = onDismiss,
+        modifier = Modifier
+            .fillMaxWidth(0.92f)
+            .fillMaxHeight(0.80f)
+            .background(MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.extraLarge),
+        dimAlpha = 0.6f,
+        dismissOnBackdropClick = true
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
 
-    Column(
-        modifier = modifier
-            .fillMaxWidth(0.9f)
-            .background(
-                color = MaterialTheme.colorScheme.primaryContainer,
-                shape = RoundedCornerShape(12.dp)
-            ),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
+            Text(
+                text = "Choose icon",
+                style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.padding(16.dp)
+            )
+
+            HorizontalDivider()
+
+            LazyColumn(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 12.dp)
+            ) {
+                items(sections) { section ->
+                    SectionHeaderRow(
+                        title = section.title,
+                        isExpanded = expanded[section.title] == true,
+                        onToggle = { expanded[section.title] = !(expanded[section.title] == true) }
+                    )
+
+                    if (expanded[section.title] == true) {
+                        IconGrid4(
+                            options = section.options,
+                            selectedKey = selectedKey,
+                            onPick = onPick
+                        )
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                }
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+                horizontalArrangement = Arrangement.End
+            ) {
+                TextButton(onClick = onDismiss) { Text("CANCEL") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SectionHeaderRow(
+    title: String,
+    isExpanded: Boolean,
+    onToggle: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 12.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = "انتخاب آیکون",
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 10.dp, end = 14.dp),
-            textAlign = TextAlign.End,
-            fontSize = 20.sp
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.weight(1f)
         )
+        IconButton(onClick = onToggle) {
+            Icon(
+                imageVector = if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                contentDescription = "toggle"
+            )
+        }
+    }
+}
 
-        LazyColumn(
-            modifier = Modifier
-                .padding(10.dp)
-                .fillMaxHeight(),
-        ) {
-            items(topicIconMap.toList()) { (topic, iconMap) ->
+@Composable
+private fun IconGrid4(
+    options: List<IconOption>,
+    selectedKey: String,
+    onPick: (IconOption) -> Unit,
+) {
+    // ساده و سبک: ۴تایی در هر ردیف، بدون LazyVerticalGrid
+    val rows = (options.size + 3) / 4
+    Column(modifier = Modifier.fillMaxWidth()) {
+        repeat(rows) { r ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                for (c in 0 until 4) {
+                    val idx = r * 4 + c
+                    if (idx < options.size) {
+                        val opt = options[idx]
+                        val selected = opt.key == selectedKey
 
-
-                var isExpanded by rememberSaveable { mutableStateOf(false) }
-                val imageVectorsListForThisTopic = iconMap.values.toList()
-
-
-
-                Column(
-                    modifier = Modifier.fillMaxHeight(),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Text(
-                            text = topic,
-                            modifier = Modifier.weight(0.7f),
-                            fontSize = 16.sp
-                        )
                         IconButton(
-                            modifier = Modifier.weight(0.3f),
-                            onClick = { isExpanded = !isExpanded }
+                            onClick = { onPick(opt) },
+                            modifier = Modifier
+                                .size(56.dp)
+                                .then(
+                                    if (selected) Modifier.border(
+                                        width = 2.dp,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        shape = MaterialTheme.shapes.small
+                                    ) else Modifier
+                                )
                         ) {
                             Icon(
-                                imageVector = if (!isExpanded) {
-                                    Icons.Filled.ExpandMore
-                                } else {
-                                    Icons.Filled.ExpandLess
-                                },
-                                contentDescription = "Expand",
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(2.dp)
+                                imageVector = opt.icon,
+                                contentDescription = opt.key,
+                                modifier = Modifier.size(28.dp)
                             )
                         }
+                    } else {
+                        Spacer(modifier = Modifier.size(56.dp))
                     }
-                    Spacer(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(1.dp)
-                            .padding(start = 4.dp, end = 12.dp)
-                            .background(
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                shape = RectangleShape
-                            ),
-                    )
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(4),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 50.dp, max = 500.dp)
+                }
+            }
+        }
+    }
+}
 
+
+@Composable
+fun ChooseColorDialog(
+    initialHex: String,
+    onDismiss: () -> Unit,
+    onConfirm: (hex: String) -> Unit
+) {
+    val options = remember { buildColorOptions() }
+    var selectedHex by remember { mutableStateOf(initialHex.ifBlank { options.first().hex }) }
+
+    DimmedDialog(
+        onDismiss = onDismiss,
+        modifier = Modifier
+            .fillMaxWidth(0.92f)
+            .fillMaxHeight(0.62f)
+            .background(MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.extraLarge),
+        dimAlpha = 0.6f,
+        dismissOnBackdropClick = true
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+
+            Text(
+                text = "Choose color",
+                style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.padding(16.dp)
+            )
+
+            HorizontalDivider()
+
+            Spacer(Modifier.height(18.dp))
+
+            // Grid ساده: 6 ستون * چند ردیف
+            val cols = 6
+            val rows = (options.size + cols - 1) / cols
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                repeat(rows) { r ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (isExpanded) {
-                            items(imageVectorsListForThisTopic) {
-                                IconButton(
-                                    modifier = Modifier,
-                                    onClick = { onClickOnIcon(it.name) }
+                        for (c in 0 until cols) {
+                            val idx = r * cols + c
+                            if (idx < options.size) {
+                                val opt = options[idx]
+                                val selected = opt.hex.equals(selectedHex, ignoreCase = true)
+
+                                Box(
+                                    modifier = Modifier
+                                        .size(42.dp)
+                                        .border(
+                                            width = if (selected) 4.dp else 0.dp,
+                                            color = if (selected) Color.Black else Color.Transparent,
+                                            shape = CircleShape
+                                        )
+                                        .padding(if (selected) 4.dp else 0.dp)
+                                        .border(
+                                            width = 1.dp,
+                                            color = Color.Black.copy(alpha = 0.08f),
+                                            shape = CircleShape
+                                        )
+                                        .clickable { selectedHex = opt.hex },
+                                    contentAlignment = Alignment.Center
                                 ) {
-                                    Icon(
-                                        imageVector = it,
-                                        contentDescription = it.name,
+                                    Box(
                                         modifier = Modifier
                                             .fillMaxSize()
-                                            .padding(2.dp),
-                                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                            .border(0.dp, Color.Transparent, CircleShape)
+                                            .background(opt.color, CircleShape)
                                     )
                                 }
-                            }
-                        } else {
-                            items(imageVectorsListForThisTopic.take(4)) {
-                                IconButton(
-                                    modifier = Modifier,
-                                    onClick = { onClickOnIcon(it.name) }
-                                ) {
-                                    Icon(
-                                        imageVector = it,
-                                        contentDescription = it.name,
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .padding(2.dp),
-                                        tint = MaterialTheme.colorScheme.onPrimaryContainer
-                                    )
-                                }
+                            } else {
+                                Spacer(Modifier.size(42.dp))
                             }
                         }
-
                     }
                 }
             }
 
+            Spacer(Modifier.weight(1f))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+                horizontalArrangement = Arrangement.End
+            ) {
+                TextButton(onClick = onDismiss) { Text("CANCEL") }
+                Spacer(Modifier.width(8.dp))
+                TextButton(onClick = { onConfirm(selectedHex) }) { Text("OK") }
+            }
         }
-
-
     }
 }
 
+
 @Composable
-fun AddColorInAddCategory(
-    onClickColor: (color: Color) -> Unit,
+private fun ParentPickerRow(
+    item: CategoryRenderItem,
+    computedLevel: Int,
+    enabled: Boolean,
+    onPick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Column(
+    val indent = (computedLevel - 1).coerceAtLeast(0) * 16
+    val bg = containerColorForLevel(computedLevel)
+
+    ListItem(
         modifier = modifier
-            .fillMaxWidth(0.9f)
-            .fillMaxHeight(0.8f)
-            .background(
-                color = MaterialTheme.colorScheme.primaryContainer,
-                shape = RoundedCornerShape(12.dp)
-            ),
+            .fillMaxWidth()
+            .padding(start = indent.dp)
+            .then(if (enabled) Modifier.clickable { onPick() } else Modifier),
+        colors = ListItemDefaults.colors(
+            containerColor = bg
+        ),
+        leadingContent = {
+            Icon(
+                imageVector = iconFromKey(item.category.iconName),
+                contentDescription = item.category.iconName,
+                tint = if (enabled) colorFromHex(item.category.color)
+                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f),
+                modifier = Modifier.size(28.dp)
+            )
+        },
+        headlineContent = {
+            Text(
+                text = item.category.name,
+                color = if (enabled) LocalContentColor.current
+                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
+            )
+        },
+        supportingContent = {
+            if (!enabled) {
+                Text(
+                    text = "حداکثر عمق",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+        }
+    )
+}
+
+
+@Composable
+private fun containerColorForLevel(level: Int): Color {
+    val e = when (level.coerceIn(1, 4)) {
+        1 -> 0.dp
+        2 -> 2.dp
+        3 -> 6.dp
+        else -> 12.dp
+    }
+    return MaterialTheme.colorScheme.surfaceColorAtElevation(e)
+}
+
+
+@Composable
+private fun CategoryOptionsSideSheet(
+    category: CategoryEntity,
+    tasks: List<TaskMiniUi>,              // ✅ جدید
+    onDismiss: () -> Unit,
+    onClickPickIcon: () -> Unit,
+    onClickPickColor: () -> Unit,
+    onClickRename: () -> Unit,
+    onClickEditDescription: () -> Unit,
+    onClickDelete: () -> Unit,
+    onAddTask: () -> Unit,
+    tasksExpanded: Boolean,
+    onToggleTasksExpand: () -> Unit,
+    onClickTask: (Int) -> Unit,
+    scheduledCount: Int,
+) {
+
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .zIndex(100f)
     ) {
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(4),
+        // ✅ Backdrop کلیکی برای dismiss
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 50.dp, max = 700.dp)
-
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.45f))
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                ) { onDismiss() }
+        )
+        Column(
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .fillMaxHeight()
+                .fillMaxWidth(0.78f)
+                .background(MaterialTheme.colorScheme.surface)
         ) {
-            items(colorsOfCategory) { color ->
-
-                IconButton(
-                    modifier = Modifier.weight(0.3f),
-                    onClick = { onClickColor(color) }
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Circle,
-                        tint = color,
-                        contentDescription = "Expand",
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(2.dp)
-                    )
-                }
-
+            // Header (آیکن + اسم)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(colorFromHex(category.color).copy(alpha = 0.15f))
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = iconFromKey(category.iconName),
+                    contentDescription = null,
+                    tint = colorFromHex(category.color),
+                    modifier = Modifier.size(28.dp)
+                )
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    text = category.name,
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.weight(1f)
+                )
             }
 
+            HorizontalDivider()
+
+            SheetActionRow(
+                leading = {
+                    Icon(
+                        imageVector = iconFromKey(category.iconName),
+                        contentDescription = null,
+                        tint = colorFromHex(category.color)
+                    )
+                },
+                title = "Add task",
+                trailing = { Icon(Icons.Filled.Search, contentDescription = null) },
+                onClick = {
+                    onAddTask() // ✅ جدید
+                }
+            )
+            HorizontalDivider(thickness = 0.5.dp)
+
+            TasksSection(
+                tasks = tasks,
+                expanded = tasksExpanded,
+                onToggleExpand = onToggleTasksExpand,
+                onOpenTasksMenu = { /* بعداً */ },
+                onClickTask = onClickTask
+            )
+
+            // بخش آمارها (فعلاً 0)
+
+            SheetStatRow(icon = Icons.Filled.Event, text = "${scheduledCount} scheduled activities")
+            SheetStatRow(icon = Icons.Filled.History, text = "0 logged activities")
+            SheetStatRow(icon = Icons.Filled.Description, text = "0 notes")
+            SheetStatRow(icon = Icons.Filled.AttachFile, text = "0 attachments")
+
+            Spacer(Modifier.height(10.dp))
+            HorizontalDivider()
+
+            // Parameters (باز/بسته)
+            var paramsExpanded by rememberSaveable { mutableStateOf(true) }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { paramsExpanded = !paramsExpanded }
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Filled.Settings, contentDescription = null)
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    "Parameters",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f)
+                )
+                Icon(
+                    imageVector = if (paramsExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                    contentDescription = null
+                )
+            }
+
+            if (paramsExpanded) {
+                HorizontalDivider()
+
+                // Icon
+                SheetActionRow(
+                    leading = {
+                        Icon(
+                            iconFromKey(category.iconName),
+                            contentDescription = null,
+                            tint = colorFromHex(category.color)
+                        )
+                    },
+                    title = "Icon",
+                    trailing = {
+                        Icon(Icons.Filled.GridView, contentDescription = null)
+                    },
+                    onClick = onClickPickIcon
+                )
+
+                // Color
+                SheetActionRow(
+                    leading = {
+                        Box(
+                            Modifier
+                                .size(22.dp)
+                                .border(1.dp, Color.Black.copy(alpha = 0.12f), CircleShape)
+                                .background(colorFromHex(category.color), CircleShape)
+                        )
+                    },
+                    title = "Color",
+                    trailing = { Icon(Icons.Filled.Palette, contentDescription = null) },
+                    onClick = onClickPickColor
+                )
+
+                // Rename
+                SheetActionRow(
+                    leading = { Icon(Icons.Filled.Edit, contentDescription = null) },
+                    title = "Rename",
+                    onClick = onClickRename
+                )
+
+                // Description
+                SheetActionRow(
+                    leading = { Icon(Icons.Filled.Description, contentDescription = null) },
+                    title = "Add description",
+                    onClick = onClickEditDescription
+                )
+
+                // Delete
+                SheetActionRow(
+                    leading = { Icon(Icons.Filled.Delete, contentDescription = null) },
+                    title = "Delete",
+                    titleColor = MaterialTheme.colorScheme.error,
+                    onClick = onClickDelete
+                )
+            }
+        }
+    }
+}
+
+
+@Composable
+private fun SheetStatRow(icon: androidx.compose.ui.graphics.vector.ImageVector, text: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.width(12.dp))
+        Text(text)
+    }
+    HorizontalDivider(thickness = 0.5.dp)
+}
+
+@Composable
+private fun SheetActionRow(
+    leading: @Composable () -> Unit,
+    title: String,
+    onClick: () -> Unit,
+    trailing: (@Composable () -> Unit)? = null,
+    titleColor: Color = LocalContentColor.current,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(Modifier.size(26.dp), contentAlignment = Alignment.Center) { leading() }
+        Spacer(Modifier.width(12.dp))
+        Text(title, color = titleColor, modifier = Modifier.weight(1f))
+        if (trailing != null) {
+            Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) { trailing() }
+        }
+    }
+    HorizontalDivider(thickness = 0.5.dp)
+}
+
+
+@Composable
+private fun TasksSection(
+    tasks: List<TaskMiniUi>,
+    expanded: Boolean,
+    onToggleExpand: () -> Unit,
+    onOpenTasksMenu: () -> Unit, // اگر خواستی سه نقطه کنار tasks هم داشته باشه
+    onClickTask: (Int) -> Unit = {}
+) {
+    // Header row مثل عکس: "1 task" + فلش + سه‌نقطه
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onToggleExpand() }
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(Icons.Filled.Done, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.width(12.dp))
+
+        Text("${tasks.size} task${if (tasks.size == 1) "" else "s"}", modifier = Modifier.weight(1f))
+
+        IconButton(onClick = onToggleExpand) {
+            Icon(
+                imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                contentDescription = null
+            )
         }
 
+        IconButton(onClick = onOpenTasksMenu) {
+            Icon(Icons.Filled.MoreVert, contentDescription = "tasks menu")
+        }
+    }
 
+    HorizontalDivider(thickness = 0.5.dp)
+
+    if (expanded) {
+        tasks.forEach { t ->
+            TaskRowMini(
+                task = t,
+                onClick = { onClickTask(t.id) }
+            )
+            HorizontalDivider(thickness = 0.5.dp)
+        }
     }
 }
 
 @Composable
-fun AddDescriptionInAddCategory(modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier
-            .fillMaxWidth(0.9f)
-            .fillMaxHeight(0.8f)
-            .background(
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                shape = RoundedCornerShape(12.dp)
-            ),
+private fun TaskRowMini(
+    task: TaskMiniUi,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-
+        // شبیه عکس: دایره کنار تسک
+        Box(
+            modifier = Modifier
+                .size(22.dp)
+                .border(2.dp, MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f), CircleShape)
+        )
+        Spacer(Modifier.width(14.dp))
+        Text(task.title)
     }
 }
 
+@Composable
+fun AddTaskDialog(
+    addTaskMod:Boolean,
+    categoryName: String,
+    categoryIconName: String,
+    categoryColorHex: String,
+    draft: TaskDraft,
+    onDismiss: () -> Unit,
+    onNameChange: (String) -> Unit,
+    onPriorityChange: (Int) -> Unit,
+    onCompletedToggle: (Boolean) -> Unit,
+    onNoteChange: (String) -> Unit,
+    onConfirm: () -> Unit,
+    onOpenSchedule: () -> Unit
+) {
+    DimmedDialog(
+        onDismiss = onDismiss,
+        modifier = Modifier
+            .fillMaxWidth(0.92f)
+            .fillMaxHeight(0.88f)
+            .background(MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.extraLarge),
+        dimAlpha = 0.6f,
+        dismissOnBackdropClick = true
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+
+            // Top bar
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                TextButton(onClick = onDismiss) { Text("Back") }
+                Text(
+                    if (addTaskMod)"New task" else "Edit Task",
+                    style = MaterialTheme.typography.titleLarge)
+                TextButton(
+                    onClick = onConfirm,
+                    enabled = draft.name.isNotBlank()
+                ) { Text("✓") }
+            }
+
+            HorizontalDivider()
+
+            // Title row (مثل Test زیرخط)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Filled.Check, contentDescription = null)
+                Spacer(Modifier.width(10.dp))
+                OutlinedTextField(
+                    value = draft.name,
+                    onValueChange = onNameChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Title") },
+                    singleLine = true
+                )
+            }
+
+            HorizontalDivider()
+
+            // Category row (آیکن+نام)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = iconFromKey(categoryIconName),
+                    contentDescription = null,
+                    tint = colorFromHex(categoryColorHex),
+                    modifier = Modifier.size(26.dp)
+                )
+                Spacer(Modifier.width(12.dp))
+                Text(categoryName, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            }
+
+            HorizontalDivider()
+
+            // Priority row (سه دایره مثل عکس)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Priority", modifier = Modifier.width(90.dp))
+                PriorityDots(
+                    selected = draft.priority,
+                    onPick = onPriorityChange
+                )
+            }
+
+            HorizontalDivider()
+
+            // Completed row
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(if (draft.isCompleted) "Completed" else "Uncompleted", modifier = Modifier.weight(1f))
+                Switch(checked = draft.isCompleted, onCheckedChange = onCompletedToggle)
+            }
+
+            HorizontalDivider()
+
+            // Note
+            OutlinedTextField(
+                value = draft.note,
+                onValueChange = onNoteChange,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+                label = { Text("Add note") },
+                minLines = 2
+            )
+
+            SheetActionRow(
+                leading = { Icon(Icons.Filled.Event, contentDescription = null) },
+                title = "Schedule this task",
+                onClick = { onOpenSchedule() }
+            )
+
+        }
+    }
+}
+
+@Composable
+private fun PriorityDots(selected: Int, onPick: (Int) -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        (0..2).forEach { i ->
+            val isSel = i == selected
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .background(
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (isSel) 1f else 0.5f),
+                        shape = CircleShape
+                    )
+                    .border(
+                        width = if (isSel) 2.dp else 0.dp,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        shape = CircleShape
+                    )
+                    .clickable { onPick(i) },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = when (i) { 0 -> "*" ; 1 -> "!" ; else -> "!!" },
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun TaskScheduleDialog(
+    taskName: String,
+    draft: ScheduleDraft,
+    onDismiss: () -> Unit,
+    onTitleChange: (String) -> Unit,
+    onModeChange: (ScheduleMode) -> Unit,
+    onStartChange: (LocalTime) -> Unit,
+    onEndChange: (LocalTime) -> Unit,
+    onDurationChange: (Int) -> Unit,
+    onRepeatingChange: (Boolean) -> Unit,
+    onConfirm: () -> Unit
+) {
+    DimmedDialog(
+        onDismiss = onDismiss,
+        modifier = Modifier
+            .fillMaxWidth(0.92f)
+            .fillMaxHeight(0.88f)
+            .background(MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.extraLarge),
+        dimAlpha = 0.6f,
+        dismissOnBackdropClick = true
+    ) {
+        Column(Modifier.fillMaxSize()) {
+
+            // top bar
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                TextButton(onClick = onDismiss) { Text("Back") }
+                Text("New scheduled activity", style = MaterialTheme.typography.titleLarge)
+                TextButton(onClick = onConfirm) { Text("✓") }
+            }
+
+            HorizontalDivider()
+
+            // title (کم‌رنگ پیش‌فرض)
+            OutlinedTextField(
+                value = draft.title,
+                onValueChange = onTitleChange,
+                modifier = Modifier.fillMaxWidth().padding(12.dp),
+                label = { Text("Title (optional)") },
+                placeholder = { Text(taskName, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)) },
+                singleLine = true
+            )
+
+            HorizontalDivider()
+
+            // mode dropdown: Time range / Amount of time
+            ModeDropdownRow(
+                mode = draft.mode,
+                onPick = onModeChange
+            )
+
+            HorizontalDivider()
+
+            if (draft.mode == ScheduleMode.TIME_RANGE) {
+                // فعلاً ساده: نمایش متن + بعداً TimePicker
+                TimeRangeRow(
+                    start = draft.start,
+                    end = draft.end,
+                    onStartChange = onStartChange,
+                    onEndChange = onEndChange
+                )
+            } else {
+                AmountOfTimeRow(
+                    minutes = draft.durationMinutes,
+                    onMinutesChange = onDurationChange
+                )
+            }
+
+            HorizontalDivider()
+
+            // Repeating
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Repeating", modifier = Modifier.weight(1f))
+                Switch(checked = draft.repeating, onCheckedChange = onRepeatingChange)
+            }
+
+            HorizontalDivider()
+
+            // Note / Reminder placeholder (فعلاً)
+            SheetActionRow(
+                leading = { Icon(Icons.Filled.Description, null) },
+                title = "Add note",
+                onClick = { /* بعداً */ }
+            )
+            SheetActionRow(
+                leading = { Icon(Icons.Filled.History, null) },
+                title = "Add reminder",
+                onClick = { /* بعداً */ }
+            )
+        }
+    }
+}
+
+@Composable
+private fun ModeDropdownRow(
+    mode: ScheduleMode,
+    onPick: (ScheduleMode) -> Unit
+) {
+    var open by remember { mutableStateOf(false) }
+    Row(
+        Modifier.fillMaxWidth().clickable { open = true }.padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text("Time range", modifier = Modifier.weight(1f))
+        Text(
+            text = if (mode == ScheduleMode.TIME_RANGE) "Time range" else "Amount of time",
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.width(8.dp))
+        Icon(Icons.Filled.ExpandMore, contentDescription = null)
+    }
+    DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+        DropdownMenuItem(
+            text = { Text("Time range") },
+            onClick = { open = false; onPick(ScheduleMode.TIME_RANGE) }
+        )
+        DropdownMenuItem(
+            text = { Text("Amount of time") },
+            onClick = { open = false; onPick(ScheduleMode.AMOUNT_OF_TIME) }
+        )
+    }
+}
+
+@Composable
+private fun TimeRangeRow(
+    start: LocalTime,
+    end: LocalTime,
+    onStartChange: (LocalTime) -> Unit,
+    onEndChange: (LocalTime) -> Unit
+) {
+    // فعلاً فقط نمایش، بعداً TimePicker می‌ذاریم
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 18.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text("${start}", style = MaterialTheme.typography.titleLarge)
+        Spacer(Modifier.width(18.dp))
+        Text("-", style = MaterialTheme.typography.titleLarge)
+        Spacer(Modifier.width(18.dp))
+        Text("${end}", style = MaterialTheme.typography.titleLarge)
+    }
+}
+
+@Composable
+private fun AmountOfTimeRow(
+    minutes: Int,
+    onMinutesChange: (Int) -> Unit
+) {
+    OutlinedTextField(
+        value = minutes.toString(),
+        onValueChange = { v -> onMinutesChange(v.filter(Char::isDigit).toIntOrNull() ?: minutes) },
+        modifier = Modifier.fillMaxWidth().padding(12.dp),
+        label = { Text("Minutes") },
+        singleLine = true
+    )
+}

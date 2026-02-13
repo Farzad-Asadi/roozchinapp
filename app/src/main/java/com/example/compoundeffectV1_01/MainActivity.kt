@@ -24,7 +24,7 @@ class MainActivity : ComponentActivity() {
 
             AppTheme(dynamicColor = false)  {
                 Surface {
-                    AppNavGraph(navController = navController)
+                    MainScreen(navController = navController)
                 }
             }
         }
