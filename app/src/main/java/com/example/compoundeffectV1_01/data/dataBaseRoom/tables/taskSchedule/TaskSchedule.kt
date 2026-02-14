@@ -14,7 +14,7 @@ import java.time.LocalTime
 
 @Entity(
     tableName = "task_schedule",
-    indices = [Index(value = ["taskId"], unique = true)],
+    indices = [Index(value = ["taskId"])],
     foreignKeys = [
         ForeignKey(
             entity = Task::class,

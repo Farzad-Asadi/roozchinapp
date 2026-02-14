@@ -32,5 +32,7 @@ interface TaskRepository {
 
     fun observePalletTasks(): Flow<List<Task>>
 
+    suspend fun markAsPallet(taskId: Int)
+
 
 }

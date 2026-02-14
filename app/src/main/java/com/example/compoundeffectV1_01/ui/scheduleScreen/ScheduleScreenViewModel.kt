@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.Duration
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.Calendar
 import javax.inject.Inject
@@ -32,15 +33,42 @@ class ScheduleScreenViewModel @Inject constructor(
     private val taskScheduleRepo: TaskScheduleRepository,
 ) : ViewModel() {
 
-    val timelineItems: StateFlow<List<TaskTimelineItem>> =
-        taskRepo.observeAllScheduledTasksWithSchedule()
-            .map { list -> list.mapNotNull(::toTimelineItemOrNull).sortedBy { it.start } }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
 
     val palletTasks: StateFlow<List<Task>> =
         taskRepo.observePalletTasks()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    val timelineItems: StateFlow<List<TaskTimelineItem>> =
+        taskScheduleRepo.observeAllTimeRangeSchedulesWithTask()
+            .map { rows ->
+                rows.mapNotNull { r ->
+                    val date = r.s_dateEpochDay?.let(LocalDate::ofEpochDay) ?: return@mapNotNull null
+                    val s = r.s_startMinuteOfDay ?: return@mapNotNull null
+                    val e = r.s_endMinuteOfDay ?: return@mapNotNull null
+                    if (e <= s) return@mapNotNull null
+
+                    val start = LocalDateTime.of(date, java.time.LocalTime.of(s / 60, s % 60))
+                    val end = LocalDateTime.of(date, java.time.LocalTime.of(e / 60, e % 60))
+
+                    TaskTimelineItem(
+                        scheduleId = r.s_id,
+                        taskId = r.t_id,
+                        name = r.t_name,
+                        colorHex = r.t_color,
+                        description = r.t_description,
+                        categoryId = r.t_categoryId,
+                        isCompleted = r.t_isCompleted,
+                        priority = r.t_priority,
+                        start = start,
+                        end = end,
+                        categoryName = r.c_name,
+                        categoryIconName = r.c_iconName,
+                        categoryColor = r.c_color
+                    )
+                }
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
 
 
@@ -48,74 +76,61 @@ class ScheduleScreenViewModel @Inject constructor(
 
 
 
-    fun dropTaskToSchedule(
-        taskId: Int,
-        date: java.time.LocalDate,
-        startMinute: Int,
-        endMinute: Int
-    ) {
+
+
+
+
+
+    fun moveSchedule(scheduleId: Int, newDate: LocalDate, newStart: Int, newEnd: Int) {
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            taskScheduleRepo.updateTimeRange(scheduleId, newDate, newStart, newEnd)
+        }
 
-            // 1) schedule upsert
-            val schedule = TaskSchedule(
-                id = null,
-                taskId = taskId,
-                title = null,
-                mode = ScheduleMode.TIME_RANGE,
-                dateEpochDay = date.toEpochDay(),
-                startMinuteOfDay = startMinute,
-                endMinuteOfDay = endMinute,
-                durationMinutes = null,
-                repeating = false
-            )
-            taskScheduleRepo.upsert(schedule)
+    }
 
-            // 2) task flags update
-            val t = taskRepo.getTaskById(taskId) ?: return@launch
-            taskRepo.updateTask(
-                t.copy(
-                    inSchedule = true,
-                    inPallet = false
-                )
-            )
+    fun resizeScheduleEnd(scheduleId: Int, newEnd: Int) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            taskScheduleRepo.updateEndMinute(scheduleId, newEnd)
         }
     }
 
+    fun resizeScheduleStart(scheduleId: Int, newStart: Int) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            taskScheduleRepo.updateStartMinute(scheduleId, newStart)
+        }
+    }
 
+    fun dropTaskToSchedule(taskId: Int, date: LocalDate, startMinute: Int, endMinute: Int) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val newScheduleId = taskScheduleRepo.insert(
+                TaskSchedule(
+                    id = null,
+                    taskId = taskId,
+                    title = null,
+                    mode = ScheduleMode.TIME_RANGE,
+                    dateEpochDay = date.toEpochDay(),
+                    startMinuteOfDay = startMinute,
+                    endMinuteOfDay = endMinute,
+                    durationMinutes = null,
+                    repeating = false
+                )
+            )
 
-    private fun toTimelineItemOrNull(
-        tws: TaskWithSchedule
-    ): TaskTimelineItem? {
-        val s = tws.schedule ?: return null
-        if (s.mode != ScheduleMode.TIME_RANGE) return null
+            val t = taskRepo.getTaskById(taskId) ?: return@launch
+            taskRepo.updateTask(t.copy(inSchedule = true, inPallet = false))
+        }
+    }
 
-        val date = s.dateEpochDay?.let(java.time.LocalDate::ofEpochDay) ?: return null
-        val startMin = s.startMinuteOfDay ?: return null
-        val endMin = s.endMinuteOfDay ?: return null
+    fun sendScheduleToPallet(scheduleId: Int, taskId: Int) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            taskScheduleRepo.deleteById(scheduleId)
 
-        val startTime = java.time.LocalTime.of(startMin / 60, startMin % 60)
-        val endTime = java.time.LocalTime.of(endMin / 60, endMin % 60)
+            val left = taskScheduleRepo.countByTaskId(taskId)
 
-        val start = LocalDateTime.of(date, startTime)
-        val end = LocalDateTime.of(date, endTime)
-
-        // اگر end <= start بود، ignore
-        if (!end.isAfter(start)) return null
-
-        val t = tws.task
-        val id = t.id ?: return null
-
-        return TaskTimelineItem(
-            taskId = id,
-            name = t.name,
-            colorHex = t.color,
-            description = t.description,
-            categoryId = t.categoryId,
-            isCompleted = t.isCompleted,
-            priority = t.priority,
-            start = start,
-            end = end
-        )
+            if (left == 0) {
+                taskRepo.markAsPallet(taskId)
+            }
+        }
     }
 
 
@@ -123,6 +138,7 @@ class ScheduleScreenViewModel @Inject constructor(
 
 
 data class TaskTimelineItem(
+    val scheduleId: Int,          // ✅ مهم
     val taskId: Int,
     val name: String,
     val colorHex: String,
@@ -130,11 +146,47 @@ data class TaskTimelineItem(
     val categoryId: Int?,
     val isCompleted: Boolean,
     val priority: Int,
-
-    // ✅ فقط برای تایم‌لاین: از schedule استخراج میشه
     val start: LocalDateTime,
     val end: LocalDateTime,
 
-    // برای overlap مثل قبل (بعداً پر می‌کنیم)
-    val overlapIndex: Int = 0
+    // ✅ category info for UI
+    val categoryName: String?,
+    val categoryIconName: String?,
+    val categoryColor: String?
+)
+
+
+data class PendingMove(
+    val date: LocalDate,
+    val startMin: Int,
+    val endMin: Int
+)
+
+data class TimeRangeScheduleRow(
+    val s_id: Int,
+    val s_taskId: Int,
+    val s_title: String?,
+    val s_mode: ScheduleMode,
+    val s_dateEpochDay: Long?,
+    val s_startMinuteOfDay: Int?,
+    val s_endMinuteOfDay: Int?,
+    val s_durationMinutes: Int?,
+    val s_repeating: Boolean,
+
+    val t_id: Int,
+    val t_name: String,
+    val t_color: String,
+    val t_description: String,
+    val t_categoryId: Int?,
+    val t_isCompleted: Boolean,
+    val t_priority: Int,
+    val t_inPallet: Boolean,
+    val t_inSchedule: Boolean,
+    val t_selected: Boolean,
+    val t_changed: Boolean,
+
+    // ✅ from CategoryEntity (LEFT JOIN)
+    val c_name: String?,
+    val c_iconName: String?,
+    val c_color: String?
 )

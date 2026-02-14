@@ -42,7 +42,7 @@ interface TaskDao {
     SELECT * FROM task
     WHERE categoryId = :categoryId
     ORDER BY id DESC
-""")
+    """)
     fun observeTasksWithScheduleByCategory(categoryId: Int): Flow<List<TaskWithSchedule>>
 
 
@@ -50,7 +50,7 @@ interface TaskDao {
     SELECT COUNT(*) FROM task_schedule s
     INNER JOIN task t ON t.id = s.taskId
     WHERE t.categoryId = :categoryId
-""")
+    """)
     fun observeScheduledCountByCategory(categoryId: Int): Flow<Int>
 
     @Transaction
@@ -58,12 +58,19 @@ interface TaskDao {
     SELECT * FROM task
     INNER JOIN task_schedule s ON s.taskId = task.id
     WHERE s.mode = 'TIME_RANGE'
-""")
+    """)
     fun observeAllScheduledTasksWithSchedule(): Flow<List<TaskWithSchedule>>
 
     @Query("SELECT * FROM task WHERE inPallet = 1 ORDER BY id DESC")
     fun observePalletTasks(): Flow<List<Task>>
 
+
+    @Query("""
+    UPDATE task 
+    SET inPallet = 1, inSchedule = 0
+    WHERE id = :taskId
+    """)
+    suspend fun markAsPallet(taskId: Int)
 
 
 }

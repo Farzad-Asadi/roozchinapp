@@ -1,10 +1,25 @@
 package com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule
 
+import com.example.compoundeffectV1_01.ui.scheduleScreen.TimeRangeScheduleRow
 import kotlinx.coroutines.flow.Flow
+import java.time.LocalDate
 
 interface TaskScheduleRepository {
     fun observeByTaskId(taskId: Int): Flow<TaskSchedule?>
     suspend fun getByTaskId(taskId: Int): TaskSchedule?
     suspend fun upsert(schedule: TaskSchedule)
     suspend fun deleteByTaskId(taskId: Int)
+
+
+    suspend fun insert(schedule: TaskSchedule): Int
+    suspend fun updateTimeRange(scheduleId: Int, date: LocalDate, startMin: Int, endMin: Int)
+    suspend fun updateEndMinute(scheduleId: Int, endMin: Int)
+    suspend fun updateStartMinute(scheduleId: Int, startMin: Int)
+    fun observeAllTimeRangeSchedulesWithTask(): Flow<List<TimeRangeScheduleRow>>
+
+    suspend fun deleteById(scheduleId: Int)
+    suspend fun countByTaskId(taskId: Int): Int
+
+
+
 }

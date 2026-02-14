@@ -39,5 +39,8 @@ class TaskRepositoryImpl @Inject constructor(
     override fun observePalletTasks(): Flow<List<Task>> =
         taskDao.observePalletTasks()
 
+    override suspend fun markAsPallet(taskId: Int) =
+        taskDao.markAsPallet(taskId)
+
 
 }
