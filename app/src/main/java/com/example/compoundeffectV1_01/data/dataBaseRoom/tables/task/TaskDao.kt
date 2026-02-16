@@ -61,16 +61,7 @@ interface TaskDao {
     """)
     fun observeAllScheduledTasksWithSchedule(): Flow<List<TaskWithSchedule>>
 
-    @Query("SELECT * FROM task WHERE inPallet = 1 ORDER BY id DESC")
-    fun observePalletTasks(): Flow<List<Task>>
 
-
-    @Query("""
-    UPDATE task 
-    SET inPallet = 1, inSchedule = 0
-    WHERE id = :taskId
-    """)
-    suspend fun markAsPallet(taskId: Int)
 
 
 }

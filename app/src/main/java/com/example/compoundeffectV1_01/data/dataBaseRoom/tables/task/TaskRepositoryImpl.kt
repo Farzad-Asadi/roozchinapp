@@ -36,11 +36,6 @@ class TaskRepositoryImpl @Inject constructor(
     override fun observeAllScheduledTasksWithSchedule(): Flow<List<TaskWithSchedule>> =
         taskDao.observeAllScheduledTasksWithSchedule()
 
-    override fun observePalletTasks(): Flow<List<Task>> =
-        taskDao.observePalletTasks()
-
-    override suspend fun markAsPallet(taskId: Int) =
-        taskDao.markAsPallet(taskId)
 
 
 }

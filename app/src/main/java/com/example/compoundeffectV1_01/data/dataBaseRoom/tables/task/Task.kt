@@ -18,9 +18,6 @@ data class Task(
 
     val description: String,
 
-    val inPallet: Boolean = false,
-    val inSchedule: Boolean = false,
-
     val durationOverlap: Int = 0,
     val selected: Boolean,
     val changed: Boolean = false,

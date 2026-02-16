@@ -30,9 +30,7 @@ interface TaskRepository {
 
     fun observeAllScheduledTasksWithSchedule(): Flow<List<TaskWithSchedule>>
 
-    fun observePalletTasks(): Flow<List<Task>>
 
-    suspend fun markAsPallet(taskId: Int)
 
 
 }

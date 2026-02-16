@@ -1,6 +1,5 @@
 package com.example.compoundeffectV1_01.ui.scheduleScreen
 
-import androidx.compose.animation.core.snap
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -36,6 +35,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,7 +48,6 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
@@ -58,8 +57,6 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.Task
-import com.example.compoundeffectV1_01.ui.navigation.bottomBarDestinations
-import com.example.compoundeffectV1_01.ui.navigation.AppRoutes
 import com.example.compoundeffectV1_01.utils.colorFromHex
 import com.example.compoundeffectV1_01.utils.iconFromKey
 import kotlinx.coroutines.delay
@@ -72,16 +69,18 @@ import kotlin.math.roundToInt
 fun ScheduleScreen2(
     viewModel: ScheduleScreenViewModel = hiltViewModel()
 ) {
-    val items by viewModel.timelineItems.collectAsState()
-    val pallet by viewModel.palletTasks.collectAsState()
+    val allItems by viewModel.allItems.collectAsState()
+
+    val timelineItems = remember(allItems) { allItems.filter { !it.inPallet } }
+    val palletItems   = remember(allItems) { allItems.filter { it.inPallet } }
 
 
     // ✅ تنظیمات تایم‌لاین
     val numDays = 5
-    var startDate by rememberSaveable { mutableStateOf(LocalDate.now()) }
+    val startDate by rememberSaveable { mutableStateOf(LocalDate.now()) }
 
-    var verticalZoom by rememberSaveable { mutableStateOf(1f) }
-    var horizontalZoom by rememberSaveable { mutableStateOf(1f) }
+    val verticalZoom by rememberSaveable { mutableFloatStateOf(1f) }
+    val horizontalZoom by rememberSaveable { mutableStateOf(1f) }
 
     val hourHeightDp = (72.dp * verticalZoom).coerceIn(48.dp, 140.dp)
     val dayWidthDp = (220.dp * horizontalZoom).coerceIn(160.dp, 360.dp)
@@ -89,15 +88,17 @@ fun ScheduleScreen2(
     val vScroll = rememberScrollState()
     val hScroll = rememberScrollState()
 
-    var draggingTask by remember { mutableStateOf<Task?>(null) }
-    var dragX by remember { mutableStateOf(0f) }
-    var dragY by remember { mutableStateOf(0f) }
+    var draggingFromPallet by remember { mutableStateOf<ScheduleScreenItem?>(null) }
 
-// برای اینکه بفهمیم Grid کجای صفحه‌ست
+    var draggingSchedule by remember { mutableStateOf<Task?>(null) }
+    var dragX by remember { mutableFloatStateOf(0f) }
+    var dragY by remember { mutableFloatStateOf(0f) }
+
+    // برای اینکه بفهمیم Grid کجای صفحه‌ست
     var gridOriginInWindow by remember { mutableStateOf(Offset.Zero) }
     var palletExpanded by rememberSaveable { mutableStateOf(false) }
 
-    val palletContentWidth = 200.dp
+    val palletContentWidth = 160.dp
     val palletOverlayWidth = 18.dp + if (palletExpanded) palletContentWidth else 0.dp
 
     val pendingMove = remember { mutableStateMapOf<Int, PendingMove>() } // key = scheduleId
@@ -105,8 +106,8 @@ fun ScheduleScreen2(
 
     var selectedScheduleId by rememberSaveable { mutableStateOf<Int?>(null) }
 
-    LaunchedEffect(items) {
-        items.forEach { ti ->
+    LaunchedEffect(timelineItems) {
+        timelineItems.forEach { ti ->
             val pm = pendingMove[ti.scheduleId] ?: return@forEach
 
             val curDate = ti.start.toLocalDate()
@@ -247,7 +248,7 @@ fun ScheduleScreen2(
                             )
 
                             // ✅ آیتم‌ها روی Grid
-                            items.forEach { it ->
+                            timelineItems.forEach {
 
                                 val pm = pendingMove[it.scheduleId]
                                 val displayItem = if (pm == null) it else it.copy(
@@ -278,37 +279,41 @@ fun ScheduleScreen2(
                                     onResizeStartCommit = { scheduleId, newStart ->
                                         viewModel.resizeScheduleStart(scheduleId, newStart)
                                     },
-                                    onSendToPallet = { scheduleId, taskId ->
-                                        viewModel.sendScheduleToPallet(scheduleId, taskId)
+                                    onSendToPallet = { scheduleId, _ ->
+                                        viewModel.moveScheduleFromTimeLineToPallet(scheduleId)
                                         selectedScheduleId = null
                                     }
-
                                 )
                             }
-
                         }
                     }
                 }
             }
 
             RightPallet(
-                tasks = pallet,
+                palletItems = palletItems,
                 expanded = palletExpanded,
                 onToggle = { palletExpanded = !palletExpanded },
                 onStartDrag = { task, sx, sy ->
-                    draggingTask = task
+                    draggingSchedule = task
                     dragX = sx
                     dragY = sy
                 },
-                modifier = Modifier.align(Alignment.CenterEnd)
+                modifier = Modifier.align(Alignment.CenterEnd),
+                onLongPressStartDrag = { task, sx, sy ->
+                    palletExpanded = false            // ✅ پالت بسته شود
+                    draggingFromPallet = task         // ✅ درگ شروع
+                    dragX = sx
+                    dragY = sy
+                }
             )
 
             // ✅ Drag overlay
-            if (draggingTask != null) {
+            if (draggingFromPallet != null) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .pointerInput(draggingTask?.id) {
+                        .pointerInput(draggingFromPallet?.scheduleId) {
                             detectDragGestures(
                                 onDrag = { change, dragAmount ->
                                     change.consume()
@@ -316,54 +321,47 @@ fun ScheduleScreen2(
                                     dragY += dragAmount.y
                                 },
                                 onDragEnd = {
-                                    // Drop
-                                    val t = draggingTask ?: return@detectDragGestures.also {
-                                        draggingTask = null
-                                    }
+                                    val t = draggingFromPallet ?: return@detectDragGestures
 
-                                    // مختصات drop نسبت به Grid
                                     val localX = dragX - gridOriginInWindow.x
                                     val localY = dragY - gridOriginInWindow.y
 
-                                    // تبدیل به dayIndex و minute
                                     val dayIndex = (localX / dayWidthDp.toPx()).toInt()
                                     val minuteOfDay = ((localY / hourHeightDp.toPx()) * 60f).toInt()
 
                                     if (dayIndex in 0 until numDays && minuteOfDay in 0 until 24 * 60) {
                                         val date = startDate.plusDays(dayIndex.toLong())
 
-                                        val startMin = minuteOfDay.coerceIn(0, 24 * 60 - 15)
-                                        val endMin =
-                                            (startMin + 60).coerceAtMost(24 * 60) // پیش‌فرض 1 ساعت
+                                        // قوانین: داخل روز + حداقل 5 دقیقه + snap
+                                        val minDur = 5
+                                        val startMin = snap(minuteOfDay.coerceIn(0, 24 * 60 - minDur), 5)
+                                        val endMin = (startMin + 60).coerceAtMost(24 * 60) // پیش‌فرض 60 دقیقه
 
-                                        viewModel.dropTaskToSchedule(
-                                            taskId = t.id!!,
-                                            date = date,
-                                            startMinute = startMin,
-                                            endMinute = endMin
+                                        viewModel.dropScheduleFromPalletToTimeLine(
+                                            t.scheduleId
                                         )
                                     }
 
-                                    draggingTask = null
+                                    draggingFromPallet = null
                                 },
-                                onDragCancel = { draggingTask = null }
+                                onDragCancel = { draggingFromPallet = null }
                             )
                         }
                 ) {
-                    // کارت شناور
                     Box(
                         modifier = Modifier
                             .offset { IntOffset(dragX.toInt(), dragY.toInt()) }
                             .background(
-                                colorFromHex(draggingTask!!.color).copy(alpha = 0.85f),
+                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
                                 shape = MaterialTheme.shapes.medium
                             )
                             .padding(horizontal = 12.dp, vertical = 10.dp)
                     ) {
-                        Text(draggingTask!!.name, maxLines = 1)
+                        Text(draggingFromPallet!!.title, maxLines = 1)
                     }
                 }
             }
+
 
         }
 
@@ -411,7 +409,7 @@ private fun CurrentTimeLine(
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun TimelineItemBox(
-    item: TaskTimelineItem,
+    item: ScheduleScreenItem,
     startDate: LocalDate,
     dayWidthDp: Dp,
     hourHeightDp: Dp,
@@ -552,7 +550,7 @@ private fun TimelineItemBox(
     ) {
 
 
-        //  آیکون گروه + نام تسک
+        //  آیکون گروه + نام اسکچول یا تسک
         Row(
             modifier = Modifier
                 .align(Alignment.TopStart)
@@ -562,7 +560,7 @@ private fun TimelineItemBox(
             CategoryIconWithPlate(iconName = item.categoryIconName)
             Spacer(Modifier.width(8.dp))
             Text(
-                text = item.name,
+                text = item.title,
                 style = MaterialTheme.typography.labelLarge,
                 maxLines = 1
             )
@@ -577,7 +575,7 @@ private fun TimelineItemBox(
                 .width(dayWidthDp - 12.dp)
                 .height(taskH)
                 .background(
-                    color = colorFromHex(item.colorHex).copy(alpha = 0.85f),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
                     shape = MaterialTheme.shapes.medium
                 )
         ) {
@@ -636,13 +634,7 @@ private fun TimelineItemBox(
                     .padding(start = 8.dp, top = 34.dp, end = 8.dp, bottom = 8.dp)
             ) {
 
-                if (item.description.isNotBlank()) {
-                    Text(
-                        item.description,
-                        style = MaterialTheme.typography.labelSmall,
-                        maxLines = 1
-                    )
-                }
+
             }
 
 
@@ -674,10 +666,21 @@ private fun TimelineItemBox(
                                 topDy += dragAmount
                             },
                             onDragEnd = {
-                                onResizeStartCommit(item.scheduleId, resizeStart)
+                                // محاسبه نهایی داخل onDragEnd تا stale نشه
+                                val topDeltaMin2 = ((topDy / hourHpx) * 60f).roundToInt()
+
+                                val raw = (startMin0 + topDeltaMin2)
+                                    .coerceIn(DAY_MIN, (endMin0 - MIN_GAP_MIN).coerceAtLeast(DAY_MIN))
+
+                                val desired = snap(raw, 5) // یا 15 اگر می‌خوای
+                                val clamped = clampRange(desired, endMin0)
+
+                                onResizeStartCommit(item.scheduleId, clamped.start)
+
                                 isResizingStart = false
                                 topDy = 0f
-                            },
+                            }
+                            ,
                             onDragCancel = {
                                 isResizingStart = false
                                 topDy = 0f
@@ -751,7 +754,16 @@ private fun TimelineItemBox(
                                 bottomDy += dragAmount
                             },
                             onDragEnd = {
-                                onResizeEndCommit(item.scheduleId, resizeEnd)
+                                val bottomDeltaMin2 = ((bottomDy / hourHpx) * 60f).roundToInt()
+
+                                val raw = (endMin0 + bottomDeltaMin2)
+                                    .coerceIn((startMin0 + MIN_GAP_MIN).coerceAtMost(DAY_MAX), DAY_MAX)
+
+                                val desired = snap(raw, 5) // یا 15
+                                val clamped = clampRange(startMin0, desired)
+
+                                onResizeEndCommit(item.scheduleId, clamped.end)
+
                                 isResizingEnd = false
                                 bottomDy = 0f
                             },
@@ -797,10 +809,11 @@ private fun TimelineItemBox(
 
 @Composable
 private fun RightPallet(
-    tasks: List<Task>,
+    palletItems: List<ScheduleScreenItem>,
     expanded: Boolean,
     onToggle: () -> Unit,
     onStartDrag: (Task, startX: Float, startY: Float) -> Unit,
+    onLongPressStartDrag: (ScheduleScreenItem, startWindowX: Float, startWindowY: Float) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val width = if (expanded) 200.dp else 18.dp
@@ -833,11 +846,15 @@ private fun RightPallet(
                 Spacer(Modifier.height(8.dp))
 
                 LazyColumn {
-                    items(tasks, key = { it.id!! }) { t ->
+                    items(palletItems, key = { it.scheduleId }) { t ->
                         PalletTaskItem(
-                            task = t,
-                            onStartDrag = onStartDrag
+                            item = t,
+                            onLongPressStartDrag = { task, sx, sy ->
+                                onToggle()
+                                onLongPressStartDrag(task,sx,sy)
+                            }
                         )
+
                         HorizontalDivider(thickness = 0.5.dp)
                     }
                 }
@@ -846,10 +863,11 @@ private fun RightPallet(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun PalletTaskItem(
-    task: Task,
-    onStartDrag: (Task, startWindowX: Float, startWindowY: Float) -> Unit
+    item: ScheduleScreenItem,
+    onLongPressStartDrag: (ScheduleScreenItem, startWindowX: Float, startWindowY: Float) -> Unit
 ) {
     var origin by remember { mutableStateOf(Offset.Zero) }
 
@@ -858,23 +876,20 @@ private fun PalletTaskItem(
             .fillMaxWidth()
             .onGloballyPositioned { origin = it.positionInWindow() }
             .padding(vertical = 6.dp)
-            .background(colorFromHex(task.color).copy(alpha = 0.25f), MaterialTheme.shapes.medium)
-            .pointerInput(task.id) {
-                detectDragGestures(
-                    onDragStart = { local ->
-                        onStartDrag(task, origin.x + local.x, origin.y + local.y)
-                    },
-                    onDrag = { change, _ ->
-                        // ✅ مهم: فقط consume کنیم که همون لمس روی آیتم، کلیک/اسکرول لیست رو قفل نکنه
-                        change.consume()
-                    }
-                )
-            }
+            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f), MaterialTheme.shapes.medium)
+            .combinedClickable(
+                onClick = {},
+                onLongClick = {
+                    // نقطه شروع زیر انگشت (تقریبی: مرکز آیتم)
+                    onLongPressStartDrag(item, origin.x + 30f, origin.y + 30f)
+                }
+            )
             .padding(10.dp)
     ) {
-        Text(task.name, maxLines = 1)
+        Text(item.title, maxLines = 1)
     }
 }
+
 
 
 @Composable

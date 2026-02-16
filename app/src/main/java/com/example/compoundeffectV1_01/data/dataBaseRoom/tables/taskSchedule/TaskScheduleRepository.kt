@@ -1,6 +1,6 @@
 package com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule
 
-import com.example.compoundeffectV1_01.ui.scheduleScreen.TimeRangeScheduleRow
+import com.example.compoundeffectV1_01.ui.scheduleScreen.ScheduleItemsRow
 import kotlinx.coroutines.flow.Flow
 import java.time.LocalDate
 
@@ -15,10 +15,13 @@ interface TaskScheduleRepository {
     suspend fun updateTimeRange(scheduleId: Int, date: LocalDate, startMin: Int, endMin: Int)
     suspend fun updateEndMinute(scheduleId: Int, endMin: Int)
     suspend fun updateStartMinute(scheduleId: Int, startMin: Int)
-    fun observeAllTimeRangeSchedulesWithTask(): Flow<List<TimeRangeScheduleRow>>
+    fun observeAllSchedulesWithTask(): Flow<List<ScheduleItemsRow>>
 
     suspend fun deleteById(scheduleId: Int)
     suspend fun countByTaskId(taskId: Int): Int
+
+    suspend fun setSchedulePalletState(scheduleId: Int, inPallet: Boolean)
+    suspend fun getLastInactiveTimeRange(taskId: Int, mode: ScheduleMode = ScheduleMode.TIME_RANGE): TaskSchedule?
 
 
 

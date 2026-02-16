@@ -5,7 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
-import com.example.compoundeffectV1_01.ui.scheduleScreen.TimeRangeScheduleRow
+import com.example.compoundeffectV1_01.ui.scheduleScreen.ScheduleItemsRow
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -75,6 +75,7 @@ interface TaskScheduleDao {
 SELECT 
   s.id             AS s_id,
   s.taskId         AS s_taskId,
+  s.inPallet      AS s_inPallet,
   s.title          AS s_title,
   s.mode           AS s_mode,
   s.dateEpochDay   AS s_dateEpochDay,
@@ -90,8 +91,6 @@ SELECT
   t.categoryId     AS t_categoryId,
   t.isCompleted    AS t_isCompleted,
   t.priority       AS t_priority,
-  t.inPallet       AS t_inPallet,
-  t.inSchedule     AS t_inSchedule,
   t.selected       AS t_selected,
   t.changed        AS t_changed,
 
@@ -102,9 +101,8 @@ SELECT
 FROM task_schedule s
 JOIN task t ON t.id = s.taskId
 LEFT JOIN category c ON c.categoryId = t.categoryId
-WHERE s.mode = 'TIME_RANGE'
 """)
-    fun observeAllTimeRangeSchedulesWithTask(): Flow<List<TimeRangeScheduleRow>>
+    fun observeAllSchedulesWithTask(): Flow<List<ScheduleItemsRow>>
 
 
 
@@ -113,6 +111,14 @@ WHERE s.mode = 'TIME_RANGE'
 
     @Query("SELECT COUNT(*) FROM task_schedule WHERE taskId = :taskId")
     suspend fun countByTaskId(taskId: Int): Int
+
+
+
+    @Query("UPDATE task_schedule SET inPallet = :inPallet WHERE id = :scheduleId")
+    suspend fun setSchedulePalletState(scheduleId: Int, inPallet: Boolean)
+
+    @Query("SELECT * FROM task_schedule WHERE taskId=:taskId AND mode=:mode AND inPallet=1 ORDER BY id DESC LIMIT 1")
+    suspend fun getLastInactiveTimeRange(taskId: Int, mode: ScheduleMode = ScheduleMode.TIME_RANGE): TaskSchedule?
 
 
 }

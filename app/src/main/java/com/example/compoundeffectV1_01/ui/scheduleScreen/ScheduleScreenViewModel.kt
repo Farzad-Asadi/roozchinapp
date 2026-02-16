@@ -1,30 +1,20 @@
 package com.example.compoundeffectV1_01.ui.scheduleScreen
 
 
-import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.Task
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskRepository
-import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskWithSchedule
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.ScheduleMode
-import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.TaskSchedule
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.TaskScheduleRepository
-import com.example.compoundeffectV1_01.utils.createTimeForSampleEvents
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.async
-import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
-import java.util.Calendar
 import javax.inject.Inject
 
 @HiltViewModel
@@ -35,12 +25,10 @@ class ScheduleScreenViewModel @Inject constructor(
 
 
 
-    val palletTasks: StateFlow<List<Task>> =
-        taskRepo.observePalletTasks()
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    val timelineItems: StateFlow<List<TaskTimelineItem>> =
-        taskScheduleRepo.observeAllTimeRangeSchedulesWithTask()
+
+    val allItems: StateFlow<List<ScheduleScreenItem>> =
+        taskScheduleRepo.observeAllSchedulesWithTask()
             .map { rows ->
                 rows.mapNotNull { r ->
                     val date = r.s_dateEpochDay?.let(LocalDate::ofEpochDay) ?: return@mapNotNull null
@@ -51,17 +39,21 @@ class ScheduleScreenViewModel @Inject constructor(
                     val start = LocalDateTime.of(date, java.time.LocalTime.of(s / 60, s % 60))
                     val end = LocalDateTime.of(date, java.time.LocalTime.of(e / 60, e % 60))
 
-                    TaskTimelineItem(
+                    ScheduleScreenItem(
                         scheduleId = r.s_id,
                         taskId = r.t_id,
-                        name = r.t_name,
-                        colorHex = r.t_color,
-                        description = r.t_description,
-                        categoryId = r.t_categoryId,
-                        isCompleted = r.t_isCompleted,
-                        priority = r.t_priority,
+                        title =r.t_name,
+                        mode =r.s_mode,
+
+                        dateEpochDay = r.s_dateEpochDay,
                         start = start,
                         end = end,
+
+                        durationMinutes = r.s_durationMinutes,
+
+                        inPallet = r.s_inPallet,
+                        repeating = r.s_repeating,
+
                         categoryName = r.c_name,
                         categoryIconName = r.c_iconName,
                         categoryColor = r.c_color
@@ -100,52 +92,76 @@ class ScheduleScreenViewModel @Inject constructor(
         }
     }
 
-    fun dropTaskToSchedule(taskId: Int, date: LocalDate, startMinute: Int, endMinute: Int) {
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            val newScheduleId = taskScheduleRepo.insert(
-                TaskSchedule(
-                    id = null,
-                    taskId = taskId,
-                    title = null,
-                    mode = ScheduleMode.TIME_RANGE,
-                    dateEpochDay = date.toEpochDay(),
-                    startMinuteOfDay = startMinute,
-                    endMinuteOfDay = endMinute,
-                    durationMinutes = null,
-                    repeating = false
-                )
-            )
+    fun dropScheduleFromPalletToTimeLine(scheduleId: Int ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            taskScheduleRepo.setSchedulePalletState(scheduleId ,false )
 
-            val t = taskRepo.getTaskById(taskId) ?: return@launch
-            taskRepo.updateTask(t.copy(inSchedule = true, inPallet = false))
         }
     }
 
-    fun sendScheduleToPallet(scheduleId: Int, taskId: Int) {
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            taskScheduleRepo.deleteById(scheduleId)
-
-            val left = taskScheduleRepo.countByTaskId(taskId)
-
-            if (left == 0) {
-                taskRepo.markAsPallet(taskId)
-            }
+    fun moveScheduleFromTimeLineToPallet(scheduleId: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            taskScheduleRepo.setSchedulePalletState(scheduleId, true)
         }
     }
+
 
 
 }
 
 
+
+
+
+
+
+data class ScheduleScreenItem(
+    val scheduleId: Int,
+    val taskId: Int,
+    val title: String,
+    val mode: ScheduleMode ,
+
+    // برای TIME_RANGE
+    val dateEpochDay: Long? = null,       // LocalDate.toEpochDay()
+    val start: LocalDateTime,
+    val end: LocalDateTime,
+
+    // برای AMOUNT_OF_TIME
+    val durationMinutes: Int? = null,
+
+    val inPallet: Boolean ,
+    val repeating: Boolean ,
+
+    val categoryName: String?,
+    val categoryIconName: String?,
+    val categoryColor: String?
+)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 data class TaskTimelineItem(
     val scheduleId: Int,          // ✅ مهم
     val taskId: Int,
+    val inPallet: Boolean,
+
     val name: String,
     val colorHex: String,
     val description: String,
     val categoryId: Int?,
     val isCompleted: Boolean,
     val priority: Int,
+
     val start: LocalDateTime,
     val end: LocalDateTime,
 
@@ -162,9 +178,10 @@ data class PendingMove(
     val endMin: Int
 )
 
-data class TimeRangeScheduleRow(
+data class ScheduleItemsRow(
     val s_id: Int,
     val s_taskId: Int,
+    val s_inPallet: Boolean,
     val s_title: String?,
     val s_mode: ScheduleMode,
     val s_dateEpochDay: Long?,
@@ -180,8 +197,6 @@ data class TimeRangeScheduleRow(
     val t_categoryId: Int?,
     val t_isCompleted: Boolean,
     val t_priority: Int,
-    val t_inPallet: Boolean,
-    val t_inSchedule: Boolean,
     val t_selected: Boolean,
     val t_changed: Boolean,
 

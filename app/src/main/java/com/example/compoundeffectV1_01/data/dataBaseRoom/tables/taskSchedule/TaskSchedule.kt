@@ -42,6 +42,10 @@ data class TaskSchedule(
     // برای AMOUNT_OF_TIME
     val durationMinutes: Int? = null,
 
+
+
+    val inPallet: Boolean = false,
+
     val repeating: Boolean = false
 )
 

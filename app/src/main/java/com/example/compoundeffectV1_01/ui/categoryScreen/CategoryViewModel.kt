@@ -217,8 +217,6 @@ class CategoryViewModel @Inject constructor(
                 name = d.name.trim(),
                 color = categoryColor,
                 description = d.note,
-                inPallet = false,
-                inSchedule = false,
                 durationOverlap = 0,
                 selected = false,
                 changed = false,
@@ -304,6 +302,7 @@ class CategoryViewModel @Inject constructor(
                 endMinuteOfDay = if (d.mode == ScheduleMode.TIME_RANGE) d.end.toMinuteOfDay() else null,
 
                 durationMinutes = if (d.mode == ScheduleMode.AMOUNT_OF_TIME) d.durationMinutes else null,
+                inPallet = false,
                 repeating = d.repeating
             )
 
