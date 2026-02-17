@@ -52,4 +52,19 @@ class TaskScheduleRepositoryImpl @Inject constructor(
     override suspend fun getLastInactiveTimeRange(taskId: Int, mode: ScheduleMode): TaskSchedule? =
         dao.getLastInactiveTimeRange(taskId, mode)
 
+    override suspend fun dropFromPalletToTimeline(
+        scheduleId: Int,
+        date: LocalDate,
+        startMin: Int,
+        endMin: Int,
+        mode: ScheduleMode
+    ) =
+        dao.dropFromPalletToTimeline(
+            scheduleId = scheduleId,
+            dateEpochDay = date.toEpochDay(), // ✅ تبدیل
+            startMin = startMin,
+            endMin = endMin
+        )
+
+
 }

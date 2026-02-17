@@ -23,6 +23,13 @@ interface TaskScheduleRepository {
     suspend fun setSchedulePalletState(scheduleId: Int, inPallet: Boolean)
     suspend fun getLastInactiveTimeRange(taskId: Int, mode: ScheduleMode = ScheduleMode.TIME_RANGE): TaskSchedule?
 
+    suspend fun dropFromPalletToTimeline(
+        scheduleId: Int,
+        date: LocalDate,
+        startMin: Int,
+        endMin: Int,
+        mode: ScheduleMode = ScheduleMode.TIME_RANGE
+    )
 
 
 }

@@ -92,24 +92,25 @@ class ScheduleScreenViewModel @Inject constructor(
         }
     }
 
-    fun dropScheduleFromPalletToTimeLine(scheduleId: Int ) {
-        viewModelScope.launch(Dispatchers.IO) {
-            taskScheduleRepo.setSchedulePalletState(scheduleId ,false )
-
-        }
-    }
-
     fun moveScheduleFromTimeLineToPallet(scheduleId: Int) {
         viewModelScope.launch(Dispatchers.IO) {
             taskScheduleRepo.setSchedulePalletState(scheduleId, true)
         }
     }
 
+    fun dropScheduleFromPalletToTimeLine(
+        scheduleId: Int,
+        date: LocalDate,
+        startMin: Int,
+        endMin: Int
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            taskScheduleRepo.dropFromPalletToTimeline(scheduleId, date, startMin, endMin)
+        }
+    }
 
 
 }
-
-
 
 
 
@@ -136,41 +137,6 @@ data class ScheduleScreenItem(
     val categoryIconName: String?,
     val categoryColor: String?
 )
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-data class TaskTimelineItem(
-    val scheduleId: Int,          // ✅ مهم
-    val taskId: Int,
-    val inPallet: Boolean,
-
-    val name: String,
-    val colorHex: String,
-    val description: String,
-    val categoryId: Int?,
-    val isCompleted: Boolean,
-    val priority: Int,
-
-    val start: LocalDateTime,
-    val end: LocalDateTime,
-
-    // ✅ category info for UI
-    val categoryName: String?,
-    val categoryIconName: String?,
-    val categoryColor: String?
-)
-
 
 data class PendingMove(
     val date: LocalDate,

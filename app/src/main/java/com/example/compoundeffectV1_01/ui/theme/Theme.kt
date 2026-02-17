@@ -261,7 +261,6 @@ val unspecified_scheme = ColorFamily(
 @Composable
 fun AppTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    // Dynamic color is available on Android 12+
     dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {
@@ -270,16 +269,23 @@ fun AppTheme(
             val context = LocalContext.current
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
-
         darkTheme -> darkScheme
         else -> lightScheme
     }
+
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            window.statusBarColor = colorScheme.primary.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = darkTheme
+
+            // ✅ edge-to-edge
+            WindowCompat.setDecorFitsSystemWindows(window, false)
+
+            // ✅ status bar شفاف تا با TopBar یکی دیده شود
+            window.statusBarColor = android.graphics.Color.TRANSPARENT
+
+            // ✅ رنگ آیکن‌ها درست
+            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
         }
     }
 
@@ -289,4 +295,5 @@ fun AppTheme(
         content = content
     )
 }
+
 

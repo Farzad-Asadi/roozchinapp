@@ -120,5 +120,23 @@ LEFT JOIN category c ON c.categoryId = t.categoryId
     @Query("SELECT * FROM task_schedule WHERE taskId=:taskId AND mode=:mode AND inPallet=1 ORDER BY id DESC LIMIT 1")
     suspend fun getLastInactiveTimeRange(taskId: Int, mode: ScheduleMode = ScheduleMode.TIME_RANGE): TaskSchedule?
 
+    @Query("""
+        UPDATE task_schedule
+        SET 
+            inPallet = 0,
+            dateEpochDay = :dateEpochDay,
+            startMinuteOfDay = :startMin,
+            endMinuteOfDay = :endMin,
+            mode = :mode
+        WHERE id = :scheduleId
+    """)
+    suspend fun dropFromPalletToTimeline(
+        scheduleId: Int,
+        dateEpochDay: Long,
+        startMin: Int,
+        endMin: Int,
+        mode: ScheduleMode = ScheduleMode.TIME_RANGE
+    )
+
 
 }
