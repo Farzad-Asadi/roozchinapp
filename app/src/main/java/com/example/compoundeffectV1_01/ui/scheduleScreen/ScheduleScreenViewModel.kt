@@ -171,3 +171,10 @@ data class ScheduleItemsRow(
     val c_iconName: String?,
     val c_color: String?
 )
+
+data class OverlapLayout(
+    val level: Int,
+    val widthFrac: Float,   // 1.0, 0.75, 0.5, 0.25
+    val offsetFrac: Float,  // 0.0, 0.25, 0.5, 0.75
+    val z: Float
+)

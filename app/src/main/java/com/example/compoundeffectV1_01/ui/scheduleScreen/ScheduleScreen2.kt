@@ -3,6 +3,7 @@ package com.example.compoundeffectV1_01.ui.scheduleScreen
 import android.util.Log
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -58,6 +59,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
@@ -67,9 +69,11 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontVariation.width
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.Task
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.ScheduleMode
@@ -223,14 +227,25 @@ fun ScheduleScreen2(
 
 
 
-    LaunchedEffect(pendingBringDayIntoView, dayWidthDp, numDays) {
-        val day = pendingBringDayIntoView ?: return@LaunchedEffect
-        // یکم حاشیه بده که روز کامل دیده شه
-        val targetX = (day * dayWidthPx - dayWidthPx * 0.2f)
-            .coerceIn(0f, hScroll.maxValue.toFloat())
-        hScroll.animateScrollTo(targetX.toInt())
-        pendingBringDayIntoView = null
+
+
+    // 1) اول آیتم‌های نمایشی (با pendingMove) را بساز
+    val displayTimelineItems = remember(timelineItems, pendingMove) {
+        timelineItems.map { it ->
+            val pm = pendingMove[it.scheduleId]
+            if (pm == null) it
+            else it.copy(
+                start = pm.date.atStartOfDay().plusMinutes(pm.startMin.toLong()),
+                end   = pm.date.atStartOfDay().plusMinutes(pm.endMin.toLong())
+            )
+        }
     }
+
+// 2) بعد layout های همپوشانی را حساب کن (فقط داخل روز)
+    val overlapLayouts = remember(displayTimelineItems, startDate, numDays) {
+        computeOverlapLayouts(displayTimelineItems, startDate, numDays)
+    }
+
 
     LaunchedEffect(isAutoScrollingActive) {
         while (isAutoScrollingActive) {
@@ -267,6 +282,15 @@ fun ScheduleScreen2(
                 pendingMove.remove(ti.scheduleId)
             }
         }
+    }
+
+    LaunchedEffect(pendingBringDayIntoView, dayWidthDp, numDays) {
+        val day = pendingBringDayIntoView ?: return@LaunchedEffect
+        // یکم حاشیه بده که روز کامل دیده شه
+        val targetX = (day * dayWidthPx - dayWidthPx * 0.2f)
+            .coerceIn(0f, hScroll.maxValue.toFloat())
+        hScroll.animateScrollTo(targetX.toInt())
+        pendingBringDayIntoView = null
     }
 
     LaunchedEffect(vScroll.maxValue, hourHeightDp, dayWidthDp, startDate) {
@@ -542,10 +566,12 @@ fun ScheduleScreen2(
                             )
 
                             // ✅ آیتم‌ها روی Grid
-                            timelineItems.forEach {
+                            displayTimelineItems.forEach { displayItem ->
 
-                                val pm = pendingMove[it.scheduleId]
-                                val displayItem = if (pm == null) it else it.copy(
+                                val layout = overlapLayouts[displayItem.scheduleId]
+
+                                val pm = pendingMove[displayItem.scheduleId]
+                                val item = if (pm == null) displayItem else displayItem.copy(
                                     start = LocalDateTime.of(pm.date, java.time.LocalTime.MIN)
                                         .plusMinutes(pm.startMin.toLong()),
                                     end = LocalDateTime.of(pm.date, java.time.LocalTime.MIN)
@@ -553,8 +579,9 @@ fun ScheduleScreen2(
                                 )
 
                                 TimelineItemBox(
-                                    item = displayItem,
+                                    item = item,
                                     startDate = startDate,
+                                    overlapLayout = layout,
                                     dayWidthDp = dayWidthDp,
                                     hourHeightDp = hourHeightDp,
                                     verticalZoom = verticalZoom,
@@ -759,6 +786,7 @@ private fun CurrentTimeLine(
 private fun TimelineItemBox(
     item: ScheduleScreenItem,
     startDate: LocalDate,
+    overlapLayout: OverlapLayout?,
     dayWidthDp: Dp,
     hourHeightDp: Dp,
     verticalZoom: Float,
@@ -863,7 +891,14 @@ private fun TimelineItemBox(
     }
 
 
-    val x = dayWidthDp * displayDayIndex
+    val baseW = (dayWidthDp - 12.dp)
+
+    val widthFrac = overlapLayout?.widthFrac ?: 1f
+    val offsetFrac = overlapLayout?.offsetFrac ?: 0f
+    val z = overlapLayout?.z ?: item.scheduleId.toFloat()
+    val hasShadow = (overlapLayout?.level ?: 0) >= 1
+
+    val x = dayWidthDp * displayDayIndex + (baseW * offsetFrac)
     val y = hourHeightDp * (displayStart / 60f)
     val h = hourHeightDp * (((displayEnd - displayStart).coerceAtLeast(minDur)) / 60f)
 
@@ -892,6 +927,22 @@ private fun TimelineItemBox(
     // محدودش کن که کارت خیلی از ستون خارج نشه (اختیاری ولی خوش‌دست‌تر)
     val previewDx = residualDx.coerceIn(-dayWpx * 0.45f, dayWpx * 0.45f)
 
+
+    val level = overlapLayout?.level ?: 0
+
+    val borderWidth = when (level) {
+        1 -> 1.dp
+        2 -> 1.5.dp
+        3 -> 2.dp
+        else -> 0.dp
+    }
+
+    val borderColor = when (level) {
+        1 -> MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+        2 -> MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)
+        3 -> MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+        else -> Color.Transparent
+    }
 
     LaunchedEffect(isMoving, moveDayIndex) {
         if (isMoving && moveDayIndex != lastBroughtDay) {
@@ -940,21 +991,9 @@ private fun TimelineItemBox(
     Box(
         modifier = Modifier
             .offset(x = x + 6.dp, y = containerY)
-            .graphicsLayer {
-                if (isMoving) {
-                    translationX = previewDx   // ✅ نمایش حرکت چپ/راست
-                    shadowElevation = 8.dp.toPx()
-                    scaleX = 1.01f
-                    scaleY = 1.01f
-                } else {
-                    translationX = 0f
-                    shadowElevation = 0f
-                    scaleX = 1f
-                    scaleY = 1f
-                }
-            }
-            .width(dayWidthDp - 12.dp)
+            .width(baseW * widthFrac)
             .height(selectionH)
+            .zIndex(z)
             .drawBehind {
                 if (dashed) {
                     val stroke = Stroke(
@@ -997,10 +1036,16 @@ private fun TimelineItemBox(
                 .align(Alignment.Center)
                 .width(dayWidthDp - 12.dp)
                 .height(taskH)
+                .border(
+                    width = borderWidth,
+                    color = borderColor,
+                    shape = MaterialTheme.shapes.medium
+                )
                 .background(
                     color = scheduleColor,
                     shape = MaterialTheme.shapes.medium
                 )
+
         ) {
 
 
@@ -1461,8 +1506,13 @@ private const val ZOOM_MIN = 0.6f
 private const val ZOOM_MAX = 6.0f
 private const val ZOOM_STEP = 0.2f
 
-private val TIME_RANGE_COLOR_ALPHA = 0.45f
+private const val TIME_RANGE_COLOR_ALPHA = 0.45f
 private val TIME_RANGE_COLOR = androidx.compose.ui.graphics.Color(0xFF5E81F4)
+
+private const val OVERLAP_MAX_LEVEL = 3            // 0..3  => 4 لایه
+private const val OVERLAP_STEP_FRAC = 0.25f        // هر لایه 1/4 عرض جابه‌جا + کوچک می‌شود
+
+
 
 
 private enum class AutoScrollMode { MOVE, RESIZE_START, RESIZE_END }
@@ -1506,4 +1556,88 @@ private fun snapZoom(z: Float): Float =
 
 private fun snapStepForZoom(zoom: Float): Int {
     return if (zoom >= 2.0f) 5 else 15
+}
+
+
+
+private data class DayKey(val date: LocalDate, val dayIndex: Int)
+
+private fun minuteOfDay(dt: LocalDateTime): Int =
+    dt.toLocalTime().hour * 60 + dt.toLocalTime().minute
+
+private fun overlaps(aStart: Int, aEnd: Int, bStart: Int, bEnd: Int): Boolean =
+    aStart < bEnd && bStart < aEnd
+
+/**
+ * فقط داخل یک روز همپوشانی را محاسبه می‌کند.
+ * اگر بیشتر از ۴ همپوشانی شد، همه اضافه‌ها روی level=3 تلنبار می‌شوند.
+ */
+private fun computeOverlapLayouts(
+    items: List<ScheduleScreenItem>,
+    startDate: LocalDate,
+    numDays: Int
+): Map<Int, OverlapLayout> {
+
+    // فقط آیتم‌های داخل بازه 5 روزه
+    val inRange = items.filter { it.start.toLocalDate() >= startDate && it.start.toLocalDate() < startDate.plusDays(numDays.toLong()) }
+
+    // group per-day
+    val groups: Map<DayKey, List<ScheduleScreenItem>> = inRange.groupBy { it ->
+        val dayIndex = ChronoUnit.DAYS.between(startDate, it.start.toLocalDate()).toInt()
+        DayKey(it.start.toLocalDate(), dayIndex)
+    }
+
+    val result = mutableMapOf<Int, OverlapLayout>()
+
+    for ((_, dayItems) in groups) {
+        // مرتب‌سازی برای sweep-line
+        val sorted = dayItems.sortedWith(
+            compareBy<ScheduleScreenItem> { minuteOfDay(it.start) }
+                .thenBy { minuteOfDay(it.end) }
+                .thenBy { it.scheduleId }
+        )
+
+        // endMin هر level (اگر null یعنی آزاد)
+        val endByLevel = Array<Int?>(OVERLAP_MAX_LEVEL + 1) { null }
+
+        for (it in sorted) {
+            val s = minuteOfDay(it.start).coerceIn(0, 1440)
+            val e = minuteOfDay(it.end).coerceIn(0, 1440)
+            if (e <= s) continue
+
+            // levelهای 0..2 را اگر آزاد بود انتخاب کن
+            var chosen = -1
+            for (lvl in 0 until OVERLAP_MAX_LEVEL) { // 0..2
+                val activeEnd = endByLevel[lvl]
+                val free = (activeEnd == null) || (s >= activeEnd)
+                if (free) {
+                    chosen = lvl
+                    endByLevel[lvl] = e
+                    break
+                }
+            }
+
+            // اگر جا نبود => تلنبار روی level=3
+            if (chosen == -1) {
+                chosen = OVERLAP_MAX_LEVEL
+                val prev = endByLevel[OVERLAP_MAX_LEVEL]
+                endByLevel[OVERLAP_MAX_LEVEL] = if (prev == null) e else maxOf(prev, e)
+            }
+
+            val widthFrac = (1f - chosen * OVERLAP_STEP_FRAC).coerceAtLeast(OVERLAP_STEP_FRAC)
+            val offsetFrac = (chosen * OVERLAP_STEP_FRAC).coerceIn(0f, 1f - OVERLAP_STEP_FRAC)
+
+            // zIndex: level بالاتر همیشه روی‌تر + جدیدترها (scheduleId بزرگتر) روی‌تر
+            val z = (chosen * 1_000_000 + it.scheduleId).toFloat()
+
+            result[it.scheduleId] = OverlapLayout(
+                level = chosen,
+                widthFrac = widthFrac,
+                offsetFrac = offsetFrac,
+                z = z
+            )
+        }
+    }
+
+    return result
 }
