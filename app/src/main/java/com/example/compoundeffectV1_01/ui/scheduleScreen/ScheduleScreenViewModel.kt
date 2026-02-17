@@ -74,20 +74,20 @@ class ScheduleScreenViewModel @Inject constructor(
 
 
     fun moveSchedule(scheduleId: Int, newDate: LocalDate, newStart: Int, newEnd: Int) {
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO) {
             taskScheduleRepo.updateTimeRange(scheduleId, newDate, newStart, newEnd)
         }
 
     }
 
     fun resizeScheduleEnd(scheduleId: Int, newEnd: Int) {
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO) {
             taskScheduleRepo.updateEndMinute(scheduleId, newEnd)
         }
     }
 
     fun resizeScheduleStart(scheduleId: Int, newStart: Int) {
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO) {
             taskScheduleRepo.updateStartMinute(scheduleId, newStart)
         }
     }
