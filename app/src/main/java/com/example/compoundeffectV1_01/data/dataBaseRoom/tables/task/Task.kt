@@ -14,18 +14,22 @@ data class Task(
 
     val name: String,
     val color: String,
-
-
     val description: String,
 
     val durationOverlap: Int = 0,
     val selected: Boolean,
     val changed: Boolean = false,
 
-    val categoryId: Int? = null,     // تسک مربوط به کدام category
+    val categoryId: Int? = null,
     val isCompleted: Boolean = false,
-    val priority: Int = 0            // 0..2 مثلا
+    val priority: Int = 0,
+
+    // ✅ جدیدها
+    val orderIndex: Int = 0,        // ترتیب داخل category
+    val indentLevel: Int = 0,       // 0..3 (برای > >> >>>)
+    val parentTaskId: Int? = null   // برای ارتباط والد/فرزند
 )
+
 
 
 

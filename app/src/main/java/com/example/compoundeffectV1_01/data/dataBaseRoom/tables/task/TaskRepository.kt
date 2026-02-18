@@ -30,7 +30,11 @@ interface TaskRepository {
 
     fun observeAllScheduledTasksWithSchedule(): Flow<List<TaskWithSchedule>>
 
+    suspend fun getTasksByCategoryOrdered(categoryId: Int): List<Task>
 
+    suspend fun getMinOrderIndex(categoryId: Int): Int?
+
+    suspend fun getMaxOrderIndex(categoryId: Int): Int?
 
 
 }

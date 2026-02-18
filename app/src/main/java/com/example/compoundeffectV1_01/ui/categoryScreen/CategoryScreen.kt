@@ -22,14 +22,21 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowBackIosNew
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Done
+import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.ExpandLess
@@ -40,6 +47,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Task
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -62,6 +70,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -90,7 +99,6 @@ import org.burnoutcrew.reorderable.reorderable
 import java.time.LocalTime
 
 @SuppressLint("SuspiciousIndentation")
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CategoryScreen(
     onNavigateToSchedule: () -> Unit, // فعلاً استفاده نمی‌کنیم، بعداً به bottom bar وصل می‌کنیم
@@ -109,7 +117,6 @@ fun CategoryScreen(
     val scheduledCount by viewModel.scheduledCountForMenu.collectAsState()
 
 
-
     var showPickParent by rememberSaveable { mutableStateOf(false) }
     var showAddCategory by rememberSaveable { mutableStateOf(false) }
     var isDragging by remember { mutableStateOf(false) }
@@ -120,7 +127,6 @@ fun CategoryScreen(
     var nameError by rememberSaveable { mutableStateOf<String?>(null) }
 
     val parentEntity = state.categories.firstOrNull { it.categoryId == draft.parentId }
-
 
 
     var showDeleteConfirm by rememberSaveable { mutableStateOf(false) }
@@ -137,6 +143,10 @@ fun CategoryScreen(
     var tasksExpanded by rememberSaveable(menuCategoryId) { mutableStateOf(false) }
 
     var showScheduleDialog by rememberSaveable { mutableStateOf(false) }
+
+    var sheetMode by rememberSaveable(menuCategoryId) { mutableStateOf(CategorySheetMode.OVERVIEW) }
+
+    var showTaskDialog by rememberSaveable { mutableStateOf(false) }
 
 
     LaunchedEffect(createResult) {
@@ -503,7 +513,10 @@ fun CategoryScreen(
 
         CategoryOptionsSideSheet(
             category = menuCategory,
-            onDismiss = { viewModel.setMenuCategoryId(null) },
+            onDismiss = {
+                sheetMode = CategorySheetMode.OVERVIEW
+                viewModel.setMenuCategoryId(null)
+            },
             onClickPickIcon = { showEditIconPicker = true },
             onClickPickColor = { showEditColorPicker = true },
             onClickRename = {
@@ -522,20 +535,31 @@ fun CategoryScreen(
                     id = tws.task.id ?: -1,
                     title = tws.task.name,
                     isDone = tws.task.isCompleted,
-                    hasSchedule = (tws.schedule != null)
+                    hasSchedule = (tws.schedule != null),
+                    hasChildren = false // TODO: بعداً از repo بگیر
                 )
             },
             onAddTask = {
                 val cat = menuCategory ?: return@CategoryOptionsSideSheet
                 viewModel.startAddTask(cat.categoryId!!, cat.color)
-                showAddTaskDialog = true
+                showTaskDialog = true
             },
             tasksExpanded = tasksExpanded,
             onToggleTasksExpand = { tasksExpanded = !tasksExpanded },
             onClickTask = { taskId ->
                 viewModel.startEditTask(taskId)
+                showTaskDialog = true
             },
-            scheduledCount=scheduledCount
+            scheduledCount = scheduledCount,
+            sheetMode = sheetMode,
+            onChangeMode = { sheetMode = it },
+            toggleTaskCompleted = { taskId: Int, done: Boolean ->
+                viewModel.toggleTaskCompleted(taskId, done)
+            },
+            deleteTask = { taskId: Int ->
+                viewModel.deleteTask(taskId)
+            }
+
 
         )
     }
@@ -606,67 +630,76 @@ fun CategoryScreen(
     if (menuCategoryId != null && showEditIconPicker) {
         val current = state.categories.firstOrNull { it.categoryId == menuCategoryId } ?: return
 
-            ChooseIconDialog(
-                selectedKey = current.iconName,
-                onDismiss = { showEditIconPicker = false },
-                onPick = { opt ->
-                    viewModel.updateCategoryIcon(menuCategoryId!!, opt.key)
-                    showEditIconPicker = false
-                }
-            )
+        ChooseIconDialog(
+            selectedKey = current.iconName,
+            onDismiss = { showEditIconPicker = false },
+            onPick = { opt ->
+                viewModel.updateCategoryIcon(menuCategoryId!!, opt.key)
+                showEditIconPicker = false
+            }
+        )
     }
 
     if (menuCategoryId != null && showEditColorPicker) {
         val current = state.categories.firstOrNull { it.categoryId == menuCategoryId } ?: return
 
-            ChooseColorDialog(
-                initialHex = current.color,
-                onDismiss = { showEditColorPicker = false },
-                onConfirm = { hex ->
-                    viewModel.updateCategoryColor(menuCategoryId!!, hex)
-                    showEditColorPicker = false
+        ChooseColorDialog(
+            initialHex = current.color,
+            onDismiss = { showEditColorPicker = false },
+            onConfirm = { hex ->
+                viewModel.updateCategoryColor(menuCategoryId!!, hex)
+                showEditColorPicker = false
+            }
+        )
+    }
+
+    if (showTaskDialog && menuCategory != null) {
+        val isEdit = (editingTaskId != null)
+
+        AddTaskDialog(
+            addTaskMod = !isEdit,
+            categoryName = menuCategory.name,
+            categoryIconName = menuCategory.iconName,
+            categoryColorHex = menuCategory.color,
+            draft = taskDraft,
+
+            onDismiss = {
+                showTaskDialog = false
+                viewModel.finishEditTask()
+            },
+
+            onNameChange = viewModel::setTaskName,
+            onPriorityChange = viewModel::setTaskPriority,
+            onCompletedToggle = viewModel::setTaskCompleted,
+            onNoteChange = viewModel::setTaskNote,
+
+            // ✅ این دوتا از UI میاد و داخل Draft ذخیره میشه
+            onInsertAtTopChange = viewModel::setTaskInsertAtTop,
+            onChildLevelChange = viewModel::setTaskChildLevel,
+
+            // ✅ فقط اکشن
+            onConfirm = { action ->
+                val editing = (editingTaskId != null)
+
+                if (editing) {
+                    viewModel.saveEditedTask(menuCategory.color)
+                    showTaskDialog = false
+                } else {
+                    viewModel.createTaskForCategory(menuCategory.color)
+
+                    if (action == ConfirmAction.SAVE_AND_CLOSE) {
+                        showTaskDialog = false
+                    } else {
+                        viewModel.resetTaskDraftKeepSomeDefaults()
+                    }
                 }
-            )
-    }
-
-    if (showAddTaskDialog && menuCategory != null) {
-        AddTaskDialog(
-            addTaskMod = true,
-            categoryName = menuCategory.name,
-            categoryIconName = menuCategory.iconName,
-            categoryColorHex = menuCategory.color,
-            draft = taskDraft,
-            onDismiss = { showAddTaskDialog = false },
-            onNameChange = viewModel::setTaskName,
-            onPriorityChange = viewModel::setTaskPriority,
-            onCompletedToggle = viewModel::setTaskCompleted,
-            onNoteChange = viewModel::setTaskNote,
-            onConfirm = {
-                viewModel.createTaskForCategory(menuCategory.color)
-                showAddTaskDialog = false
             },
+
             onOpenSchedule = { showScheduleDialog = true }
         )
+
     }
 
-    if (editingTaskId != null && menuCategory != null) {
-        AddTaskDialog(
-            addTaskMod = false,
-            categoryName = menuCategory.name,
-            categoryIconName = menuCategory.iconName,
-            categoryColorHex = menuCategory.color,
-            draft = taskDraft,
-            onDismiss = { viewModel.finishEditTask() },
-            onNameChange = viewModel::setTaskName,
-            onPriorityChange = viewModel::setTaskPriority,
-            onCompletedToggle = viewModel::setTaskCompleted,
-            onNoteChange = viewModel::setTaskNote,
-            onConfirm = {
-                viewModel.saveEditedTask(menuCategory.color)
-            },
-            onOpenSchedule = { showScheduleDialog = true }
-        )
-    }
     if (showScheduleDialog && menuCategory != null) {
         TaskScheduleDialog(
             taskName = taskDraft.name.ifBlank { "Task" },
@@ -1253,7 +1286,7 @@ private fun containerColorForLevel(level: Int): Color {
 @Composable
 private fun CategoryOptionsSideSheet(
     category: CategoryEntity,
-    tasks: List<TaskMiniUi>,              // ✅ جدید
+    tasks: List<TaskMiniUi>,
     onDismiss: () -> Unit,
     onClickPickIcon: () -> Unit,
     onClickPickColor: () -> Unit,
@@ -1265,6 +1298,10 @@ private fun CategoryOptionsSideSheet(
     onToggleTasksExpand: () -> Unit,
     onClickTask: (Int) -> Unit,
     scheduledCount: Int,
+    sheetMode: CategorySheetMode,
+    onChangeMode: (CategorySheetMode) -> Unit,
+    toggleTaskCompleted: (taskId: Int, done: Boolean) -> Unit,
+    deleteTask: (taskId: Int) -> Unit,
 ) {
 
 
@@ -1290,143 +1327,409 @@ private fun CategoryOptionsSideSheet(
                 .fillMaxWidth(0.78f)
                 .background(MaterialTheme.colorScheme.surface)
         ) {
-            // Header (آیکن + اسم)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(colorFromHex(category.color).copy(alpha = 0.15f))
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = iconFromKey(category.iconName),
-                    contentDescription = null,
-                    tint = colorFromHex(category.color),
-                    modifier = Modifier.size(28.dp)
-                )
-                Spacer(Modifier.width(12.dp))
-                Text(
-                    text = category.name,
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-
-            HorizontalDivider()
-
-            SheetActionRow(
-                leading = {
-                    Icon(
-                        imageVector = iconFromKey(category.iconName),
-                        contentDescription = null,
-                        tint = colorFromHex(category.color)
-                    )
-                },
-                title = "Add task",
-                trailing = { Icon(Icons.Filled.Search, contentDescription = null) },
-                onClick = {
-                    onAddTask() // ✅ جدید
-                }
-            )
-            HorizontalDivider(thickness = 0.5.dp)
-
-            TasksSection(
-                tasks = tasks,
-                expanded = tasksExpanded,
-                onToggleExpand = onToggleTasksExpand,
-                onOpenTasksMenu = { /* بعداً */ },
-                onClickTask = onClickTask
-            )
-
-            // بخش آمارها (فعلاً 0)
-
-            SheetStatRow(icon = Icons.Filled.Event, text = "${scheduledCount} scheduled activities")
-            SheetStatRow(icon = Icons.Filled.History, text = "0 logged activities")
-            SheetStatRow(icon = Icons.Filled.Description, text = "0 notes")
-            SheetStatRow(icon = Icons.Filled.AttachFile, text = "0 attachments")
-
-            Spacer(Modifier.height(10.dp))
-            HorizontalDivider()
-
-            // Parameters (باز/بسته)
-            var paramsExpanded by rememberSaveable { mutableStateOf(true) }
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { paramsExpanded = !paramsExpanded }
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(Icons.Filled.Settings, contentDescription = null)
-                Spacer(Modifier.width(12.dp))
-                Text(
-                    "Parameters",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.weight(1f)
-                )
-                Icon(
-                    imageVector = if (paramsExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                    contentDescription = null
-                )
-            }
-
-            if (paramsExpanded) {
-                HorizontalDivider()
-
-                // Icon
-                SheetActionRow(
-                    leading = {
+            when (sheetMode) {
+                CategorySheetMode.OVERVIEW -> {
+                    // ✅ هدر فعلی کتگوری
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(colorFromHex(category.color).copy(alpha = 0.15f))
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Icon(
-                            iconFromKey(category.iconName),
+                            imageVector = iconFromKey(category.iconName),
                             contentDescription = null,
-                            tint = colorFromHex(category.color)
+                            tint = colorFromHex(category.color),
+                            modifier = Modifier.size(28.dp)
                         )
-                    },
-                    title = "Icon",
-                    trailing = {
-                        Icon(Icons.Filled.GridView, contentDescription = null)
-                    },
-                    onClick = onClickPickIcon
-                )
-
-                // Color
-                SheetActionRow(
-                    leading = {
-                        Box(
-                            Modifier
-                                .size(22.dp)
-                                .border(1.dp, Color.Black.copy(alpha = 0.12f), CircleShape)
-                                .background(colorFromHex(category.color), CircleShape)
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            text = category.name,
+                            style = MaterialTheme.typography.titleLarge,
+                            modifier = Modifier.weight(1f)
                         )
-                    },
-                    title = "Color",
-                    trailing = { Icon(Icons.Filled.Palette, contentDescription = null) },
-                    onClick = onClickPickColor
-                )
+                    }
 
-                // Rename
-                SheetActionRow(
-                    leading = { Icon(Icons.Filled.Edit, contentDescription = null) },
-                    title = "Rename",
-                    onClick = onClickRename
-                )
+                    HorizontalDivider()
 
-                // Description
-                SheetActionRow(
-                    leading = { Icon(Icons.Filled.Description, contentDescription = null) },
-                    title = "Add description",
-                    onClick = onClickEditDescription
-                )
+                    // ✅ بدنه اسکرول‌دار (Overview)
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                    ) {
+                        item {
+                            // ✅ ردیف Tasks ساده (فقط یک ردیف، بدون expand/منو/لیست)
+                            SheetTasksCompactRow(
+                                count = tasks.size,
+                                onClick = { onChangeMode(CategorySheetMode.TASKS) }
+                            )
+                            HorizontalDivider(thickness = 0.5.dp)
 
-                // Delete
-                SheetActionRow(
-                    leading = { Icon(Icons.Filled.Delete, contentDescription = null) },
-                    title = "Delete",
-                    titleColor = MaterialTheme.colorScheme.error,
-                    onClick = onClickDelete
+                            // آمارها مثل قبل (اگر می‌خوای نگه داریم)
+                            SheetStatRow(
+                                icon = Icons.Filled.Event,
+                                text = "${scheduledCount} scheduled activities"
+                            )
+                            SheetStatRow(icon = Icons.Filled.History, text = "0 logged activities")
+                            SheetStatRow(icon = Icons.Filled.Description, text = "0 notes")
+                            SheetStatRow(icon = Icons.Filled.AttachFile, text = "0 attachments")
+
+                            Spacer(Modifier.height(10.dp))
+                            HorizontalDivider()
+                        }
+
+                        item {
+                            // ✅ Parameters همون قبلی (بدون تغییر)
+                            var paramsExpanded by rememberSaveable { mutableStateOf(true) }
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { paramsExpanded = !paramsExpanded }
+                                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Filled.Settings, contentDescription = null)
+                                Spacer(Modifier.width(12.dp))
+                                Text(
+                                    "Parameters",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Icon(
+                                    imageVector = if (paramsExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                                    contentDescription = null
+                                )
+                            }
+
+                            if (paramsExpanded) {
+                                HorizontalDivider()
+
+                                SheetActionRow(
+                                    leading = {
+                                        Icon(
+                                            iconFromKey(category.iconName),
+                                            contentDescription = null,
+                                            tint = colorFromHex(category.color)
+                                        )
+                                    },
+                                    title = "Icon",
+                                    trailing = {
+                                        Icon(
+                                            Icons.Filled.GridView,
+                                            contentDescription = null
+                                        )
+                                    },
+                                    onClick = onClickPickIcon
+                                )
+
+                                SheetActionRow(
+                                    leading = {
+                                        Box(
+                                            Modifier
+                                                .size(22.dp)
+                                                .border(
+                                                    1.dp,
+                                                    Color.Black.copy(alpha = 0.12f),
+                                                    CircleShape
+                                                )
+                                                .background(
+                                                    colorFromHex(category.color),
+                                                    CircleShape
+                                                )
+                                        )
+                                    },
+                                    title = "Color",
+                                    trailing = {
+                                        Icon(
+                                            Icons.Filled.Palette,
+                                            contentDescription = null
+                                        )
+                                    },
+                                    onClick = onClickPickColor
+                                )
+
+                                SheetActionRow(
+                                    leading = {
+                                        Icon(
+                                            Icons.Filled.Edit,
+                                            contentDescription = null
+                                        )
+                                    },
+                                    title = "Rename",
+                                    onClick = onClickRename
+                                )
+
+                                SheetActionRow(
+                                    leading = {
+                                        Icon(
+                                            Icons.Filled.Description,
+                                            contentDescription = null
+                                        )
+                                    },
+                                    title = "Add description",
+                                    onClick = onClickEditDescription
+                                )
+
+                                SheetActionRow(
+                                    leading = {
+                                        Icon(
+                                            Icons.Filled.Delete,
+                                            contentDescription = null
+                                        )
+                                    },
+                                    title = "Delete",
+                                    titleColor = MaterialTheme.colorScheme.error,
+                                    onClick = onClickDelete
+                                )
+                            }
+
+                            Spacer(Modifier.height(24.dp))
+                        }
+                    }
+                }
+
+                CategorySheetMode.TASKS -> {
+                    // ✅ حالت Tasks: کل سایدشیت عوض میشه
+                    TasksModeContent(
+                        category = category,
+                        tasks = tasks,
+                        onBack = { onChangeMode(CategorySheetMode.OVERVIEW) },
+                        onAddTask = onAddTask,
+                        onClickTask = onClickTask,
+                        toggleTaskCompleted = { taskId: Int, done: Boolean ->
+                            toggleTaskCompleted(taskId, done)
+                        },
+                        deleteTask = { taskId: Int ->
+                            deleteTask(taskId)
+                        }
+
+                    )
+                }
+            }
+        }
+    }
+}
+
+
+@Composable
+private fun SheetTasksCompactRow(
+    count: Int,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            Icons.Filled.Task,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.width(12.dp))
+
+        // "Tasks" چسبیده به تعداد
+        Text("Tasks", style = MaterialTheme.typography.bodyLarge)
+        Spacer(Modifier.width(8.dp))
+        Text("$count", color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+    HorizontalDivider(thickness = 0.5.dp)
+}
+
+@Composable
+private fun TasksModeContent(
+    category: CategoryEntity,
+    tasks: List<TaskMiniUi>,
+    onBack: () -> Unit,
+    onAddTask: () -> Unit,
+    onClickTask: (Int) -> Unit,
+    toggleTaskCompleted: (taskId: Int, done: Boolean) -> Unit,
+    deleteTask: (taskId: Int) -> Unit,
+) {
+    var expanded by rememberSaveable { mutableStateOf(true) }
+
+    var taskMenuForId by rememberSaveable { mutableStateOf<Int?>(null) }
+    var expandedIds by rememberSaveable { mutableStateOf(setOf<Int>()) } // برای expand تسک‌های دارای child
+
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+    ) {
+
+        // ردیف اول: Add task + آیکون کتگوری + Search
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            TextButton(onClick = onBack) { Text("Back") }
+
+            Spacer(Modifier.width(8.dp))
+
+            Icon(
+                imageVector = iconFromKey(category.iconName),
+                contentDescription = null,
+                tint = colorFromHex(category.color),
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(Modifier.width(10.dp))
+
+            Text(
+                text = "Add task",
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable { onAddTask() }
+            )
+
+            IconButton(onClick = { /* بعداً سرچ */ }) {
+                Icon(Icons.Filled.Search, contentDescription = "search")
+            }
+        }
+
+        HorizontalDivider()
+
+        // ردیف دوم: آیکون تسک، تعداد، Tasks، اکسپند، سه نقطه
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Filled.Task,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.width(10.dp))
+
+            Text("${tasks.size}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.width(10.dp))
+
+            Text("Tasks", modifier = Modifier.weight(1f))
+
+            IconButton(onClick = { expanded = !expanded }) {
+                Icon(
+                    imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                    contentDescription = "expand"
+                )
+            }
+
+            IconButton(onClick = { /* منوی سه نقطه برای tasks: بعداً */ }) {
+                Icon(Icons.Filled.MoreVert, contentDescription = "tasks menu")
+            }
+        }
+
+        HorizontalDivider(thickness = 0.5.dp)
+
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+        ) {
+            if (expanded) {
+                items(tasks, key = { it.id }) { t ->
+                    val isExpanded = expandedIds.contains(t.id)
+                    val showMenu = (taskMenuForId == t.id)
+
+                    TaskRowInSheet(
+                        task = t,
+                        expanded = isExpanded,
+                        onToggleExpand = {
+                            expandedIds = if (isExpanded) expandedIds - t.id else expandedIds + t.id
+                        },
+                        onClickRow = {
+                            taskMenuForId = t.id
+                            onClickTask(t.id)
+                        },      // ✅ با کلیک روی تسک منو باز میشه
+                        onDismissMenu = { taskMenuForId = null },
+                        showMenu = showMenu,
+                        onEdit = { onClickTask(t.id) },            // ✅ همون startEditTask در بیرون
+                        onToggleDone = { toggleTaskCompleted(t.id, !t.isDone) },
+                        onDelete = { deleteTask(t.id) }
+
+                    )
+                    HorizontalDivider(thickness = 0.5.dp)
+
+                    // ✅ اگر child ها را داری، اینجا زیرش با indent نشان بده
+                    // if (t.hasChildren && isExpanded) { ... }
+                }
+            }
+        }
+
+
+    }
+}
+
+
+@Composable
+private fun TaskRowInSheet(
+    task: TaskMiniUi,
+    expanded: Boolean,
+    onToggleExpand: () -> Unit,
+    onClickRow: () -> Unit,
+    onDismissMenu: () -> Unit,
+    showMenu: Boolean,
+    onEdit: () -> Unit,
+    onToggleDone: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClickRow() }
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // ✅ دایره وضعیت
+        Box(
+            modifier = Modifier
+                .size(22.dp)
+                .border(
+                    width = 2.dp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
+                    shape = CircleShape
+                )
+                .background(
+                    color = if (task.isDone) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f)
+                    else Color.Transparent,
+                    shape = CircleShape
+                )
+        )
+        Spacer(Modifier.width(12.dp))
+
+        // ✅ عنوان
+        Text(
+            task.title,
+            modifier = Modifier.weight(1f)
+        )
+
+        // ✅ تقویم اگر schedule داشت
+        if (task.hasSchedule) {
+            Spacer(Modifier.width(8.dp))
+            Icon(
+                Icons.Filled.Event,
+                contentDescription = "scheduled",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        // ✅ expand اگر child داشت
+        if (task.hasChildren) {
+            IconButton(onClick = onToggleExpand) {
+                Icon(
+                    imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                    contentDescription = "expand"
                 )
             }
         }
+
     }
 }
 
@@ -1473,52 +1776,6 @@ private fun SheetActionRow(
 
 
 @Composable
-private fun TasksSection(
-    tasks: List<TaskMiniUi>,
-    expanded: Boolean,
-    onToggleExpand: () -> Unit,
-    onOpenTasksMenu: () -> Unit, // اگر خواستی سه نقطه کنار tasks هم داشته باشه
-    onClickTask: (Int) -> Unit = {}
-) {
-    // Header row مثل عکس: "1 task" + فلش + سه‌نقطه
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onToggleExpand() }
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(Icons.Filled.Done, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.width(12.dp))
-
-        Text("${tasks.size} task${if (tasks.size == 1) "" else "s"}", modifier = Modifier.weight(1f))
-
-        IconButton(onClick = onToggleExpand) {
-            Icon(
-                imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                contentDescription = null
-            )
-        }
-
-        IconButton(onClick = onOpenTasksMenu) {
-            Icon(Icons.Filled.MoreVert, contentDescription = "tasks menu")
-        }
-    }
-
-    HorizontalDivider(thickness = 0.5.dp)
-
-    if (expanded) {
-        tasks.forEach { t ->
-            TaskRowMini(
-                task = t,
-                onClick = { onClickTask(t.id) }
-            )
-            HorizontalDivider(thickness = 0.5.dp)
-        }
-    }
-}
-
-@Composable
 private fun TaskRowMini(
     task: TaskMiniUi,
     onClick: () -> Unit
@@ -1534,7 +1791,11 @@ private fun TaskRowMini(
         Box(
             modifier = Modifier
                 .size(22.dp)
-                .border(2.dp, MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f), CircleShape)
+                .border(
+                    2.dp,
+                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
+                    CircleShape
+                )
         )
         Spacer(Modifier.width(14.dp))
         Text(task.title)
@@ -1543,7 +1804,7 @@ private fun TaskRowMini(
 
 @Composable
 fun AddTaskDialog(
-    addTaskMod:Boolean,
+    addTaskMod: Boolean,
     categoryName: String,
     categoryIconName: String,
     categoryColorHex: String,
@@ -1553,9 +1814,17 @@ fun AddTaskDialog(
     onPriorityChange: (Int) -> Unit,
     onCompletedToggle: (Boolean) -> Unit,
     onNoteChange: (String) -> Unit,
-    onConfirm: () -> Unit,
+    onInsertAtTopChange: (Boolean) -> Unit,   // ✅ جدید
+    onChildLevelChange: (Int) -> Unit,        // ✅ جدید
+    onConfirm: (ConfirmAction) -> Unit,       // ✅ جدید
     onOpenSchedule: () -> Unit
-) {
+)
+ {
+
+    var insertAtTop by rememberSaveable { mutableStateOf(false) } // false = add to bottom
+    var childLevel by rememberSaveable { mutableIntStateOf(0) } // 0 = none, 1..3 = > >> >>>
+
+
     DimmedDialog(
         onDismiss = onDismiss,
         modifier = Modifier
@@ -1565,7 +1834,9 @@ fun AddTaskDialog(
         dimAlpha = 0.6f,
         dismissOnBackdropClick = true
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize())
+
+        {
 
             // Top bar
             Row(
@@ -1575,103 +1846,182 @@ fun AddTaskDialog(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                TextButton(onClick = onDismiss) { Text("Back") }
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Filled.ArrowBackIosNew, contentDescription = "close")
+                }
+
                 Text(
-                    if (addTaskMod)"New task" else "Edit Task",
-                    style = MaterialTheme.typography.titleLarge)
-                TextButton(
-                    onClick = onConfirm,
-                    enabled = draft.name.isNotBlank()
-                ) { Text("✓") }
-            }
+                    if (addTaskMod) "New task" else "Edit Task",
+                    style = MaterialTheme.typography.titleLarge
+                )
 
+                Spacer(Modifier.weight(1f))
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // ✅✅ فقط در حالت Add
+                    IconButton(
+                        onClick = { onConfirm(ConfirmAction.SAVE_AND_CONTINUE) },
+                        enabled = addTaskMod && draft.name.isNotBlank()
+                    ) {
+                        Icon(Icons.Filled.DoneAll, contentDescription = "save_and_continue")
+                    }
+
+                    IconButton(
+                        onClick = { onConfirm(ConfirmAction.SAVE_AND_CLOSE) },
+                        enabled = draft.name.isNotBlank()
+                    ) {
+                        Icon(Icons.Filled.Check, contentDescription = "save")
+                    }
+                }
+            }
             HorizontalDivider()
 
-            // Title row (مثل Test زیرخط)
-            Row(
+
+            // ناحیه اسکرول دار
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .weight(1f) // مهم
+                    .verticalScroll(rememberScrollState())
             ) {
-                Icon(Icons.Filled.Check, contentDescription = null)
-                Spacer(Modifier.width(10.dp))
+
+                // Title row
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Filled.Check, contentDescription = null)
+                    Spacer(Modifier.width(10.dp))
+                    OutlinedTextField(
+                        value = draft.name,
+                        onValueChange = onNameChange,
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Title") },
+                        singleLine = true
+                    )
+                }
+                HorizontalDivider()
+
+
+
+
+                // Category row
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = iconFromKey(categoryIconName),
+                        contentDescription = null,
+                        tint = colorFromHex(categoryColorHex),
+                        modifier = Modifier.size(26.dp)
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        categoryName,
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    Spacer(Modifier.weight(1f))
+
+                    IconButton(onClick = { onInsertAtTopChange(!draft.insertAtTop) }) {
+                        Icon(
+                            imageVector = if (draft.insertAtTop) Icons.Filled.ArrowUpward else Icons.Filled.ArrowDownward,
+                            contentDescription = "insert position"
+                        )
+                    }
+
+                }
+                HorizontalDivider()
+
+
+
+
+                // Priority row (سه دایره مثل عکس)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Priority", modifier = Modifier.width(90.dp))
+                    PriorityDots(
+                        selected = draft.priority,
+                        onPick = onPriorityChange
+                    )
+                }
+                HorizontalDivider()
+
+
+
+
+                //ردیف فرزند کردن
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Child", modifier = Modifier.width(90.dp))
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        ChildLevelChip(label = "-", selected = childLevel == 0) { childLevel = 0 }
+                        ChildLevelChip(label = ">", selected = childLevel == 1) { childLevel = 1 }
+                        ChildLevelChip(label = ">>", selected = childLevel == 2) { childLevel = 2 }
+                        ChildLevelChip(label = ">>>", selected = childLevel == 3) { childLevel = 3 }
+                    }
+                }
+                HorizontalDivider()
+
+
+
+
+
+                // Completed row
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        if (draft.isCompleted) "Completed" else "Uncompleted",
+                        modifier = Modifier.weight(1f)
+                    )
+                    Switch(checked = draft.isCompleted, onCheckedChange = onCompletedToggle)
+                }
+                HorizontalDivider()
+
+
+
+
+                // Note
                 OutlinedTextField(
-                    value = draft.name,
-                    onValueChange = onNameChange,
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Title") },
-                    singleLine = true
+                    value = draft.note,
+                    onValueChange = onNoteChange,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    label = { Text("Add note") },
+                    minLines = 2
                 )
-            }
 
-            HorizontalDivider()
 
-            // Category row (آیکن+نام)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = iconFromKey(categoryIconName),
-                    contentDescription = null,
-                    tint = colorFromHex(categoryColorHex),
-                    modifier = Modifier.size(26.dp)
+
+
+
+                SheetActionRow(
+                    leading = { Icon(Icons.Filled.Event, contentDescription = null) },
+                    title = "Schedule this task",
+                    onClick = { onOpenSchedule() }
                 )
-                Spacer(Modifier.width(12.dp))
-                Text(categoryName, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+
             }
-
-            HorizontalDivider()
-
-            // Priority row (سه دایره مثل عکس)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("Priority", modifier = Modifier.width(90.dp))
-                PriorityDots(
-                    selected = draft.priority,
-                    onPick = onPriorityChange
-                )
-            }
-
-            HorizontalDivider()
-
-            // Completed row
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(if (draft.isCompleted) "Completed" else "Uncompleted", modifier = Modifier.weight(1f))
-                Switch(checked = draft.isCompleted, onCheckedChange = onCompletedToggle)
-            }
-
-            HorizontalDivider()
-
-            // Note
-            OutlinedTextField(
-                value = draft.note,
-                onValueChange = onNoteChange,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(12.dp),
-                label = { Text("Add note") },
-                minLines = 2
-            )
-
-            SheetActionRow(
-                leading = { Icon(Icons.Filled.Event, contentDescription = null) },
-                title = "Schedule this task",
-                onClick = { onOpenSchedule() }
-            )
-
         }
     }
 }
@@ -1697,13 +2047,38 @@ private fun PriorityDots(selected: Int, onPick: (Int) -> Unit) {
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = when (i) { 0 -> "*" ; 1 -> "!" ; else -> "!!" },
+                    text = when (i) {
+                        0 -> "*"; 1 -> "!"; else -> "!!"
+                    },
                     style = MaterialTheme.typography.titleMedium
                 )
             }
         }
     }
 }
+
+@Composable
+private fun ChildLevelChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(44.dp)
+            .background(
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (selected) 1f else 0.5f),
+                shape = CircleShape
+            )
+            .border(
+                width = if (selected) 2.dp else 0.dp,
+                color = MaterialTheme.colorScheme.onSurface,
+                shape = CircleShape
+            )
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        Text(label, style = MaterialTheme.typography.titleMedium)
+    }
+}
+
+
 
 @Composable
 fun TaskScheduleDialog(
@@ -1731,7 +2106,9 @@ fun TaskScheduleDialog(
 
             // top bar
             Row(
-                Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -1746,9 +2123,16 @@ fun TaskScheduleDialog(
             OutlinedTextField(
                 value = draft.title,
                 onValueChange = onTitleChange,
-                modifier = Modifier.fillMaxWidth().padding(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
                 label = { Text("Title (optional)") },
-                placeholder = { Text(taskName, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)) },
+                placeholder = {
+                    Text(
+                        taskName,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
+                    )
+                },
                 singleLine = true
             )
 
@@ -1781,7 +2165,9 @@ fun TaskScheduleDialog(
 
             // Repeating
             Row(
-                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text("Repeating", modifier = Modifier.weight(1f))
@@ -1812,7 +2198,10 @@ private fun ModeDropdownRow(
 ) {
     var open by remember { mutableStateOf(false) }
     Row(
-        Modifier.fillMaxWidth().clickable { open = true }.padding(horizontal = 16.dp, vertical = 14.dp),
+        Modifier
+            .fillMaxWidth()
+            .clickable { open = true }
+            .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text("Time range", modifier = Modifier.weight(1f))
@@ -1844,7 +2233,9 @@ private fun TimeRangeRow(
 ) {
     // فعلاً فقط نمایش، بعداً TimePicker می‌ذاریم
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 18.dp),
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 18.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -1864,8 +2255,17 @@ private fun AmountOfTimeRow(
     OutlinedTextField(
         value = minutes.toString(),
         onValueChange = { v -> onMinutesChange(v.filter(Char::isDigit).toIntOrNull() ?: minutes) },
-        modifier = Modifier.fillMaxWidth().padding(12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(12.dp),
         label = { Text("Minutes") },
         singleLine = true
     )
 }
+
+
+//>>>>>>>>>>>>>>>> Utils <<<<<<<<<<<<<<<<<<
+
+private enum class CategorySheetMode { OVERVIEW, TASKS }
+enum class ConfirmAction { SAVE_AND_CLOSE, SAVE_AND_CONTINUE }
+

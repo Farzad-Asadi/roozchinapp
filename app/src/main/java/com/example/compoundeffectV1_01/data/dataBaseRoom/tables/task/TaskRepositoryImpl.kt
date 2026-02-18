@@ -36,6 +36,14 @@ class TaskRepositoryImpl @Inject constructor(
     override fun observeAllScheduledTasksWithSchedule(): Flow<List<TaskWithSchedule>> =
         taskDao.observeAllScheduledTasksWithSchedule()
 
+    override suspend fun getTasksByCategoryOrdered(categoryId: Int): List<Task> =
+        taskDao.getTasksByCategoryOrdered(categoryId)
+
+    override suspend fun getMinOrderIndex(categoryId: Int): Int? =
+            taskDao.getMinOrderIndex(categoryId)
+
+    override suspend fun getMaxOrderIndex(categoryId: Int): Int? =
+                taskDao.getMaxOrderIndex(categoryId)
 
 
 }

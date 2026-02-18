@@ -12,6 +12,7 @@ import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.Sch
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.TaskSchedule
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.TaskScheduleRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -132,6 +133,7 @@ class CategoryViewModel @Inject constructor(
 
 
 
+    //کتگوری ها
     fun setDraftName(value: String) {
         _draft.update { it.copy(name = value) }
     }
@@ -171,9 +173,6 @@ class CategoryViewModel @Inject constructor(
         _draft.value = CategoryDraft2()
         _createResult.value = null
     }
-
-
-
     fun renameCategory(categoryId: Int, newName: String) {
         val name = newName.trim()
         if (name.isBlank()) return
@@ -198,20 +197,106 @@ class CategoryViewModel @Inject constructor(
 
 
 
+    //تسک ها
     fun startAddTask(categoryId: Int, categoryColor: String) {
         _taskDraft.value = TaskDraft(categoryId = categoryId)
         _scheduleDraft.value = ScheduleDraft()          // ✅ ریست
         _scheduleConfirmedForNewTask.value = false
     }
+    fun startEditTask(taskId: Int) {
+        viewModelScope.launch {
+            val t = taskRepo.getTaskById(taskId) ?: return@launch
+
+            _editingTaskId.value = taskId
+            _taskDraft.value = TaskDraft(
+                name = t.name,
+                categoryId = t.categoryId,
+                priority = t.priority,
+                isCompleted = t.isCompleted,
+                note = t.description,
+                insertAtTop = false,           // در edit معنی خاصی نداره (می‌تونه ثابت بمونه)
+                childLevel = t.indentLevel     // ✅ از Task بخون
+            )
+
+
+            val sch = scheduleRepo.getByTaskId(taskId)
+
+            fun minuteOfDayToLocalTime(min: Int): java.time.LocalTime =
+                java.time.LocalTime.of(min / 60, min % 60)
+
+            _scheduleDraft.value =
+                if (sch == null) {
+                    ScheduleDraft()
+                } else {
+                    ScheduleDraft(
+                        title = sch.title.orEmpty(),
+                        mode = sch.mode,
+
+                        date = sch.dateEpochDay?.let(java.time.LocalDate::ofEpochDay) ?: java.time.LocalDate.now(),
+                        start = sch.startMinuteOfDay?.let(::minuteOfDayToLocalTime) ?: java.time.LocalTime.of(20, 0),
+                        end = sch.endMinuteOfDay?.let(::minuteOfDayToLocalTime) ?: java.time.LocalTime.of(21, 0),
+
+                        durationMinutes = sch.durationMinutes ?: 60,
+                        repeating = sch.repeating
+                    )
+                }
+        }
+    }
     fun setTaskName(v: String) = _taskDraft.update { it.copy(name = v) }
     fun setTaskPriority(p: Int) = _taskDraft.update { it.copy(priority = p) }
     fun setTaskCompleted(v: Boolean) = _taskDraft.update { it.copy(isCompleted = v) }
     fun setTaskNote(v: String) = _taskDraft.update { it.copy(note = v) }
+    fun setTaskInsertAtTop(v: Boolean) = _taskDraft.update { it.copy(insertAtTop = v) }
+    fun setTaskChildLevel(v: Int) = _taskDraft.update { it.copy(childLevel = v.coerceIn(0, 3)) }
+    fun markScheduleConfirmedForNewTask() {
+        _scheduleConfirmedForNewTask.value = true
+    }
+    fun resetScheduleConfirmedForNewTask() {
+        _scheduleConfirmedForNewTask.value = false
+    }
+    fun resetTaskDraftKeepSomeDefaults() {
+        val cur = _taskDraft.value
+        _taskDraft.value = TaskDraft(
+            name = "",
+            categoryId = cur.categoryId,
+            priority = cur.priority,
+            isCompleted = false,
+            note = "",
+            insertAtTop = cur.insertAtTop,
+            childLevel = cur.childLevel
+        )
+        _scheduleDraft.value = ScheduleDraft()
+        _scheduleConfirmedForNewTask.value = false
+    }
     fun createTaskForCategory(categoryColor: String) {
         val d = _taskDraft.value
         if (d.name.isBlank()) return
+        val categoryId = d.categoryId ?: return
 
         viewModelScope.launch {
+            val ordered = withContext(kotlinx.coroutines.Dispatchers.IO) {
+                taskRepo.getTasksByCategoryOrdered(categoryId) // باید در repo پاس بدهی به dao
+            }
+
+            val minIdx = ordered.minOfOrNull { it.orderIndex }
+            val maxIdx = ordered.maxOfOrNull { it.orderIndex }
+
+            val newOrderIndex =
+                if (d.insertAtTop) (minIdx?.minus(1) ?: 0)
+                else (maxIdx?.plus(1) ?: 0)
+
+            val newIndent = d.childLevel.coerceIn(0, 3)
+
+            // پیدا کردن parent: نزدیک‌ترین task قبلی با indentLevel = newIndent - 1
+            val parentId: Int? =
+                if (newIndent <= 0) null
+                else if (d.insertAtTop) null
+                else {
+                    val targetIndent = newIndent - 1
+                    ordered.asReversed().firstOrNull { it.indentLevel == targetIndent }?.id
+                }
+
+
             val newTask = Task(
                 id = null,
                 name = d.name.trim(),
@@ -220,55 +305,51 @@ class CategoryViewModel @Inject constructor(
                 durationOverlap = 0,
                 selected = false,
                 changed = false,
-                categoryId = d.categoryId,
+                categoryId = categoryId,
                 isCompleted = d.isCompleted,
-                priority = d.priority
+                priority = d.priority,
+                orderIndex = newOrderIndex,
+                indentLevel = newIndent,
+                parentTaskId = parentId
             )
 
-            // ✅ 1) insert و گرفتن id
-            val newId = withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val newId = withContext(Dispatchers.IO) {
                 taskRepo.insertTaskAndReturnId(newTask)
             }
 
-            // ✅ 2) اگر کاربر Schedule رو OK کرده بود، همون لحظه ذخیره کن
+            // schedule مثل قبل…
             if (_scheduleConfirmedForNewTask.value) {
-                val sd = _scheduleDraft.value
-
-                fun LocalTime.toMinuteOfDay(): Int = this.hour * 60 + this.minute
-                // یا: this.toSecondOfDay() / 60
-
-                val schedule = TaskSchedule(
-                    id = null,
-                    taskId = newId,
-                    title = sd.title.trim().ifBlank { null },
-                    mode = sd.mode,
-
-                    dateEpochDay = if (sd.mode == ScheduleMode.TIME_RANGE) sd.date.toEpochDay() else null,
-                    startMinuteOfDay = if (sd.mode == ScheduleMode.TIME_RANGE) sd.start.toMinuteOfDay() else null,
-                    endMinuteOfDay = if (sd.mode == ScheduleMode.TIME_RANGE) sd.end.toMinuteOfDay() else null,
-
-                    durationMinutes = if (sd.mode == ScheduleMode.AMOUNT_OF_TIME) sd.durationMinutes else null,
-                    repeating = sd.repeating
-                )
-
-                withContext(kotlinx.coroutines.Dispatchers.IO) {
-                    scheduleRepo.upsert(schedule)
-                }
+                // همون کد قبلی scheduleRepo.upsert(...)
             }
 
-
-            // ✅ پاکسازی‌ها
-            resetTaskDraft()
-            _scheduleDraft.value = ScheduleDraft()
-            _scheduleConfirmedForNewTask.value = false
+            // پاکسازی‌های داخل همین تابع رو بردار
+            // چون رفتار close/continue را بیرون کنترل می‌کنیم
         }
     }
     private fun resetTaskDraft() {
         _taskDraft.value = TaskDraft()
     }
+    fun toggleTaskCompleted(taskId: Int, done: Boolean) {
+        viewModelScope.launch {
+            val t = taskRepo.getTaskById(taskId) ?: return@launch
+            withContext(kotlinx.coroutines.Dispatchers.IO) {
+                taskRepo.updateTask(t.copy(isCompleted = done))
+            }
+        }
+    }
+    fun deleteTask(taskId: Int) {
+        viewModelScope.launch {
+            val t = taskRepo.getTaskById(taskId) ?: return@launch
+            withContext(kotlinx.coroutines.Dispatchers.IO) {
+                taskRepo.deleteTask(t)
+            }
+        }
+    }
 
 
 
+
+    //اسچدول ها
     fun setScheduleTitle(v: String) = _scheduleDraft.update { it.copy(title = v) }
     fun setScheduleMode(m: ScheduleMode) = _scheduleDraft.update { it.copy(mode = m) }
     fun setScheduleDate(d: LocalDate) = _scheduleDraft.update { it.copy(date = d) }
@@ -312,12 +393,8 @@ class CategoryViewModel @Inject constructor(
         }
     }
 
-    fun markScheduleConfirmedForNewTask() {
-        _scheduleConfirmedForNewTask.value = true
-    }
-    fun resetScheduleConfirmedForNewTask() {
-        _scheduleConfirmedForNewTask.value = false
-    }
+
+
 
 
 
@@ -595,42 +672,7 @@ class CategoryViewModel @Inject constructor(
     }
 
 
-    fun startEditTask(taskId: Int) {
-        viewModelScope.launch {
-            val t = taskRepo.getTaskById(taskId) ?: return@launch
 
-            _editingTaskId.value = taskId
-            _taskDraft.value = TaskDraft(
-                name = t.name,
-                categoryId = t.categoryId,
-                priority = t.priority,
-                isCompleted = t.isCompleted,
-                note = t.description
-            )
-
-            val sch = scheduleRepo.getByTaskId(taskId)
-
-            fun minuteOfDayToLocalTime(min: Int): java.time.LocalTime =
-                java.time.LocalTime.of(min / 60, min % 60)
-
-            _scheduleDraft.value =
-                if (sch == null) {
-                    ScheduleDraft()
-                } else {
-                    ScheduleDraft(
-                        title = sch.title.orEmpty(),
-                        mode = sch.mode,
-
-                        date = sch.dateEpochDay?.let(java.time.LocalDate::ofEpochDay) ?: java.time.LocalDate.now(),
-                        start = sch.startMinuteOfDay?.let(::minuteOfDayToLocalTime) ?: java.time.LocalTime.of(20, 0),
-                        end = sch.endMinuteOfDay?.let(::minuteOfDayToLocalTime) ?: java.time.LocalTime.of(21, 0),
-
-                        durationMinutes = sch.durationMinutes ?: 60,
-                        repeating = sch.repeating
-                    )
-                }
-        }
-    }
 
 
     fun finishEditTask() {
@@ -718,7 +760,8 @@ data class TaskMiniUi(
     val id: Int,
     val title: String,
     val isDone: Boolean = false,
-    val hasSchedule: Boolean = false
+    val hasSchedule: Boolean = false,
+    val hasChildren: Boolean = false
 )
 
 data class TaskDraft(
@@ -726,8 +769,13 @@ data class TaskDraft(
     val categoryId: Int? = null,
     val priority: Int = 0,
     val isCompleted: Boolean = false,
-    val note: String = ""
+    val note: String = "",
+
+    // ✅ جدیدها برای دیالوگ
+    val insertAtTop: Boolean = false, // false=آخر لیست، true=اول لیست
+    val childLevel: Int = 0           // 0..3 (0 یعنی هیچ)
 )
+
 
 data class ScheduleDraft(
     val title: String = "",
@@ -740,4 +788,6 @@ data class ScheduleDraft(
     val durationMinutes: Int = 60,
     val repeating: Boolean = false
 )
+
+
 

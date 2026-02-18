@@ -26,24 +26,10 @@ interface TaskDao {
     @Delete
     suspend fun deleteTask(task: Task)
 
-    @Query("""
-        SELECT * FROM task 
-        WHERE categoryId = :categoryId
-        ORDER BY id DESC
-    """)
-    fun observeTasksByCategory(categoryId: Int): Flow<List<Task>>
 
     @Query("SELECT * FROM task WHERE id = :id LIMIT 1")
     suspend fun getTaskById(id: Int): Task?
 
-
-    @Transaction
-    @Query("""
-    SELECT * FROM task
-    WHERE categoryId = :categoryId
-    ORDER BY id DESC
-    """)
-    fun observeTasksWithScheduleByCategory(categoryId: Int): Flow<List<TaskWithSchedule>>
 
 
     @Query("""
@@ -61,6 +47,34 @@ interface TaskDao {
     """)
     fun observeAllScheduledTasksWithSchedule(): Flow<List<TaskWithSchedule>>
 
+    @Query("""
+    SELECT * FROM task 
+    WHERE categoryId = :categoryId
+    ORDER BY orderIndex ASC, id ASC
+""")
+    fun observeTasksByCategory(categoryId: Int): Flow<List<Task>>
+
+    @Transaction
+    @Query("""
+    SELECT * FROM task
+    WHERE categoryId = :categoryId
+    ORDER BY orderIndex ASC, id ASC
+""")
+    fun observeTasksWithScheduleByCategory(categoryId: Int): Flow<List<TaskWithSchedule>>
+
+
+    @Query("""
+    SELECT * FROM task
+    WHERE categoryId = :categoryId
+    ORDER BY orderIndex ASC, id ASC
+""")
+    suspend fun getTasksByCategoryOrdered(categoryId: Int): List<Task>
+
+    @Query("SELECT MIN(orderIndex) FROM task WHERE categoryId = :categoryId")
+    suspend fun getMinOrderIndex(categoryId: Int): Int?
+
+    @Query("SELECT MAX(orderIndex) FROM task WHERE categoryId = :categoryId")
+    suspend fun getMaxOrderIndex(categoryId: Int): Int?
 
 
 
