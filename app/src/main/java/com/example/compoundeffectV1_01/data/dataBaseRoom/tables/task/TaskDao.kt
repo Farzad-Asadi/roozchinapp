@@ -7,6 +7,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
+import com.example.compoundeffectV1_01.ui.categoryScreen.TaskReorderUpdate
 import kotlinx.coroutines.flow.Flow
 import java.time.LocalDateTime
 
@@ -76,6 +77,24 @@ interface TaskDao {
     @Query("SELECT MAX(orderIndex) FROM task WHERE categoryId = :categoryId")
     suspend fun getMaxOrderIndex(categoryId: Int): Int?
 
+    @Query("SELECT COUNT(*) FROM task WHERE parentTaskId = :taskId")
+    suspend fun countChildren(taskId: Int): Int
+
+
+    @Query("UPDATE task SET orderIndex = :orderIndex WHERE id = :id")
+    suspend fun updateTaskOrder(id: Int, orderIndex: Int)
+
+    @Query("UPDATE task SET indentLevel = :indentLevel, parentTaskId = :parentTaskId WHERE id = :id")
+    suspend fun updateTaskHierarchy(id: Int, indentLevel: Int, parentTaskId: Int?)
+
+
+    @Transaction
+    suspend fun applyTaskReorderAndHierarchy(updates: List<TaskReorderUpdate>) {
+        for (u in updates) {
+            updateTaskOrder(u.id, u.orderIndex)
+            updateTaskHierarchy(u.id, u.indentLevel, u.parentTaskId)
+        }
+    }
 
 
 }

@@ -40,28 +40,97 @@ class CategoryViewModel @Inject constructor(
 
 
     // این دو تا برای سناریوی “درگ شروع شد/تمام شد”
-    private val _dragCollapsedRestore = MutableStateFlow<Int?>(null)
-    private val _collapsedIds = MutableStateFlow<Set<Int>>(emptySet())
+    private val _dragCollapsedRestoreCategory = MutableStateFlow<Int?>(null)
+    private val _dragCollapsedRestoreTask = MutableStateFlow<Int?>(null)
+    private val _collapsedIdsCategory = MutableStateFlow<Set<Int>>(emptySet())
+    private val _taskCollapsedIds = MutableStateFlow<Set<Int>>(emptySet())
+
+    private val _menuCategoryId = MutableStateFlow<Int?>(null)
+    val menuCategoryId = _menuCategoryId.asStateFlow()
+
+    // ✅ لیست تسک‌ها + schedule
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val tasksWithScheduleForMenu: StateFlow<List<TaskWithSchedule>> =
+        menuCategoryId
+            .flatMapLatest { id ->
+                if (id == null) flowOf(emptyList())
+                else taskRepo.observeTasksWithScheduleByCategory(id)
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val taskMiniUiForMenu: StateFlow<List<TaskMiniUi>> =
+        tasksWithScheduleForMenu
+            .map { list ->
+                list.mapNotNull { tws ->
+                    val t = tws.task
+                    val id = t.id ?: return@mapNotNull null
+
+                    TaskMiniUi(
+                        id = id,
+                        title = t.name,
+                        isDone = t.isCompleted,
+                        hasSchedule = (tws.schedule != null),
+                        indentLevel = t.indentLevel,
+                        parentTaskId = t.parentTaskId
+                    )
+                }
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val tasksForMenuCategory: StateFlow<List<Task>> =
+        _menuCategoryId
+            .flatMapLatest { id ->
+                if (id == null) flowOf(emptyList())
+                else taskRepo.observeTasksByCategory(id)
+            }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5_000),
+                initialValue = emptyList()
+            )
 
 
     val uiState: StateFlow<CategoryUiState2> =
         combine(
             categoryRepository.observeAll(),
-            _collapsedIds
-        ) { categories, collapsed ->
-            val flatten = flattenCategoryTreeWithLevelsAndVisibility(categories, collapsed)
+            _collapsedIdsCategory,
+            tasksForMenuCategory,     // ✅ لیست خام Task ها
+            taskMiniUiForMenu,        // ✅ برای ساخت renderItems تسک‌ها
+            _taskCollapsedIds
+        ) { categories, catCollapsed, tasks, tasksMini, taskCollapsed ->
+
+            val catFlatten = flattenCategoryTreeWithLevelsAndVisibility(categories, catCollapsed)
+
+            val taskRender = flattenTaskTreeWithLevelsAndVisibility(
+                all = tasksMini,
+                collapsedIds = taskCollapsed,
+                rootParentId = null,
+                maxDepth = 4
+            )
+
             CategoryUiState2(
                 isLoading = false,
                 categories = categories,
-                renderItems = flatten.items,
-                levelById = flatten.levelById
+                renderItems = catFlatten.items,
+
+                tasks = tasks,                 // ✅ اینجا کامل شد
+                taskRenderItems = taskRender,  // ✅ اینم مثل قبل
+
+                levelById = catFlatten.levelById
             )
-            }
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(5_000),
-                initialValue = CategoryUiState2(isLoading = true, categories = emptyList())
+        }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = CategoryUiState2(
+                isLoading = true,
+                categories = emptyList(),
+                tasks = emptyList()
             )
+        )
+
+
 
     private val _draft = MutableStateFlow(CategoryDraft2())
     val draft = _draft.asStateFlow()
@@ -84,21 +153,9 @@ class CategoryViewModel @Inject constructor(
     private val _taskDraft = MutableStateFlow(TaskDraft())
     val taskDraft = _taskDraft.asStateFlow()
 
-    private val _menuCategoryId = MutableStateFlow<Int?>(null)
-    val menuCategoryId = _menuCategoryId.asStateFlow()
 
-    @OptIn(ExperimentalCoroutinesApi::class)
-    val tasksForMenuCategory: StateFlow<List<Task>> =
-        _menuCategoryId
-            .flatMapLatest { id ->
-                if (id == null) flowOf(emptyList())
-                else taskRepo.observeTasksByCategory(id)
-            }
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(5_000),
-                initialValue = emptyList()
-            )
+
+
 
     private val _editingTaskId = MutableStateFlow<Int?>(null)
     val editingTaskId = _editingTaskId.asStateFlow()
@@ -108,15 +165,7 @@ class CategoryViewModel @Inject constructor(
 
     private val _scheduleConfirmedForNewTask = MutableStateFlow(false)
 
-    // ✅ لیست تسک‌ها + schedule
-    @OptIn(ExperimentalCoroutinesApi::class)
-    val tasksWithScheduleForMenu: StateFlow<List<TaskWithSchedule>> =
-        menuCategoryId
-            .flatMapLatest { id ->
-                if (id == null) flowOf(emptyList())
-                else taskRepo.observeTasksWithScheduleByCategory(id)
-            }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
 
     // ✅ شمارش scheduled (دو روش)
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -194,7 +243,60 @@ class CategoryViewModel @Inject constructor(
             categoryRepository.updateCategory(current.copy(color = colorHex))
         }
     }
+    fun applyDragResult(
+        draggedId: Int,
+        oldParentId: Int?,
+        newParentId: Int?,
+        currentList: List<CategoryRenderItem>
+    ) {
+        viewModelScope.launch {
+            val dragged = uiState.value.categories.firstOrNull { it.categoryId == draggedId } ?: return@launch
 
+            val finalNewParent = newParentId ?: dragged.parentCategoryId
+
+            // parent جدید باید سطحش < 4 باشد
+            val parentLevel = uiState.value.levelById[finalNewParent ?: return@launch] ?: 1
+            if (parentLevel >= 4) return@launch
+
+            // آپدیت parent (اگر تغییر کرده)
+            if (finalNewParent != dragged.parentCategoryId) {
+                categoryRepository.updateCategory(dragged.copy(parentCategoryId = finalNewParent))
+            }
+
+            suspend fun reorderFor(parentId: Int?) {
+                val orderedIds = currentList
+                    .asSequence()
+                    .filter { it.isVisible }
+                    .filter { item ->
+                        val id = item.category.categoryId ?: return@filter false
+                        val p = if (id == draggedId) finalNewParent else item.category.parentCategoryId
+                        p == parentId
+                    }
+                    .mapNotNull { it.category.categoryId }
+                    .toList()
+
+                val currentEntities = uiState.value.categories.filter { it.parentCategoryId == parentId }
+                val byId = currentEntities.associateBy { it.categoryId }
+
+                orderedIds.forEachIndexed { index, id ->
+                    val entity =
+                        if (id == draggedId) {
+                            // dragged ممکنه هنوز تو uiState با parent قبلی باشه
+                            dragged.copy(parentCategoryId = finalNewParent)
+                        } else {
+                            byId[id] ?: return@forEachIndexed
+                        }
+
+                    categoryRepository.updateCategory(entity.copy(siblingIndex = index))
+                }
+            }
+
+
+
+            reorderFor(oldParentId)
+            reorderFor(finalNewParent)
+        }
+    }
 
 
     //تسک ها
@@ -214,9 +316,10 @@ class CategoryViewModel @Inject constructor(
                 priority = t.priority,
                 isCompleted = t.isCompleted,
                 note = t.description,
-                insertAtTop = false,           // در edit معنی خاصی نداره (می‌تونه ثابت بمونه)
-                childLevel = t.indentLevel     // ✅ از Task بخون
+                insertAtTop = false,
+                childLevel = t.indentLevel
             )
+
 
 
             val sch = scheduleRepo.getByTaskId(taskId)
@@ -274,8 +377,8 @@ class CategoryViewModel @Inject constructor(
         val categoryId = d.categoryId ?: return
 
         viewModelScope.launch {
-            val ordered = withContext(kotlinx.coroutines.Dispatchers.IO) {
-                taskRepo.getTasksByCategoryOrdered(categoryId) // باید در repo پاس بدهی به dao
+            val ordered = withContext(Dispatchers.IO) {
+                taskRepo.getTasksByCategoryOrdered(categoryId)
             }
 
             val minIdx = ordered.minOfOrNull { it.orderIndex }
@@ -287,7 +390,9 @@ class CategoryViewModel @Inject constructor(
 
             val newIndent = d.childLevel.coerceIn(0, 3)
 
-            // پیدا کردن parent: نزدیک‌ترین task قبلی با indentLevel = newIndent - 1
+            // ✅ parent ساده و پایدار:
+            // اگر insertAtTop => parent=null
+            // اگر indent>0 و insertAtTop=false => آخرین آیتم با indent-1
             val parentId: Int? =
                 if (newIndent <= 0) null
                 else if (d.insertAtTop) null
@@ -295,7 +400,6 @@ class CategoryViewModel @Inject constructor(
                     val targetIndent = newIndent - 1
                     ordered.asReversed().firstOrNull { it.indentLevel == targetIndent }?.id
                 }
-
 
             val newTask = Task(
                 id = null,
@@ -314,16 +418,34 @@ class CategoryViewModel @Inject constructor(
             )
 
             val newId = withContext(Dispatchers.IO) {
-                taskRepo.insertTaskAndReturnId(newTask)
+                taskRepo.insertTaskAndReturnId(newTask) // ✅ اینجا Int برمی‌گرده
             }
 
-            // schedule مثل قبل…
+            // ✅ اگر schedule تایید شده بود، همینجا ذخیره کن
             if (_scheduleConfirmedForNewTask.value) {
-                // همون کد قبلی scheduleRepo.upsert(...)
+                val sd = _scheduleDraft.value
+
+                fun LocalTime.toMinuteOfDay(): Int = hour * 60 + minute
+
+                val schedule = TaskSchedule(
+                    id = null,
+                    taskId = newId,
+                    title = sd.title.trim().ifBlank { null },
+                    mode = sd.mode,
+                    dateEpochDay = if (sd.mode == ScheduleMode.TIME_RANGE) sd.date.toEpochDay() else null,
+                    startMinuteOfDay = if (sd.mode == ScheduleMode.TIME_RANGE) sd.start.toMinuteOfDay() else null,
+                    endMinuteOfDay = if (sd.mode == ScheduleMode.TIME_RANGE) sd.end.toMinuteOfDay() else null,
+                    durationMinutes = if (sd.mode == ScheduleMode.AMOUNT_OF_TIME) sd.durationMinutes else null,
+                    inPallet = false,
+                    repeating = sd.repeating
+                )
+
+                withContext(Dispatchers.IO) {
+                    scheduleRepo.upsert(schedule)
+                }
             }
 
-            // پاکسازی‌های داخل همین تابع رو بردار
-            // چون رفتار close/continue را بیرون کنترل می‌کنیم
+            // ✅ اینجا چیزی ریست نکن؛ کنترل close/continue بیرون دیالوگه
         }
     }
     private fun resetTaskDraft() {
@@ -332,7 +454,7 @@ class CategoryViewModel @Inject constructor(
     fun toggleTaskCompleted(taskId: Int, done: Boolean) {
         viewModelScope.launch {
             val t = taskRepo.getTaskById(taskId) ?: return@launch
-            withContext(kotlinx.coroutines.Dispatchers.IO) {
+            withContext(Dispatchers.IO) {
                 taskRepo.updateTask(t.copy(isCompleted = done))
             }
         }
@@ -340,11 +462,314 @@ class CategoryViewModel @Inject constructor(
     fun deleteTask(taskId: Int) {
         viewModelScope.launch {
             val t = taskRepo.getTaskById(taskId) ?: return@launch
-            withContext(kotlinx.coroutines.Dispatchers.IO) {
+            withContext(Dispatchers.IO) {
                 taskRepo.deleteTask(t)
             }
         }
     }
+    fun saveEditedTask(categoryColor: String) {
+        val taskId = _editingTaskId.value ?: return
+        val d = _taskDraft.value
+        if (d.name.isBlank()) return
+
+        viewModelScope.launch {
+
+
+            val current = taskRepo.getTaskById(taskId) ?: return@launch
+            val categoryId = current.categoryId ?: return@launch
+
+            val childrenCount = withContext(Dispatchers.IO) { taskRepo.countChildren(taskId) }
+            if (childrenCount > 0 && d.childLevel < current.indentLevel) {
+                // فعلاً اجازه نده پایین بیاد (بعداً می‌تونیم کل subtree رو شیفت بدیم)
+                return@launch
+            }
+
+            val ordered = withContext(Dispatchers.IO) {
+                taskRepo.getTasksByCategoryOrdered(categoryId)
+            }
+
+            val selfIndex = ordered.indexOfFirst { it.id == taskId }
+            if (selfIndex == -1) return@launch
+
+            val (finalIndent, parentId) = computeParentForIndent(
+                ordered = ordered,
+                selfIndex = selfIndex,
+                desiredIndent = d.childLevel
+            )
+
+            val updated = current.copy(
+                name = d.name.trim(),
+                description = d.note,
+                isCompleted = d.isCompleted,
+                priority = d.priority,
+                color = categoryColor,
+                indentLevel = finalIndent,
+                parentTaskId = parentId
+            )
+
+            withContext(Dispatchers.IO) {
+                taskRepo.updateTask(updated)
+            }
+
+            finishEditTask()
+        }
+    }
+    private fun computeParentForIndent(
+        ordered: List<Task>,
+        selfIndex: Int,
+        desiredIndent: Int
+    ): Pair<Int, Int?> {
+        // خروجی: (finalIndent, parentId)
+        if (desiredIndent <= 0) return 0 to null
+
+        val prev = ordered.getOrNull(selfIndex - 1)
+        // قانون ساده: indent بیشتر از (indent قبلی + 1) نشه
+        val maxAllowedIndent = ((prev?.indentLevel ?: 0) + 1).coerceAtMost(3)
+        val finalIndent = desiredIndent.coerceIn(0, maxAllowedIndent)
+
+        if (finalIndent <= 0) return 0 to null
+
+        val targetIndent = finalIndent - 1
+        val parent = ordered
+            .subList(0, selfIndex)
+            .asReversed()
+            .firstOrNull { it.indentLevel == targetIndent }
+
+        return if (parent == null) (0 to null) else (finalIndent to parent.id)
+    }
+    fun flattenTaskTreeWithLevelsAndVisibility(
+        all: List<TaskMiniUi>,
+        collapsedIds: Set<Int>,
+        rootParentId: Int? = null,
+        maxDepth: Int = 4
+    ): List<TaskRenderItem> {
+
+        // مرتب‌سازی: چون orderIndex داخل TaskMiniUi نداریم،
+        // همین لیستی که از DB میاد را به ترتیب دریافت می‌کنیم (در DAO باید ORDER BY داشته باشد)
+        // پس اینجا فرض می‌کنیم all همین ترتیب درست است.
+
+        val byParent = all.groupBy { it.parentTaskId }
+        val items = mutableListOf<TaskRenderItem>()
+
+        fun dfs(parentId: Int?, realDepth: Int, ancestorCollapsed: Boolean) {
+            if (realDepth > 50) return
+
+            val renderLevel = realDepth.coerceAtMost(maxDepth)
+            val children = byParent[parentId].orEmpty()
+
+            for (child in children) {
+                val id = child.id
+                if (id < 0) continue
+
+                val hasChildrenRaw = byParent[id].orEmpty().isNotEmpty()
+                val hasChildren = (renderLevel < maxDepth) && hasChildrenRaw
+
+                val selfCollapsed = collapsedIds.contains(id)
+                val isExpanded = !selfCollapsed
+                val visible = !ancestorCollapsed
+
+                items += TaskRenderItem(
+                    task = child,
+                    level = renderLevel,
+                    hasChildren = hasChildren,
+                    isExpanded = isExpanded,
+                    isVisible = visible
+                )
+
+                dfs(
+                    parentId = id,
+                    realDepth = realDepth + 1,
+                    ancestorCollapsed = ancestorCollapsed || selfCollapsed
+                )
+            }
+        }
+
+        dfs(rootParentId, realDepth = 1, ancestorCollapsed = false)
+        return items
+    }
+    fun findBlockRange(list: List<TaskMiniUi>, startIndex: Int): IntRange {
+        val base = list[startIndex]
+        val baseIndent = base.indentLevel // یا childLevel/indentLevel نمایشی‌ات
+        var end = startIndex
+        for (i in startIndex + 1 .. list.lastIndex) {
+            val cur = list[i]
+            if (cur.indentLevel <= baseIndent) break
+            end = i
+        }
+        return startIndex..end
+    }
+    private fun normalizeTasksAndComputeParents(
+        flat: List<TaskMiniUi>
+    ): List<TaskReorderUpdate> {
+
+        // lastIdAtIndent[i] = آخرین تسک دیده‌شده در indent i
+        val lastIdAtIndent = arrayOfNulls<Int>(TASK_MAX_INDENT + 1)
+
+        val updates = ArrayList<TaskReorderUpdate>(flat.size)
+
+        flat.forEachIndexed { index, t ->
+            var indent = t.indentLevel.coerceIn(0, TASK_MAX_INDENT)
+
+            // ✅ جلوگیری از "پرش": اگر indent=2 ولی indent=1 نداریم => خواهر/برادرش کن => indent را کم کن
+            while (indent > 0 && lastIdAtIndent[indent - 1] == null) {
+                indent -= 1
+            }
+
+            val parentId = if (indent == 0) null else lastIdAtIndent[indent - 1]
+
+            // ثبت در lastIdAtIndent
+            lastIdAtIndent[indent] = t.id
+            // سطوح عمیق‌تر را پاک کن تا ساختار درست بماند
+            for (i in indent + 1..TASK_MAX_INDENT) lastIdAtIndent[i] = null
+
+            updates += TaskReorderUpdate(
+                id = t.id,
+                orderIndex = index,     // ✅ ساده‌ترین و پایدارترین
+                indentLevel = indent,
+                parentTaskId = parentId
+            )
+        }
+
+        return updates
+    }
+    fun applyTaskDragResult(categoryId: Int, finalFlatList: List<TaskMiniUi>) {
+        viewModelScope.launch {
+            val updates = normalizeTasksAndComputeParents(finalFlatList)
+
+            withContext(Dispatchers.IO) {
+                taskRepo.applyTaskReorderAndHierarchy(updates)
+            }
+        }
+    }
+    fun applyTaskDragResult(
+        draggedId: Int,
+        oldParentId: Int?,
+        newParentId: Int?,
+        categoryId: Int,
+        currentList: List<TaskRenderItem>
+    ) {
+        viewModelScope.launch {
+
+            // 1) گرفتن تسک درگ‌شده از DB (قابل اعتمادتر از uiState)
+            val dragged = withContext(Dispatchers.IO) {
+                taskRepo.getTaskById(draggedId)
+            } ?: return@launch
+
+            val finalNewParent: Int? = newParentId ?: dragged.parentTaskId
+
+            // 2) محاسبه indent مناسب بر اساس parent جدید
+            val finalIndent: Int = if (finalNewParent == null) {
+                0
+            } else {
+                val parentIndent = withContext(Dispatchers.IO) {
+                    taskRepo.getTaskById(finalNewParent)?.indentLevel
+                } ?: return@launch
+
+                val desired = parentIndent + 1
+                if (desired > 3) return@launch   // سقف عمق
+                desired
+            }
+
+            // 3) اگر parent/indent تغییر کرده، خود تسک را آپدیت کن
+            if (finalNewParent != dragged.parentTaskId || finalIndent != dragged.indentLevel) {
+                withContext(Dispatchers.IO) {
+                    taskRepo.updateTask(
+                        dragged.copy(
+                            parentTaskId = finalNewParent,
+                            indentLevel = finalIndent
+                        )
+                    )
+                }
+            }
+
+            suspend fun reorderFor(parentId: Int?) {
+                // ترتیب جدید siblings زیر این parent بر اساس currentList (فقط visible)
+                val orderedIds = currentList
+                    .asSequence()
+                    .filter { it.isVisible }
+                    .filter { item ->
+                        val id = item.task.id
+                        val p = if (id == draggedId) finalNewParent else item.task.parentTaskId
+                        p == parentId
+                    }
+                    .map { it.task.id }
+                    .toList()
+
+                if (orderedIds.isEmpty()) return
+
+                // همه تسک‌های دسته برای mapping (orderIndex/parentTaskId اصلی از DB)
+                val all = withContext(Dispatchers.IO) {
+                    taskRepo.getTasksByCategoryOrdered(categoryId)
+                }
+                val byId = all.associateBy { it.id }
+
+                withContext(Dispatchers.IO) {
+                    orderedIds.forEachIndexed { index, id ->
+                        val entity =
+                            if (id == draggedId) {
+                                // ممکنه هنوز در DB با وضعیت قبلی باشد؛ نسخه نهایی را اعمال کن
+                                dragged.copy(
+                                    parentTaskId = finalNewParent,
+                                    indentLevel = finalIndent
+                                )
+                            } else {
+                                byId[id] ?: return@forEachIndexed
+                            }
+
+                        // اینجا فقط orderIndex را sync می‌کنیم
+                        taskRepo.updateTask(entity.copy(orderIndex = index))
+                    }
+                }
+            }
+
+            // مثل کتگوری: هم oldParent و هم newParent را reorder کن
+            reorderFor(oldParentId)
+            if (finalNewParent != oldParentId) {
+                reorderFor(finalNewParent)
+            }
+        }
+    }
+    fun onDragEndRestoreExpandForTask() {
+        val id = _dragCollapsedRestoreTask.value ?: return
+        _dragCollapsedRestoreTask.value = null
+
+        _taskCollapsedIds.update { it - id }
+
+        // Persist اختیاری:
+        viewModelScope.launch {
+            val current = uiState.value.tasks.firstOrNull { it.id == id } ?: return@launch
+            taskRepo.updateTask(current.copy(isExtended = true))
+        }
+    }
+    fun onDragStartMaybeCollapseForTask(taskId: Int) {
+        val item = uiState.value.taskRenderItems.firstOrNull { it.task.id == taskId } ?: return
+        if (!item.hasChildren) return
+
+        val isExpandedNow = item.isExpanded
+        if (isExpandedNow) {
+            _dragCollapsedRestoreTask.value = taskId
+            _taskCollapsedIds.update { it + taskId }
+            // Persist اختیاری:
+            viewModelScope.launch {
+                val current = uiState.value.tasks.firstOrNull { it.id == taskId } ?: return@launch
+                taskRepo.updateTask(current.copy(isExtended = false))
+            }
+        }
+    }
+    fun toggleExpandForTask(taskId: Int) {
+        viewModelScope.launch {
+            val current = uiState.value.tasks.firstOrNull { it.id == taskId } ?: return@launch
+            val willCollapse = !_taskCollapsedIds.value.contains(taskId)
+
+            _taskCollapsedIds.update { set ->
+                if (willCollapse) set + taskId else set - taskId
+            }
+
+            // Persist
+            taskRepo.updateTask(current.copy(isExtended = !willCollapse))
+        }
+    }
+
 
 
 
@@ -387,7 +812,7 @@ class CategoryViewModel @Inject constructor(
                 repeating = d.repeating
             )
 
-            withContext(kotlinx.coroutines.Dispatchers.IO) {
+            withContext(Dispatchers.IO) {
                 scheduleRepo.upsert(schedule)
             }
         }
@@ -433,8 +858,8 @@ class CategoryViewModel @Inject constructor(
 
         val isExpandedNow = item.isExpanded
         if (isExpandedNow) {
-            _dragCollapsedRestore.value = categoryId
-            _collapsedIds.update { it + categoryId }
+            _dragCollapsedRestoreCategory.value = categoryId
+            _collapsedIdsCategory.update { it + categoryId }
             // Persist اختیاری:
             viewModelScope.launch {
                 val current = uiState.value.categories.firstOrNull { it.categoryId == categoryId } ?: return@launch
@@ -444,10 +869,10 @@ class CategoryViewModel @Inject constructor(
     }
 
     fun onDragEndRestoreExpand() {
-        val id = _dragCollapsedRestore.value ?: return
-        _dragCollapsedRestore.value = null
+        val id = _dragCollapsedRestoreCategory.value ?: return
+        _dragCollapsedRestoreCategory.value = null
 
-        _collapsedIds.update { it - id }
+        _collapsedIdsCategory.update { it - id }
 
         // Persist اختیاری:
         viewModelScope.launch {
@@ -459,9 +884,9 @@ class CategoryViewModel @Inject constructor(
     fun toggleExpand(categoryId: Int) {
         viewModelScope.launch {
             val current = uiState.value.categories.firstOrNull { it.categoryId == categoryId } ?: return@launch
-            val willCollapse = !_collapsedIds.value.contains(categoryId)
+            val willCollapse = !_collapsedIdsCategory.value.contains(categoryId)
 
-            _collapsedIds.update { set ->
+            _collapsedIdsCategory.update { set ->
                 if (willCollapse) set + categoryId else set - categoryId
             }
 
@@ -470,60 +895,7 @@ class CategoryViewModel @Inject constructor(
         }
     }
 
-    fun applyDragResult(
-        draggedId: Int,
-        oldParentId: Int?,
-        newParentId: Int?,
-        currentList: List<CategoryRenderItem>
-    ) {
-        viewModelScope.launch {
-            val dragged = uiState.value.categories.firstOrNull { it.categoryId == draggedId } ?: return@launch
 
-            val finalNewParent = newParentId ?: dragged.parentCategoryId
-
-            // parent جدید باید سطحش < 4 باشد
-            val parentLevel = uiState.value.levelById[finalNewParent ?: return@launch] ?: 1
-            if (parentLevel >= 4) return@launch
-
-            // آپدیت parent (اگر تغییر کرده)
-            if (finalNewParent != dragged.parentCategoryId) {
-                categoryRepository.updateCategory(dragged.copy(parentCategoryId = finalNewParent))
-            }
-
-            suspend fun reorderFor(parentId: Int?) {
-                val orderedIds = currentList
-                    .asSequence()
-                    .filter { it.isVisible }
-                    .filter { item ->
-                        val id = item.category.categoryId ?: return@filter false
-                        val p = if (id == draggedId) finalNewParent else item.category.parentCategoryId
-                        p == parentId
-                    }
-                    .mapNotNull { it.category.categoryId }
-                    .toList()
-
-                val currentEntities = uiState.value.categories.filter { it.parentCategoryId == parentId }
-                val byId = currentEntities.associateBy { it.categoryId }
-
-                orderedIds.forEachIndexed { index, id ->
-                    val entity =
-                        if (id == draggedId) {
-                            // dragged ممکنه هنوز تو uiState با parent قبلی باشه
-                            dragged.copy(parentCategoryId = finalNewParent)
-                        } else {
-                            byId[id] ?: return@forEachIndexed
-                        }
-
-                    categoryRepository.updateCategory(entity.copy(siblingIndex = index))
-                }
-            }
-
-
-
-            reorderFor(oldParentId)
-            reorderFor(finalNewParent)
-        }
-    }
 
 
 
@@ -680,26 +1052,7 @@ class CategoryViewModel @Inject constructor(
         _taskDraft.value = TaskDraft()
     }
 
-    fun saveEditedTask(categoryColor: String) {
-        val taskId = _editingTaskId.value ?: return
-        val d = _taskDraft.value
-        if (d.name.isBlank()) return
 
-        viewModelScope.launch {
-            val current = taskRepo.getTaskById(taskId) ?: return@launch
-            val updated = current.copy(
-                name = d.name.trim(),
-                description = d.note,
-                isCompleted = d.isCompleted,
-                priority = d.priority,
-                color = categoryColor // اگر می‌خوای رنگ task مثل category بماند
-            )
-            withContext(kotlinx.coroutines.Dispatchers.IO) {
-                taskRepo.updateTask(updated)
-            }
-            finishEditTask()
-        }
-    }
 
 
 
@@ -731,6 +1084,9 @@ data class CategoryUiState2(
     val isLoading: Boolean = true,
     val categories: List<CategoryEntity> = emptyList(),
     val renderItems: List<CategoryRenderItem> = emptyList(),
+
+    val tasks: List<Task> = emptyList(),
+    val taskRenderItems: List<TaskRenderItem> = emptyList(),
     val levelById: Map<Int, Int> = emptyMap(),
 
     )
@@ -761,8 +1117,12 @@ data class TaskMiniUi(
     val title: String,
     val isDone: Boolean = false,
     val hasSchedule: Boolean = false,
-    val hasChildren: Boolean = false
+
+    // ✅ برای tree
+    val indentLevel: Int = 0,      // 0..3
+    val parentTaskId: Int? = null  // null یعنی ریشه
 )
+
 
 data class TaskDraft(
     val name: String = "",
@@ -789,5 +1149,17 @@ data class ScheduleDraft(
     val repeating: Boolean = false
 )
 
+data class TaskRenderItem(
+    val task: TaskMiniUi,
+    val level: Int,        // 1..4 (نمایشی)
+    val hasChildren: Boolean,
+    val isExpanded: Boolean,
+    val isVisible: Boolean
+)
 
-
+data class TaskReorderUpdate(
+    val id: Int,
+    val orderIndex: Int,
+    val indentLevel: Int,
+    val parentTaskId: Int?
+)

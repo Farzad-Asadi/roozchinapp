@@ -1,6 +1,8 @@
 package com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task
 
 
+import androidx.room.Transaction
+import com.example.compoundeffectV1_01.ui.categoryScreen.TaskReorderUpdate
 import kotlinx.coroutines.flow.Flow
 import java.time.LocalDateTime
 import javax.inject.Inject
@@ -45,5 +47,20 @@ class TaskRepositoryImpl @Inject constructor(
     override suspend fun getMaxOrderIndex(categoryId: Int): Int? =
                 taskDao.getMaxOrderIndex(categoryId)
 
+    override suspend fun countChildren(taskId: Int): Int =
+        taskDao.countChildren(taskId)
 
+    override suspend fun updateTaskOrder(id: Int, orderIndex: Int) =
+        taskDao.updateTaskOrder(id,orderIndex)
+
+    override suspend fun updateTaskHierarchy(id: Int, indentLevel: Int, parentTaskId: Int?) =
+        taskDao.updateTaskHierarchy(id,indentLevel,parentTaskId)
+
+    @Transaction
+    override suspend fun applyTaskReorderAndHierarchy(updates: List<TaskReorderUpdate>) {
+        for (u in updates) {
+            updateTaskOrder(u.id, u.orderIndex)
+            updateTaskHierarchy(u.id, u.indentLevel, u.parentTaskId)
+        }
+    }
 }
