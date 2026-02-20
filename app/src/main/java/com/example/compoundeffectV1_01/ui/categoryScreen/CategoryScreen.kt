@@ -2,8 +2,6 @@ package com.example.compoundeffectV1_01.ui.categoryScreen
 
 import android.annotation.SuppressLint
 import android.util.Log
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -29,13 +27,17 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowRight
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBackIosNew
 import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowRight
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.Edit
@@ -46,8 +48,12 @@ import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.RadioButtonChecked
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
+import androidx.compose.material.icons.filled.RemoveDone
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material.icons.filled.Task
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -64,12 +70,12 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -81,6 +87,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -116,6 +123,8 @@ fun CategoryScreen(
     val tasksForMenu by viewModel.tasksForMenuCategory.collectAsState()
     val tasksWithSchedule by viewModel.tasksWithScheduleForMenu.collectAsState()
     val scheduledCount by viewModel.scheduledCountForMenu.collectAsState()
+    val childLevelUi by viewModel.childLevelUi.collectAsState()
+
 
 
     var showPickParent by rememberSaveable { mutableStateOf(false) }
@@ -149,6 +158,8 @@ fun CategoryScreen(
 
     var showTaskDialog by rememberSaveable { mutableStateOf(false) }
 
+    var showPickTaskCategory by rememberSaveable { mutableStateOf(false) }
+
 
     LaunchedEffect(createResult) {
         nameError = (createResult as? CategoryViewModel.CreateResult.Error)?.message
@@ -174,6 +185,9 @@ fun CategoryScreen(
         }
     }
 
+    LaunchedEffect(showTaskDialog, childLevelUi.allowed) {
+        if (showTaskDialog) viewModel.clampTaskChildLevel(childLevelUi.allowed)
+    }
 
 
     Scaffold(
@@ -563,7 +577,7 @@ fun CategoryScreen(
             scheduledCount = scheduledCount,
             sheetMode = sheetMode,
             onChangeMode = { sheetMode = it },
-            toggleTaskCompleted = { taskId ,_->
+            toggleTaskCompleted = { taskId, _ ->
                 viewModel.toggleTaskCompletedCascade(taskId)
             },
             deleteTask = { taskId: Int ->
@@ -591,7 +605,7 @@ fun CategoryScreen(
             },
             onDragEndRestoreExpandForTask = { viewModel.onDragEndRestoreExpandForTask() },
             onDragStartMaybeCollapseForTask = { viewModel.onDragStartMaybeCollapseForTask(it) },
-            toggleExpandForTask={viewModel.toggleExpandForTask(it)}
+            toggleExpandForTask = { viewModel.toggleExpandForTask(it) }
 
         )
     }
@@ -686,13 +700,18 @@ fun CategoryScreen(
     }
 
     if (showTaskDialog && menuCategory != null) {
+
+        val selectedCategoryId = taskDraft.categoryId ?: menuCategory.categoryId
+        val selectedCategory = state.categories.firstOrNull { it.categoryId == selectedCategoryId }
+            ?: menuCategory ?: return
+
         val isEdit = (editingTaskId != null)
 
         AddTaskDialog(
             addTaskMod = !isEdit,
-            categoryName = menuCategory.name,
-            categoryIconName = menuCategory.iconName,
-            categoryColorHex = menuCategory.color,
+            categoryName = selectedCategory.name,
+            categoryIconName = selectedCategory.iconName,
+            categoryColorHex = selectedCategory.color,
             draft = taskDraft,
             onDismiss = {
                 showTaskDialog = false
@@ -705,15 +724,16 @@ fun CategoryScreen(
 
             onInsertAtTopChange = viewModel::setTaskInsertAtTop,
             onChildLevelChange = viewModel::setTaskChildLevel,
-
+            onPickCategory = { showPickTaskCategory = true },
             onConfirm = { action ->
                 val editing = (editingTaskId != null)
+                val color = selectedCategory.color
 
                 if (editing) {
-                    viewModel.saveEditedTask(menuCategory.color)
+                    viewModel.saveEditedTask(color)
                     showTaskDialog = false
                 } else {
-                    viewModel.createTaskForCategory(menuCategory.color)
+                    viewModel.createTaskForCategory(color)
 
                     if (action == ConfirmAction.SAVE_AND_CLOSE) {
                         showTaskDialog = false
@@ -722,7 +742,8 @@ fun CategoryScreen(
                     }
                 }
             },
-            onOpenSchedule = { showScheduleDialog = true }
+            onOpenSchedule = { showScheduleDialog = true },
+            allowedChildLevels = childLevelUi.allowed,
         )
 
 
@@ -743,6 +764,18 @@ fun CategoryScreen(
                 viewModel.markScheduleConfirmedForNewTask()
                 viewModel.saveScheduleForCurrentTask()
                 showScheduleDialog = false
+            }
+        )
+    }
+
+    if (showTaskDialog && showPickTaskCategory) {
+        PickParentDialogSmall(
+            items = pickerFlatten.items,
+            levelById = pickerFlatten.levelById,
+            onDismiss = { showPickTaskCategory = false },
+            onPick = { categoryId ->
+                viewModel.setTaskCategoryId(categoryId)
+                showPickTaskCategory = false
             }
         )
     }
@@ -997,6 +1030,27 @@ private fun TaskRow(
                 ) { onToggleDone(id) }
         )
 
+        // ✅ Priority marker
+        val (pText, pColor) = when (item.task.priority) {
+            1 -> "*"  to Color(0xFF2E7D32) // سبز
+            2 -> "!"  to Color(0xFFF9A825) // زرد
+            3 -> "!!" to Color(0xFFC62828) // قرمز
+            else -> "" to Color.Unspecified
+        }
+
+        if (pText.isNotBlank()) {
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = pText,
+                color = pColor,
+                style = MaterialTheme.typography.titleMedium
+            )
+            Spacer(Modifier.width(8.dp))
+        } else {
+            Spacer(Modifier.width(12.dp))
+        }
+
+
         Spacer(Modifier.width(12.dp))
 
         // ✅ عنوان (یک خط، ellipsis)
@@ -1013,7 +1067,7 @@ private fun TaskRow(
             Icon(
                 imageVector = Icons.Filled.Event,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                tint = MaterialTheme.colorScheme.error
             )
         }
 
@@ -1041,7 +1095,6 @@ private fun TaskRow(
         }
     }
 }
-
 
 
 @Composable
@@ -1445,7 +1498,7 @@ private fun CategoryOptionsSideSheet(
     ) -> Unit,
     onDragEndRestoreExpandForTask: () -> Unit,
     onDragStartMaybeCollapseForTask: (taskId: Int) -> Unit,
-    toggleExpandForTask : (taskId: Int) -> Unit,
+    toggleExpandForTask: (taskId: Int) -> Unit,
 ) {
 
 
@@ -1636,7 +1689,7 @@ private fun CategoryOptionsSideSheet(
 
                 CategorySheetMode.TASKS -> {
                     // ✅ حالت Tasks: کل سایدشیت عوض میشه
-                    TasksModeContent2(
+                    TasksModeContent(
                         category = category,
                         tasks = tasks,
                         taskMiniList = taskMiniUis,
@@ -1650,17 +1703,6 @@ private fun CategoryOptionsSideSheet(
                         deleteTask = { taskId: Int ->
                             deleteTask(taskId)
                         },
-                        flattenTaskTreeWithLevelsAndVisibility = { all, collapsedIds, rootParentId, maxDepth ->
-                            flattenTaskTreeWithLevelsAndVisibility(
-                                all,
-                                collapsedIds,
-                                rootParentId,
-                                maxDepth
-                            )
-                        },
-                        findBlockRange = { list, startIndex ->
-                            findBlockRange(list, startIndex)
-                        },
                         applyTaskDragResult = { draggedId, oldParentId, newParentId, categoryId, currentList ->
                             applyTaskDragResult(
                                 draggedId,
@@ -1672,7 +1714,7 @@ private fun CategoryOptionsSideSheet(
                         },
                         onDragEndRestoreExpandForTask = { onDragEndRestoreExpandForTask() },
                         onDragStartMaybeCollapseForTask = { onDragStartMaybeCollapseForTask(it) },
-                        toggleExpandForTask={toggleExpandForTask(it)}
+                        toggleExpandForTask = { toggleExpandForTask(it) }
                     )
                 }
             }
@@ -1709,7 +1751,7 @@ private fun SheetTasksCompactRow(
 }
 
 @Composable
-private fun TasksModeContent2(
+private fun TasksModeContent(
     category: CategoryEntity,
     tasks: List<Task>,
     taskMiniList: List<TaskMiniUi>,
@@ -1719,13 +1761,6 @@ private fun TasksModeContent2(
     onClickTask: (Int) -> Unit,
     toggleTaskCompleted: (taskId: Int, done: Boolean) -> Unit,
     deleteTask: (taskId: Int) -> Unit,
-    flattenTaskTreeWithLevelsAndVisibility: (
-        all: List<TaskMiniUi>,
-        collapsedIds: Set<Int>,
-        rootParentId: Int?,
-        maxDepth: Int
-    ) -> List<TaskRenderItem>,
-    findBlockRange: (list: List<TaskMiniUi>, startIndex: Int) -> IntRange,
     applyTaskDragResult: (
         draggedId: Int,
         oldParentId: Int?,
@@ -1735,7 +1770,7 @@ private fun TasksModeContent2(
     ) -> Unit,
     onDragEndRestoreExpandForTask: () -> Unit,
     onDragStartMaybeCollapseForTask: (taskId: Int) -> Unit,
-    toggleExpandForTask : (taskId: Int) -> Unit,
+    toggleExpandForTask: (taskId: Int) -> Unit,
 ) {
     var dragging by remember { mutableStateOf(false) }
     val listState = remember { mutableStateOf(tasksRenderList) }
@@ -1937,7 +1972,18 @@ private fun TasksModeContent2(
     val isDragActive = currentDraggingId != null
     var expandedForAll by rememberSaveable { mutableStateOf(true) }
 
+    var sortMode by rememberSaveable { mutableStateOf(TaskSortMode.NONE) }
 
+    LaunchedEffect(sortMode, tasksRenderList) {
+        if (!dragging) {
+            listState.value = when (sortMode) {
+                TaskSortMode.NONE -> tasksRenderList
+                TaskSortMode.BY_NAME -> tasksRenderList.sortedBy { it.task.title.lowercase() }
+                TaskSortMode.BY_PRIORITY -> tasksRenderList.sortedByDescending { it.task.priority }
+                TaskSortMode.BY_COMPLETED -> tasksRenderList.sortedBy { it.task.isDone } // انجام نشده‌ها بالا
+            }
+        }
+    }
 
 
 
@@ -2006,616 +2052,320 @@ private fun TasksModeContent2(
                 )
             }
 
-            IconButton(onClick = { /* منوی سه نقطه برای tasks: بعداً */ }) {
-                Icon(Icons.Filled.MoreVert, contentDescription = "tasks menu")
-            }
+            TasksOptionsMenu(
+                categoryId = category.categoryId ?: 0,
+                sortMode = sortMode,
+                onChangeSort = { sortMode = it },
+                onCompleteAll = { /* VM call */ },
+                onUncompleteAll = { /* VM call */ },
+                onDeleteCompleted = { /* VM call */ },
+                onDeleteAll = { /* VM call */ }
+            )
+
+
         }
         HorizontalDivider(thickness = 0.5.dp)
 
-        LazyColumn(
-            state = reorderState.listState, // ✅ مهم
-            modifier = Modifier
-                .fillMaxSize()
-                .reorderable(reorderState)
+        var pendingDeleteTaskId by rememberSaveable { mutableStateOf<Int?>(null) }
+        var pendingDeleteTaskTitle by rememberSaveable { mutableStateOf("") }
+
+
+        androidx.compose.animation.AnimatedVisibility(
+            visible = expandedForAll,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically()
         ) {
-            items(
-                items = listState.value,
-                key = { it.task.id }
-            ) { item ->
-                val id = item.task.id
 
-                ReorderableItem(reorderState, key = id) { _ ->
-                    androidx.compose.animation.AnimatedVisibility(
-                        visible = item.isVisible,
-                        enter = fadeIn() + expandVertically(),
-                        exit = fadeOut() + shrinkVertically()
-                    ) {
-
-                        val rowDragModifier = Modifier
-                            .pointerInput(id, draggingKey.value) {
-                                awaitPointerEventScope {
-                                    while (true) {
-                                        val event = awaitPointerEvent()
-                                        val change = event.changes.firstOrNull() ?: continue
-
-                                        // فقط وقتی خود این آیتم در حال drag واقعی است
-                                        if (draggingKey.value != id) continue
-                                        if (!change.pressed) continue
-
-                                        val dx = change.positionChange().x
-                                        if (dx != 0f) onHorizontalReparentHint(id, dx)
-                                    }
-                                }
-                            }
-
-                            .detectReorderAfterLongPress(reorderState) // ✅ کل ردیف draggable
-
-
-                        TaskRow(
-                            item = item,
-                            computedLevel = effectiveLevel(id),
-                            onToggleExpand = { toggleExpandForTask(it) },
-                            onClickTask={onClickTask(it)},
-                            onToggleDone = { taskId ->
-                                val cur = listState.value.firstOrNull { it.task.id == taskId }?.task ?: return@TaskRow
-                                toggleTaskCompleted(taskId, !cur.isDone)  // ✅ معکوس
-                            },
-                            modifier = rowDragModifier,
-                        )
-
-                        HorizontalDivider(thickness = 0.5.dp) // ✅ خط باریک
-
-
-
-                    }
-                }
-            }
-        }
-    }
-}
-
-
-@Composable
-private fun TasksModeContent(
-    category: CategoryEntity,
-    tasks: List<TaskMiniUi>,
-    onBack: () -> Unit,
-    onAddTask: () -> Unit,
-    onClickTask: (Int) -> Unit,
-    toggleTaskCompleted: (taskId: Int, done: Boolean) -> Unit,
-    deleteTask: (taskId: Int) -> Unit,
-    flattenTaskTreeWithLevelsAndVisibility: (
-        all: List<TaskMiniUi>,
-        collapsedIds: Set<Int>,
-        rootParentId: Int?,
-        maxDepth: Int
-    ) -> List<TaskRenderItem>,
-    findBlockRange: (list: List<TaskMiniUi>, startIndex: Int) -> IntRange,
-    applyTaskDragResult: (categoryId: Int, finalFlatList: List<TaskMiniUi>) -> Unit,
-) {
-
-
-    var expanded by rememberSaveable { mutableStateOf(true) }
-
-    var collapsedIds by rememberSaveable { mutableStateOf(setOf<Int>()) }
-    // برای collapse موقت هنگام drag
-    val dragCollapsedRestore = remember { mutableStateOf<Int?>(null) }
-    val pendingIndentById = remember { mutableStateMapOf<Int, Int>() } // id -> indentLevel(0..3)
-
-    var taskMenuForId by rememberSaveable { mutableStateOf<Int?>(null) }
-    var expandedIds by rememberSaveable { mutableStateOf(setOf<Int>()) } // برای expand تسک‌های دارای child
-
-    // ✅ لیست لوکال برای UI (مثل کتگوری‌ها)
-    var dragging by remember { mutableStateOf(false) }
-    val listState = remember(tasks) { mutableStateOf(tasks) }
-
-    // برای parent موقت و تغییر level
-    val pendingParentById = remember { mutableStateMapOf<Int, Int?>() }
-    val dragOffsetXById = remember { mutableStateMapOf<Int, Float>() }
-    val lastReparentAtById = remember { mutableStateMapOf<Int, Long>() }
-
-    val threshold = 70f
-    val reparentDelayMs = 200L
-
-    // برای جلوگیری از cycle
-    val childrenByParent = remember(tasks) {
-        tasks.groupBy { it.parentTaskId }
-            .mapValues { it.value.map { it.id } }
-    }
-
-    fun isDescendant(candidateParentId: Int, draggedId: Int): Boolean {
-        val stack = ArrayDeque<Int>()
-        stack.add(draggedId)
-        while (stack.isNotEmpty()) {
-            val cur = stack.removeLast()
-            val children = childrenByParent[cur] ?: emptyList()
-            if (candidateParentId in children) return true
-            children.forEach { stack.add(it) }
-        }
-        return false
-    }
-
-    // parent موثر (اگر pending داریم از آن استفاده کن)
-    fun effectiveParentId(id: Int): Int? =
-        pendingParentById[id] ?: listState.value.firstOrNull { it.id == id }?.parentTaskId
-
-    // level موثر: root=1 ... max=4
-    fun effectiveLevel(id: Int): Int {
-        var level = 1
-        var curParent = effectiveParentId(id)
-        var guard = 0
-        while (curParent != null && guard < 10) {
-            level++
-            curParent = effectiveParentId(curParent)
-            guard++
-        }
-        return level.coerceAtMost(4)
-    }
-
-
-    fun updatePendingIndentFor(id: Int) {
-        val lvl = effectiveLevel(id)           // 1..4
-        pendingIndentById[id] = (lvl - 1).coerceIn(0, 3)
-    }
-
-    fun tryIndent(id: Int) {
-        val list = listState.value
-        val idx = list.indexOfFirst { it.id == id }
-        if (idx <= 0) return
-        val prevId = list[idx - 1].id
-
-        val parentLevel = effectiveLevel(prevId)
-        if (parentLevel >= 4) return
-        if (isDescendant(candidateParentId = prevId, draggedId = id)) return
-
-        pendingParentById[id] = prevId
-        updatePendingIndentFor(id)
-        pendingIndentById[id] = (effectiveLevel(id) - 1).coerceIn(0, 3)
-
-    }
-
-    fun tryOutdent(id: Int) {
-        val currentParent = effectiveParentId(id)
-
-        // ✅ اگر همین الان ریشه است، مطمئن شو indent=0 شود
-        if (currentParent == null) {
-            pendingParentById[id] = null
-            pendingIndentById[id] = 0
-            return
-        }
-
-        val newParent = effectiveParentId(currentParent) // ممکنه null بشه => سطح 0
-        pendingParentById[id] = newParent
-
-        // ✅ indent را دقیق و قطعی کم کن
-        val currentIndent = pendingIndentById[id] ?: (effectiveLevel(id) - 1).coerceIn(0, 3)
-        val newIndent = (currentIndent - 1).coerceAtLeast(0)
-        pendingIndentById[id] = newIndent
-    }
-
-
-    fun findBlockRangeUi(list: List<TaskMiniUi>, startIndex: Int): IntRange {
-        val baseId = list[startIndex].id
-        val baseIndent = pendingIndentById[baseId] ?: list[startIndex].indentLevel
-
-        var end = startIndex
-        for (i in startIndex + 1..list.lastIndex) {
-            val curId = list[i].id
-            val curIndent = pendingIndentById[curId] ?: list[i].indentLevel
-            if (curIndent <= baseIndent) break
-            end = i
-        }
-        return startIndex..end
-    }
-
-
-    val onHorizontalReparentHint: (Int, Float) -> Unit = let@{ id, deltaX ->
-        val acc = (dragOffsetXById[id] ?: 0f) + deltaX
-        dragOffsetXById[id] = acc
-
-        val now = android.os.SystemClock.uptimeMillis()
-        val last = lastReparentAtById[id] ?: 0L
-        if ((now - last) < reparentDelayMs) return@let
-
-        if (acc >= threshold) {
-            dragOffsetXById[id] = 0f
-            lastReparentAtById[id] = now
-            tryIndent(id)
-        } else if (acc <= -threshold) {
-            dragOffsetXById[id] = 0f
-            lastReparentAtById[id] = now
-            tryOutdent(id)
-        }
-    }
-
-    val draggingKey = remember { mutableStateOf<Int?>(null) }
-    val fromParentId = remember { mutableStateOf<Int?>(null) }
-
-    val draggedBlockIds = remember { mutableStateListOf<Int>() }
-    val draggedIdState = remember { mutableStateOf<Int?>(null) }
-
-
-    val reorderState = rememberReorderableLazyListState(
-        onMove = { from, to ->
-            dragging = true
-            val list = listState.value.toMutableList()
-            if (list.isEmpty()) return@rememberReorderableLazyListState
-
-            val fromIndex = from.index
-            val toIndex = to.index.coerceIn(0, list.lastIndex)
-            if (fromIndex !in list.indices || toIndex !in list.indices) return@rememberReorderableLazyListState
-            if (fromIndex == toIndex) return@rememberReorderableLazyListState
-
-            val moved = list.removeAt(fromIndex)
-            list.add(toIndex, moved)
-            listState.value = list
-        },
-        onDragEnd = { _, _ ->
-            dragging = false
-            val draggedId = draggedIdState.value
-            val block = draggedBlockIds.toList()
-            draggedIdState.value = null
-            draggedBlockIds.clear()
-
-            if (draggedId != null && block.isNotEmpty()) {
-                val list = listState.value.toMutableList()
-
-                // مقصد: جایی که خود dragged الان در لیست قرار گرفته (بعد از onMove های حین drag)
-                val targetIndex = list.indexOfFirst { it.id == draggedId }.coerceAtLeast(0)
-
-                // کل بلاک را از لیست حذف کن (هر جا که باشند)
-                val remaining = list.filterNot { it.id in block }.toMutableList()
-
-                // اندیس درج: اگر dragged قبل از حذف داخل بلاک بوده، targetIndex مربوط به لیست قبل است
-                // ساده و پایدار: درج در همان targetIndex با clamp
-                val insertAt = targetIndex.coerceIn(0, remaining.size)
-
-                // بلاک را با ترتیب اولیه‌اش درج کن
-                val blockItemsInOrder = block.mapNotNull { id -> list.firstOrNull { it.id == id } }
-                remaining.addAll(insertAt, blockItemsInOrder)
-
-                listState.value = remaining
-            }
-
-            val finalForDb = listState.value.map { t ->
-                val p = pendingParentById[t.id] ?: t.parentTaskId
-                val ind = pendingIndentById[t.id] ?: t.indentLevel
-                t.copy(parentTaskId = p, indentLevel = ind)
-            }
-
-            applyTaskDragResult(category.categoryId!!, finalForDb)
-
-            // پاکسازی pending ها
-            pendingParentById.clear()
-            pendingIndentById.clear()
-            dragOffsetXById.clear()
-            lastReparentAtById.clear()
-
-            dragCollapsedRestore.value?.let { id -> collapsedIds = collapsedIds - id }
-            dragCollapsedRestore.value = null
-        }
-
-    )
-
-    val isDragActive = reorderState.draggingItemKey != null
-    val collapsedForUi = if (isDragActive) emptySet<Int>() else collapsedIds
-
-
-    fun hasChildren(id: Int): Boolean {
-        // بر اساس ساختار فعلی UI (با pending هم سازگار)
-        return listState.value.any { effectiveParentId(it.id) == id }
-    }
-
-    fun isHiddenByCollapsedAncestors(id: Int): Boolean {
-        var p = effectiveParentId(id)
-        var guard = 0
-        while (p != null && guard < 50) {
-            if (collapsedForUi.contains(p)) return true
-            p = effectiveParentId(p)
-            guard++
-        }
-        return false
-    }
-
-
-    // وقتی شروع شد: parent قبلی را نگه دار
-    LaunchedEffect(reorderState.draggingItemKey) {
-        val key = reorderState.draggingItemKey as? Int
-
-        if (key != null) {
-            draggedIdState.value = key
-
-            // snapshot block ids (بر اساس indent فعلی لیست)
-            val list = listState.value
-            val fromIndex = list.indexOfFirst { it.id == key }
-            if (fromIndex != -1) {
-                val range = findBlockRangeUi(list, fromIndex) // همون تابعی که داری
-                draggedBlockIds.clear()
-                draggedBlockIds.addAll(list.subList(range.first, range.last + 1).map { it.id })
-            }
-
-
-
-            draggingKey.value = key
-            fromParentId.value = listState.value.firstOrNull { it.id == key }?.parentTaskId
-
-            // ✅ مثل کتگوری: اگر بچه دارد و الان باز است => موقع drag جمعش کن
-            if (hasChildren(key) && !collapsedIds.contains(key)) {
-                dragCollapsedRestore.value = key
-                collapsedIds = collapsedIds + key
-            }
-        }
-    }
-
-
-    // sync با دیتای جدید وقتی درگ نداریم
-    LaunchedEffect(tasks) {
-        if (!dragging) listState.value = tasks
-    }
-
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-    ) {
-
-        // ردیف اول: Add task + آیکون کتگوری + Search
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            TextButton(onClick = onBack) { Text("Back") }
-
-            Spacer(Modifier.width(8.dp))
-
-            Icon(
-                imageVector = iconFromKey(category.iconName),
-                contentDescription = null,
-                tint = colorFromHex(category.color),
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(Modifier.width(10.dp))
-
-            Text(
-                text = "Add task",
-                style = MaterialTheme.typography.titleLarge,
+            LazyColumn(
+                state = reorderState.listState, // ✅ مهم
                 modifier = Modifier
-                    .weight(1f)
-                    .clickable { onAddTask() }
-            )
-
-            IconButton(onClick = { /* بعداً سرچ */ }) {
-                Icon(Icons.Filled.Search, contentDescription = "search")
-            }
-        }
-
-        HorizontalDivider()
-
-        // ردیف دوم: آیکون تسک، تعداد، Tasks، اکسپند، سه نقطه
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                Icons.Filled.Task,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(Modifier.width(10.dp))
-
-            Text("${tasks.size}", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.width(10.dp))
-
-            Text("Tasks", modifier = Modifier.weight(1f))
-
-            IconButton(onClick = { expanded = !expanded }) {
-                Icon(
-                    imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                    contentDescription = "expand"
-                )
-            }
-
-            IconButton(onClick = { /* منوی سه نقطه برای tasks: بعداً */ }) {
-                Icon(Icons.Filled.MoreVert, contentDescription = "tasks menu")
-            }
-        }
-
-        HorizontalDivider(thickness = 0.5.dp)
-
-
-        val renderItems = remember(tasks, collapsedIds) {
-            flattenTaskTreeWithLevelsAndVisibility(tasks, collapsedIds, null, 4)
-        }
-
-        LazyColumn(
-            state = reorderState.listState,
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-                .reorderable(reorderState)
-        ) {
-            if (expanded) {
+                    .fillMaxSize()
+                    .reorderable(reorderState)
+            ) {
                 items(
                     items = listState.value,
-                    key = { it.id }
-                ) { t ->
-                    val id = t.id
+                    key = { it.task.id }
+                ) { item ->
+                    val id = item.task.id
 
                     ReorderableItem(reorderState, key = id) { _ ->
-                        val rowDragModifier = Modifier
-                            .pointerInput(id, draggingKey.value) {
-                                awaitPointerEventScope {
-                                    var active = true
-                                    while (active) {
-                                        val event = awaitPointerEvent()
-                                        val change = event.changes.firstOrNull() ?: continue
-
-                                        // فقط وقتی همین آیتم واقعاً drag شده
-                                        if (draggingKey.value != id) continue
-
-                                        if (!change.pressed) {
-                                            active = false
-                                            continue
-                                        }
-
-                                        val dx = change.positionChange().x
-                                        if (dx != 0f) onHorizontalReparentHint(id, dx)
-                                    }
-                                }
-                            }
-
-                            .detectReorderAfterLongPress(reorderState)
-
-                        // ✅ level نمایشی بر اساس parent موثر
-                        val level = effectiveLevel(id)
-                        val indent = (level - 1).coerceAtLeast(0) * 16
-                        val bg = containerColorForLevel(level)
-
-                        val canShowExpand = hasChildren(id) && effectiveLevel(id) < 4
-                        val isExpanded = !collapsedForUi.contains(id)
-
-
-                        val isDragActive = reorderState.draggingItemKey != null
-                        val hidden = if (isDragActive) false else isHiddenByCollapsedAncestors(id)
-
                         androidx.compose.animation.AnimatedVisibility(
-                            visible = !hidden,
-                            enter = EnterTransition.None,
-                            exit = ExitTransition.None
+                            visible = item.isVisible,
+                            enter = fadeIn() + expandVertically(),
+                            exit = fadeOut() + shrinkVertically()
                         ) {
-                            Row(
-                                modifier = rowDragModifier
-                                    .fillMaxWidth()
-                                    .background(bg)
-                                    .padding(start = indent.dp)
-                                    .clickable { onClickTask(id) }
-                                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                // دایره done
-                                Box(
-                                    modifier = Modifier
-                                        .size(22.dp)
-                                        .border(
-                                            2.dp,
-                                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
-                                            CircleShape
-                                        )
-                                        .background(
-                                            color = if (t.isDone) MaterialTheme.colorScheme.onSurfaceVariant.copy(
-                                                alpha = 0.25f
-                                            )
-                                            else Color.Transparent,
-                                            shape = CircleShape
-                                        )
-                                )
-                                Spacer(Modifier.width(12.dp))
 
-                                Text(t.title, modifier = Modifier.weight(1f))
+                            val rowDragModifier = Modifier
+                                .pointerInput(id, draggingKey.value) {
+                                    awaitPointerEventScope {
+                                        while (true) {
+                                            val event = awaitPointerEvent()
+                                            val change = event.changes.firstOrNull() ?: continue
 
-                                if (t.hasSchedule) {
-                                    Spacer(Modifier.width(8.dp))
-                                    Icon(
-                                        Icons.Filled.Event,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
+                                            // فقط وقتی خود این آیتم در حال drag واقعی است
+                                            if (draggingKey.value != id) continue
+                                            if (!change.pressed) continue
 
-                                if (canShowExpand) {
-                                    IconButton(
-                                        onClick = {
-                                            collapsedIds =
-                                                if (isExpanded) collapsedIds + id
-                                                else collapsedIds - id
+                                            val dx = change.positionChange().x
+                                            if (dx != 0f) onHorizontalReparentHint(id, dx)
                                         }
-                                    ) {
-                                        Icon(
-                                            imageVector = if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                                            contentDescription = "expand"
-                                        )
                                     }
                                 }
+
+                                .detectReorderAfterLongPress(reorderState) // ✅ کل ردیف draggable
+                            val isDragActive = reorderState.draggingItemKey != null
+
+                            val dismissState =
+                                androidx.compose.material3.rememberSwipeToDismissBoxState(
+                                    confirmValueChange = { value ->
+                                        // فقط سوایپ به چپ (EndToStart) را به حذف تبدیل کن
+                                        if (!isDragActive && value == androidx.compose.material3.SwipeToDismissBoxValue.EndToStart) {
+                                            pendingDeleteTaskId = id
+                                            pendingDeleteTaskTitle = item.task.title
+                                        }
+                                        // ❗ همیشه false تا آیتم واقعاً dismiss (حذف نمایشی) نشود
+                                        false
+                                    }
+                                )
+
+                            androidx.compose.material3.SwipeToDismissBox(
+                                state = dismissState,
+                                enableDismissFromStartToEnd = false,
+                                enableDismissFromEndToStart = !isDragActive,
+                                backgroundContent = {
+                                    // پس‌زمینه‌ی حذف (ساده)
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(MaterialTheme.colorScheme.error.copy(alpha = 0.15f))
+                                            .padding(horizontal = 16.dp),
+                                        contentAlignment = Alignment.CenterEnd
+                                    ) {
+                                        Icon(Icons.Filled.Delete, contentDescription = "delete")
+                                    }
+                                }
+                            ) {
+
+                                TaskRow(
+                                    item = item,
+                                    computedLevel = effectiveLevel(id),
+                                    onToggleExpand = { toggleExpandForTask(it) },
+                                    onClickTask = { onClickTask(it) },
+                                    onToggleDone = { taskId ->
+                                        val cur =
+                                            listState.value.firstOrNull { it.task.id == taskId }?.task
+                                                ?: return@TaskRow
+                                        toggleTaskCompleted(taskId, !cur.isDone)  // ✅ معکوس
+                                    },
+                                    modifier = rowDragModifier,
+                                )
+
+                                HorizontalDivider(thickness = 0.5.dp) // ✅ خط باریک
+
                             }
 
-                            HorizontalDivider(thickness = 0.5.dp)
                         }
                     }
                 }
             }
 
         }
-    }
-}
 
-
-@Composable
-private fun TaskRowInSheet(
-    task: TaskMiniUi,
-    expanded: Boolean,
-    onToggleExpand: () -> Unit,
-    onClickRow: () -> Unit,
-    onDismissMenu: () -> Unit,
-    showMenu: Boolean,
-    onEdit: () -> Unit,
-    onToggleDone: () -> Unit,
-    onDelete: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClickRow() }
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // ✅ دایره وضعیت
-        Box(
-            modifier = Modifier
-                .size(22.dp)
-                .border(
-                    width = 2.dp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
-                    shape = CircleShape
-                )
-                .background(
-                    color = if (task.isDone) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f)
-                    else Color.Transparent,
-                    shape = CircleShape
-                )
-        )
-        Spacer(Modifier.width(12.dp))
-
-        // ✅ عنوان
-        Text(
-            task.title,
-            modifier = Modifier.weight(1f)
-        )
-
-        // ✅ تقویم اگر schedule داشت
-        if (task.hasSchedule) {
-            Spacer(Modifier.width(8.dp))
-            Icon(
-                Icons.Filled.Event,
-                contentDescription = "scheduled",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+        if (pendingDeleteTaskId != null) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { pendingDeleteTaskId = null },
+                title = { Text("Delete task?") },
+                text = { Text("آیا از حذف این تسک مطمئن هستی؟\n\n${pendingDeleteTaskTitle}") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        val tid = pendingDeleteTaskId!!
+                        deleteTask(tid)          // همون callback که به VM وصل است
+                        pendingDeleteTaskId = null
+                    }) { Text("Delete") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { pendingDeleteTaskId = null }) { Text("Cancel") }
+                }
             )
         }
 
-        // ✅ expand اگر child داشت
-        if (task.indentLevel > 0) {
-            IconButton(onClick = onToggleExpand) {
-                Icon(
-                    imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                    contentDescription = "expand"
-                )
-            }
-        }
 
     }
+}
+
+@Composable
+fun TasksOptionsMenu(
+    categoryId: Int,
+    sortMode: TaskSortMode,
+    onChangeSort: (TaskSortMode) -> Unit,
+    onCompleteAll: () -> Unit,
+    onUncompleteAll: () -> Unit,
+    onDeleteCompleted: () -> Unit,
+    onDeleteAll: () -> Unit
+) {
+
+    var menuOpen by remember { mutableStateOf(false) }
+    var sortSubOpen by remember { mutableStateOf(false) }
+
+    Box {
+
+        IconButton(onClick = { menuOpen = true }) {
+            Icon(Icons.Filled.MoreVert, contentDescription = "tasks menu")
+        }
+
+        // ====== منوی اصلی ======
+        DropdownMenu(
+            expanded = menuOpen,
+            onDismissRequest = {
+                menuOpen = false
+                sortSubOpen = false
+            }
+        ) {
+
+            // ===== Sort =====
+            DropdownMenuItem(
+                text = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.Sort, contentDescription = null)
+                        Spacer(Modifier.width(10.dp))
+                        Text("Sort")
+                    }
+                },
+                trailingIcon = {
+                    Icon(Icons.Filled.ArrowRight, contentDescription = null)
+                },
+                onClick = { sortSubOpen = true }
+            )
+
+            HorizontalDivider()
+
+            DropdownMenuItem(
+                text = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.DoneAll, contentDescription = null)
+                        Spacer(Modifier.width(10.dp))
+                        Text("Complete all")
+                    }
+                },
+                onClick = {
+                    menuOpen = false
+                    onCompleteAll()
+                }
+            )
+
+            DropdownMenuItem(
+                text = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.RemoveDone, contentDescription = null)
+                        Spacer(Modifier.width(10.dp))
+                        Text("Uncomplete all")
+                    }
+                },
+                onClick = {
+                    menuOpen = false
+                    onUncompleteAll()
+                }
+            )
+
+            HorizontalDivider()
+
+            DropdownMenuItem(
+                text = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.DeleteSweep, contentDescription = null)
+                        Spacer(Modifier.width(10.dp))
+                        Text("Delete completed")
+                    }
+                },
+                onClick = {
+                    menuOpen = false
+                    onDeleteCompleted()
+                }
+            )
+
+            DropdownMenuItem(
+                text = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.Delete, contentDescription = null)
+                        Spacer(Modifier.width(10.dp))
+                        Text("Delete all")
+                    }
+                },
+                onClick = {
+                    menuOpen = false
+                    onDeleteAll()
+                }
+            )
+        }
+
+        // ====== ساب منوی Sort ======
+        DropdownMenu(
+            expanded = menuOpen && sortSubOpen,
+            onDismissRequest = { sortSubOpen = false },
+            offset = DpOffset(x = 180.dp, y = 0.dp)
+        ) {
+
+            SortMenuItem(
+                title = "By name",
+                selected = sortMode == TaskSortMode.BY_NAME
+            ) {
+                onChangeSort(TaskSortMode.BY_NAME)
+                menuOpen = false
+                sortSubOpen = false
+            }
+
+            SortMenuItem(
+                title = "By priority",
+                selected = sortMode == TaskSortMode.BY_PRIORITY
+            ) {
+                onChangeSort(TaskSortMode.BY_PRIORITY)
+                menuOpen = false
+                sortSubOpen = false
+            }
+
+            SortMenuItem(
+                title = "By completed",
+                selected = sortMode == TaskSortMode.BY_COMPLETED
+            ) {
+                onChangeSort(TaskSortMode.BY_COMPLETED)
+                menuOpen = false
+                sortSubOpen = false
+            }
+
+            SortMenuItem(
+                title = "No sort",
+                selected = sortMode == TaskSortMode.NONE
+            ) {
+                onChangeSort(TaskSortMode.NONE)
+                menuOpen = false
+                sortSubOpen = false
+            }
+        }
+    }
+}
+
+@Composable
+private fun SortMenuItem(
+    title: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    DropdownMenuItem(
+        text = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = if (selected)
+                        Icons.Filled.RadioButtonChecked
+                    else
+                        Icons.Filled.RadioButtonUnchecked,
+                    contentDescription = null
+                )
+                Spacer(Modifier.width(10.dp))
+                Text(title)
+            }
+        },
+        onClick = onClick
+    )
 }
 
 
@@ -2661,33 +2411,6 @@ private fun SheetActionRow(
 
 
 @Composable
-private fun TaskRowMini(
-    task: TaskMiniUi,
-    onClick: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // شبیه عکس: دایره کنار تسک
-        Box(
-            modifier = Modifier
-                .size(22.dp)
-                .border(
-                    2.dp,
-                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
-                    CircleShape
-                )
-        )
-        Spacer(Modifier.width(14.dp))
-        Text(task.title)
-    }
-}
-
-@Composable
 fun AddTaskDialog(
     addTaskMod: Boolean,
     categoryName: String,
@@ -2702,8 +2425,11 @@ fun AddTaskDialog(
     onInsertAtTopChange: (Boolean) -> Unit,   // ✅ جدید
     onChildLevelChange: (Int) -> Unit,        // ✅ جدید
     onConfirm: (ConfirmAction) -> Unit,       // ✅ جدید
-    onOpenSchedule: () -> Unit
+    onOpenSchedule: () -> Unit,
+    onPickCategory: () -> Unit,
+    allowedChildLevels: Set<Int>,
 ) {
+
 
 
     DimmedDialog(
@@ -2723,13 +2449,15 @@ fun AddTaskDialog(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 IconButton(onClick = onDismiss) {
                     Icon(Icons.Filled.ArrowBackIosNew, contentDescription = "close")
                 }
+
+                Spacer(Modifier.width(16.dp))
 
                 Text(
                     if (addTaskMod) "New task" else "Edit Task",
@@ -2770,11 +2498,11 @@ fun AddTaskDialog(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(12.dp),
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Filled.Check, contentDescription = null)
-                    Spacer(Modifier.width(10.dp))
+//                    Icon(Icons.Filled.Check, contentDescription = null)
+//                    Spacer(Modifier.width(10.dp))
                     OutlinedTextField(
                         value = draft.name,
                         onValueChange = onNameChange,
@@ -2790,7 +2518,8 @@ fun AddTaskDialog(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 14.dp),
+                        .clickable { onPickCategory() }
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
@@ -2799,7 +2528,7 @@ fun AddTaskDialog(
                         tint = colorFromHex(categoryColorHex),
                         modifier = Modifier.size(26.dp)
                     )
-                    Spacer(Modifier.width(12.dp))
+                    Spacer(Modifier.width(14.dp))
                     Text(
                         categoryName,
                         style = MaterialTheme.typography.titleMedium,
@@ -2807,6 +2536,10 @@ fun AddTaskDialog(
                     )
 
                     Spacer(Modifier.weight(1f))
+
+                    VerticalDivider(thickness = 1.dp , modifier = Modifier.height(24.dp))
+
+                    Spacer(Modifier.width(8.dp))
 
                     IconButton(onClick = { onInsertAtTopChange(!draft.insertAtTop) }) {
                         Icon(
@@ -2819,11 +2552,11 @@ fun AddTaskDialog(
                 HorizontalDivider()
 
 
-                // Priority row (سه دایره مثل عکس)
+                // Priority row
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 14.dp),
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text("Priority", modifier = Modifier.width(90.dp))
@@ -2839,28 +2572,34 @@ fun AddTaskDialog(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 14.dp),
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text("Child", modifier = Modifier.width(90.dp))
 
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+
                         ChildLevelChip(
-                            label = "-",
-                            selected = draft.childLevel == 0
+                            "-",
+                            selected = draft.childLevel == 0,
+                            enabled = 0 in allowedChildLevels
                         ) { onChildLevelChange(0) }
                         ChildLevelChip(
-                            label = ">",
-                            selected = draft.childLevel == 1
+                            ">",
+                            selected = draft.childLevel == 1,
+                            enabled = 1 in allowedChildLevels
                         ) { onChildLevelChange(1) }
                         ChildLevelChip(
-                            label = ">>",
-                            selected = draft.childLevel == 2
+                            ">>",
+                            selected = draft.childLevel == 2,
+                            enabled = 2 in allowedChildLevels
                         ) { onChildLevelChange(2) }
                         ChildLevelChip(
-                            label = ">>>",
-                            selected = draft.childLevel == 3
+                            ">>>",
+                            selected = draft.childLevel == 3,
+                            enabled = 3 in allowedChildLevels
                         ) { onChildLevelChange(3) }
+
                     }
 
                 }
@@ -2871,7 +2610,7 @@ fun AddTaskDialog(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 14.dp),
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
@@ -2911,12 +2650,12 @@ fun AddTaskDialog(
 
 @Composable
 private fun PriorityDots(selected: Int, onPick: (Int) -> Unit) {
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        (0..2).forEach { i ->
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        (0..3).forEach { i ->
             val isSel = i == selected
             Box(
                 modifier = Modifier
-                    .size(44.dp)
+                    .size(36.dp)
                     .background(
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (isSel) 1f else 0.5f),
                         shape = CircleShape
@@ -2931,7 +2670,7 @@ private fun PriorityDots(selected: Int, onPick: (Int) -> Unit) {
             ) {
                 Text(
                     text = when (i) {
-                        0 -> "*"; 1 -> "!"; else -> "!!"
+                        0 -> "-"; 1 -> "*"; 2 -> "!"; else -> "!!"
                     },
                     style = MaterialTheme.typography.titleMedium
                 )
@@ -2941,7 +2680,14 @@ private fun PriorityDots(selected: Int, onPick: (Int) -> Unit) {
 }
 
 @Composable
-private fun ChildLevelChip(label: String, selected: Boolean, onClick: () -> Unit) {
+private fun ChildLevelChip(
+    label: String,
+    selected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit
+) {
+    val alpha = if (enabled) 1f else 0.35f
+
     Box(
         modifier = Modifier
             .size(44.dp)
@@ -2951,15 +2697,18 @@ private fun ChildLevelChip(label: String, selected: Boolean, onClick: () -> Unit
             )
             .border(
                 width = if (selected) 2.dp else 0.dp,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = alpha),
                 shape = CircleShape
             )
-            .clickable { onClick() },
+            .then(
+                if (enabled) Modifier.clickable { onClick() } else Modifier
+            ),
         contentAlignment = Alignment.Center
     ) {
-        Text(label, style = MaterialTheme.typography.titleMedium)
+        Text(label, style = MaterialTheme.typography.titleMedium, color = LocalContentColor.current.copy(alpha = alpha))
     }
 }
+
 
 
 @Composable
@@ -3150,31 +2899,8 @@ private fun AmountOfTimeRow(
 
 private enum class CategorySheetMode { OVERVIEW, TASKS }
 enum class ConfirmAction { SAVE_AND_CLOSE, SAVE_AND_CONTINUE }
+enum class TaskSortMode { NONE, BY_NAME, BY_PRIORITY, BY_COMPLETED }
+
 
 const val TASK_MAX_INDENT = 3
 
-private fun normalizeUiList(flat: List<TaskMiniUi>): List<TaskMiniUi> {
-    val lastIdAtIndent = arrayOfNulls<Int>(TASK_MAX_INDENT + 1) // 0..3
-    var prevIndent = 0
-
-    return flat.map { t ->
-        var indent = t.indentLevel.coerceIn(0, TASK_MAX_INDENT)
-
-        // ✅ قانون 1: پرش نداشته باش (نسبت به قبلی)
-        indent = indent.coerceAtMost(prevIndent + 1)
-
-        // ✅ قانون 2: اگر indent=2 ولی indent=1 نداریم => کمش کن
-        while (indent > 0 && lastIdAtIndent[indent - 1] == null) {
-            indent -= 1
-        }
-
-        val parentId = if (indent == 0) null else lastIdAtIndent[indent - 1]
-
-        // ثبت
-        lastIdAtIndent[indent] = t.id
-        for (i in indent + 1..TASK_MAX_INDENT) lastIdAtIndent[i] = null
-        prevIndent = indent
-
-        t.copy(indentLevel = indent, parentTaskId = parentId)
-    }
-}
