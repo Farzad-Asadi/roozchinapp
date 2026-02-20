@@ -49,4 +49,13 @@ interface TaskRepository {
 
     suspend fun normalizeNullParentsToRoot()
 
+
+    suspend fun completeAllInCategory(categoryId: Int)
+
+    suspend fun uncompleteAllInCategory(categoryId: Int)
+
+    suspend fun deleteCompletedInCategory(categoryId: Int)
+
+    suspend fun deleteAllInCategory(categoryId: Int)
+
 }

@@ -124,5 +124,17 @@ interface TaskDao {
     suspend fun normalizeNullParentsToRoot()
 
 
+    @Query("UPDATE task SET isCompleted = 1 WHERE categoryId = :categoryId")
+    suspend fun completeAllInCategory(categoryId: Int)
+
+    @Query("UPDATE task SET isCompleted = 0 WHERE categoryId = :categoryId")
+    suspend fun uncompleteAllInCategory(categoryId: Int)
+
+    @Query("DELETE FROM task WHERE categoryId = :categoryId AND isCompleted = 1")
+    suspend fun deleteCompletedInCategory(categoryId: Int)
+
+    @Query("DELETE FROM task WHERE categoryId = :categoryId")
+    suspend fun deleteAllInCategory(categoryId: Int)
+
 
 }

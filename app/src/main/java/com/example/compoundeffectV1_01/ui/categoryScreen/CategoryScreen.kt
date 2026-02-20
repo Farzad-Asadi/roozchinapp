@@ -32,7 +32,6 @@ import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBackIosNew
 import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.ArrowRight
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Check
@@ -51,9 +50,7 @@ import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.RadioButtonChecked
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.RemoveDone
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material.icons.filled.Task
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -84,6 +81,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.text.style.TextOverflow
@@ -109,7 +107,6 @@ import java.time.LocalTime
 @SuppressLint("SuspiciousIndentation")
 @Composable
 fun CategoryScreen(
-    onNavigateToSchedule: () -> Unit, // فعلاً استفاده نمی‌کنیم، بعداً به bottom bar وصل می‌کنیم
     viewModel: CategoryViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -129,7 +126,6 @@ fun CategoryScreen(
 
     var showPickParent by rememberSaveable { mutableStateOf(false) }
     var showAddCategory by rememberSaveable { mutableStateOf(false) }
-    var isDragging by remember { mutableStateOf(false) }
 
     var showIconPicker by rememberSaveable { mutableStateOf(false) }
     var showColorPicker by rememberSaveable { mutableStateOf(false) }
@@ -138,10 +134,8 @@ fun CategoryScreen(
 
     val parentEntity = state.categories.firstOrNull { it.categoryId == draft.parentId }
 
-
     var showDeleteConfirm by rememberSaveable { mutableStateOf(false) }
     val menuCategory = state.categories.firstOrNull { it.categoryId == menuCategoryId }
-
 
     var showRenameDialog by rememberSaveable { mutableStateOf(false) }
     var renameText by rememberSaveable { mutableStateOf("") }
@@ -149,7 +143,6 @@ fun CategoryScreen(
     var showEditIconPicker by rememberSaveable { mutableStateOf(false) }
     var showEditColorPicker by rememberSaveable { mutableStateOf(false) }
 
-    var showAddTaskDialog by rememberSaveable { mutableStateOf(false) }
     var tasksExpanded by rememberSaveable(menuCategoryId) { mutableStateOf(false) }
 
     var showScheduleDialog by rememberSaveable { mutableStateOf(false) }
@@ -191,7 +184,6 @@ fun CategoryScreen(
 
 
     Scaffold(
-//        topBar = { TopAppBar(title = { Text("CategoryScreen2") }) },
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { showAddCategory = true }
@@ -202,10 +194,7 @@ fun CategoryScreen(
 
         },
         floatingActionButtonPosition = androidx.compose.material3.FabPosition.Start
-
-        // bottomBar فعلاً از Navigation foundation میاد، بعداً یکدستش می‌کنیم
     ) { padding ->
-
         Column(modifier = Modifier.padding(padding)) {
 
             var dragging by remember { mutableStateOf(false) }
@@ -232,6 +221,10 @@ fun CategoryScreen(
                     .mapValues { entry -> entry.value.mapNotNull { it.categoryId } }
             }
 
+            val draggingKey = remember { mutableStateOf<Int?>(null) }
+
+
+
             fun isDescendantOfDragged(candidateParentId: Int, draggedId: Int): Boolean {
                 // آیا candidateParentId داخل زیر درخت draggedId است؟
                 val stack = ArrayDeque<Int>()
@@ -246,7 +239,6 @@ fun CategoryScreen(
                 return false
             }
 
-
             fun effectiveParentId(item: CategoryRenderItem): Int? {
                 val id = item.category.categoryId ?: return item.category.parentCategoryId
                 return pendingParentById[id] ?: item.category.parentCategoryId
@@ -257,8 +249,6 @@ fun CategoryScreen(
             LaunchedEffect(state.renderItems) {
                 if (!dragging) listState.value = state.renderItems
             }
-
-            val draggingKey = remember { mutableStateOf<Int?>(null) }
 
             val reorderState = rememberReorderableLazyListState(
                 onMove = { from, to ->
@@ -355,7 +345,6 @@ fun CategoryScreen(
                 return level.coerceAtMost(4)
             }
 
-
             fun tryIndent(id: Int) {
                 // child شدن: parent = آیتم قبلی بالای خودش در همون لیست که level < 4
                 val list = listState.value
@@ -406,12 +395,11 @@ fun CategoryScreen(
                 }
             }
 
-            val currentDraggingId = reorderState.draggingItemKey as? Int
-            val isDragActive = currentDraggingId != null
+
 
 
             LazyColumn(
-                state = reorderState.listState, // ✅ مهم
+                state = reorderState.listState,
                 modifier = Modifier
                     .fillMaxSize()
                     .reorderable(reorderState)
@@ -421,14 +409,12 @@ fun CategoryScreen(
                     key = { it.category.categoryId ?: it.hashCode() }
                 ) { item ->
                     val id = item.category.categoryId ?: return@items
-
                     ReorderableItem(reorderState, key = id) { _ ->
                         androidx.compose.animation.AnimatedVisibility(
                             visible = item.isVisible,
                             enter = fadeIn() + expandVertically(),
                             exit = fadeOut() + shrinkVertically()
                         ) {
-
                             val rowDragModifier = Modifier
                                 .pointerInput(id, draggingKey.value) {
                                     awaitPointerEventScope {
@@ -445,32 +431,26 @@ fun CategoryScreen(
                                         }
                                     }
                                 }
-
                                 .detectReorderAfterLongPress(reorderState) // ✅ کل ردیف draggable
 
-
-                            CategoryRow2(
+                            CategoryRow(
                                 item = item,
                                 computedLevel = effectiveLevel(id),
                                 onToggleExpand = viewModel::toggleExpand,
                                 modifier = rowDragModifier,
                                 onOpenMenu = { id -> viewModel.setMenuCategoryId(id) }
                             )
-
                             HorizontalDivider(thickness = 0.5.dp) // ✅ خط باریک
                         }
                     }
                 }
-
             }
-
         }
-
     }
 
 
     if (showAddCategory) {
-        AddCategoryDialog2(
+        AddCategoryDialog(
             draft = draft,
             parentName = state.categories.firstOrNull { it.categoryId == draft.parentId }?.name
                 ?: "ریشه اصلی",
@@ -484,7 +464,7 @@ fun CategoryScreen(
             onPickIcon = { showIconPicker = true },   // ✅
             onPickColor = { showColorPicker = true }, // ✅
             onNameChange = viewModel::setDraftName,
-            onDescriptionChange = { desc ->
+            onDescriptionChange = {
                 // اگر draft.description را در VM نداری، فعلاً همینجا نگه دار یا یک setter اضافه کن
                 // پیشنهاد: viewModel.setDraftDescription(desc)
             },
@@ -506,7 +486,6 @@ fun CategoryScreen(
             }
         )
     }
-
 
     if (showAddCategory && showIconPicker) {
         ChooseIconDialog(
@@ -569,8 +548,6 @@ fun CategoryScreen(
                 viewModel.startAddTask(menuCategory.categoryId!!)
                 showTaskDialog = true
             },
-            tasksExpanded = tasksExpanded,
-            onToggleTasksExpand = { tasksExpanded = !tasksExpanded },
             onClickTask = { taskId ->
                 viewModel.startEditTask(taskId)
                 showTaskDialog = true
@@ -595,7 +572,11 @@ fun CategoryScreen(
             },
             onDragEndRestoreExpandForTask = { viewModel.onDragEndRestoreExpandForTask() },
             onDragStartMaybeCollapseForTask = { viewModel.onDragStartMaybeCollapseForTask(it) },
-            toggleExpandForTask = { viewModel.toggleExpandForTask(it) }
+            toggleExpandForTask = { viewModel.toggleExpandForTask(it) },
+            onCompleteAll = { viewModel.completeAllTasks(it) },
+            onUncompletedAll = { viewModel.uncompletedAllTasks(it) },
+            onDeleteCompleted = { viewModel.deleteCompletedTasks(it) },
+            onDeleteAll = { viewModel.deleteAllTasks(it) },
 
         )
     }
@@ -693,7 +674,7 @@ fun CategoryScreen(
 
         val selectedCategoryId = taskDraft.categoryId ?: menuCategory.categoryId
         val selectedCategory = state.categories.firstOrNull { it.categoryId == selectedCategoryId }
-            ?: menuCategory ?: return
+            ?: menuCategory
 
         val isEdit = (editingTaskId != null)
 
@@ -774,7 +755,7 @@ fun CategoryScreen(
 }
 
 @Composable
-fun AddCategoryDialog2(
+fun AddCategoryDialog(
     draft: CategoryDraft2,
     parentName: String,
     parentIconName: String,   // ✅ جدید
@@ -819,7 +800,6 @@ fun AddCategoryDialog2(
                     .fillMaxSize()
                     .padding(horizontal = 12.dp, vertical = 8.dp)
             ) {
-
                 // Name*
                 OutlinedTextField(
                     value = draft.name,
@@ -830,6 +810,7 @@ fun AddCategoryDialog2(
                 )
 
                 Spacer(Modifier.size(10.dp))
+
 
                 // Parent row (مثل عکس یک ردیف ساده)
                 Row(
@@ -853,8 +834,8 @@ fun AddCategoryDialog2(
                     }
                 }
 
-
                 HorizontalDivider()
+
 
                 // Icon row
                 Row(
@@ -875,8 +856,8 @@ fun AddCategoryDialog2(
 
                 }
 
-
                 HorizontalDivider()
+
 
                 // Color row
                 Row(
@@ -900,6 +881,7 @@ fun AddCategoryDialog2(
 
                 Spacer(Modifier.size(10.dp))
 
+
                 // Description (اختیاری)
                 OutlinedTextField(
                     value = draft.description,
@@ -910,6 +892,7 @@ fun AddCategoryDialog2(
                 )
 
                 Spacer(Modifier.weight(1f))
+
 
                 // (اختیاری) نمایش parentId برای دیباگ
                 Text(
@@ -924,7 +907,7 @@ fun AddCategoryDialog2(
 
 
 @Composable
-private fun CategoryRow2(
+private fun CategoryRow(
     item: CategoryRenderItem,
     computedLevel: Int,
     onToggleExpand: (Int) -> Unit,
@@ -961,7 +944,7 @@ private fun CategoryRow2(
                     }
                 }
 
-                IconButton(onClick = { onOpenMenu(id) }) { // ✅ مستقیم SideSheet
+                IconButton(onClick = { onOpenMenu(id) }) {
                     Icon(Icons.Filled.MoreVert, contentDescription = "menu")
                 }
             }
@@ -998,6 +981,7 @@ private fun TaskRow(
 
         Spacer(Modifier.width(6.dp))
 
+
         // ✅ دایره done
         Box(
             modifier = Modifier
@@ -1020,6 +1004,7 @@ private fun TaskRow(
                 ) { onToggleDone(id) }
         )
 
+
         // ✅ Priority marker
         val (pText, pColor) = when (item.task.priority) {
             1 -> "*"  to Color(0xFF2E7D32) // سبز
@@ -1027,7 +1012,6 @@ private fun TaskRow(
             3 -> "!!" to Color(0xFFC62828) // قرمز
             else -> "" to Color.Unspecified
         }
-
         if (pText.isNotBlank()) {
             Spacer(Modifier.width(8.dp))
             Text(
@@ -1040,8 +1024,8 @@ private fun TaskRow(
             Spacer(Modifier.width(12.dp))
         }
 
-
         Spacer(Modifier.width(12.dp))
+
 
         // ✅ عنوان (یک خط، ellipsis)
         Text(
@@ -1050,6 +1034,7 @@ private fun TaskRow(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
+
 
         // ✅ schedule icon (اگر نبود، فضا نمی‌گیرد)
         if (item.task.hasSchedule) {
@@ -1062,6 +1047,7 @@ private fun TaskRow(
         }
 
         Spacer(Modifier.width(8.dp))
+
 
         // ✅ جایگاه expand همیشه رزرو می‌شود تا چیدمان ثابت بماند
         // اندازه‌ی IconButton معمولاً 48.dp است، پس اینجا دقیقاً همان را رزرو می‌کنیم.
@@ -1098,9 +1084,9 @@ fun PickParentDialogSmall(
         onDismiss = onDismiss,
         modifier = Modifier
             .fillMaxWidth(0.86f)
-            .fillMaxHeight(0.65f) // کوچکتر از قبلی
+            .fillMaxHeight(0.65f)
             .background(MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.extraLarge),
-        dimAlpha = 0.4f, // کمی کمتر چون روی دیالوگ دیگر میاد
+        dimAlpha = 0.4f,
         dismissOnBackdropClick = true
     ) {
         Column(
@@ -1155,7 +1141,7 @@ fun ChooseIconDialog(
     val sections = remember { buildIconSections() }
     val expanded = remember {
         mutableStateMapOf<String, Boolean>().apply {
-            sections.forEach { put(it.title, true) } // همه باز باشند مثل عکس
+            sections.forEach { put(it.title, true) }
         }
     }
 
@@ -1187,7 +1173,7 @@ fun ChooseIconDialog(
                     SectionHeaderRow(
                         title = section.title,
                         isExpanded = expanded[section.title] == true,
-                        onToggle = { expanded[section.title] = !(expanded[section.title] == true) }
+                        onToggle = { expanded[section.title] = expanded[section.title] != true }
                     )
 
                     if (expanded[section.title] == true) {
@@ -1464,8 +1450,6 @@ private fun CategoryOptionsSideSheet(
     onClickEditDescription: () -> Unit,
     onClickDelete: () -> Unit,
     onAddTask: () -> Unit,
-    tasksExpanded: Boolean,
-    onToggleTasksExpand: () -> Unit,
     onClickTask: (Int) -> Unit,
     scheduledCount: Int,
     sheetMode: CategorySheetMode,
@@ -1482,6 +1466,10 @@ private fun CategoryOptionsSideSheet(
     onDragEndRestoreExpandForTask: () -> Unit,
     onDragStartMaybeCollapseForTask: (taskId: Int) -> Unit,
     toggleExpandForTask: (taskId: Int) -> Unit,
+    onCompleteAll: (Int) -> Unit,
+    onUncompletedAll: (Int) -> Unit,
+    onDeleteCompleted: (Int) -> Unit,
+    onDeleteAll: (Int) -> Unit,
 ) {
 
 
@@ -1550,7 +1538,7 @@ private fun CategoryOptionsSideSheet(
                             // آمارها مثل قبل (اگر می‌خوای نگه داریم)
                             SheetStatRow(
                                 icon = Icons.Filled.Event,
-                                text = "${scheduledCount} scheduled activities"
+                                text = "$scheduledCount scheduled activities"
                             )
                             SheetStatRow(icon = Icons.Filled.History, text = "0 logged activities")
                             SheetStatRow(icon = Icons.Filled.Description, text = "0 notes")
@@ -1697,7 +1685,11 @@ private fun CategoryOptionsSideSheet(
                         },
                         onDragEndRestoreExpandForTask = { onDragEndRestoreExpandForTask() },
                         onDragStartMaybeCollapseForTask = { onDragStartMaybeCollapseForTask(it) },
-                        toggleExpandForTask = { toggleExpandForTask(it) }
+                        toggleExpandForTask = { toggleExpandForTask(it) },
+                        onCompleteAll = { onCompleteAll(category.categoryId!!) },
+                        onUncompleteAll = { onUncompletedAll(category.categoryId!!) },
+                        onDeleteCompleted = { onDeleteCompleted(category.categoryId!!) },
+                        onDeleteAll = { onDeleteAll(category.categoryId!!) },
                     )
                 }
             }
@@ -1754,15 +1746,12 @@ private fun TasksModeContent(
     onDragEndRestoreExpandForTask: () -> Unit,
     onDragStartMaybeCollapseForTask: (taskId: Int) -> Unit,
     toggleExpandForTask: (taskId: Int) -> Unit,
+    onCompleteAll: () -> Unit,
+    onUncompleteAll: () -> Unit,
+    onDeleteCompleted: () -> Unit,
+    onDeleteAll: () -> Unit,
 ) {
 
-    var sortMode by rememberSaveable { mutableStateOf(TaskSortMode.NONE) }
-
-// ✅ وقتی کاربر در حالت sort درگ می‌کند، تا زمان drop اجازه‌ی sync/auto-sort نداریم
-    var freezeListDuringSortedDrag by rememberSaveable { mutableStateOf(false) }
-
-// ✅ فقط یکبار در هر drag فعال شود
-    var sortWasActiveThisDrag by rememberSaveable { mutableStateOf(false) }
 
 
     var dragging by remember { mutableStateOf(false) }
@@ -1815,12 +1804,10 @@ private fun TasksModeContent(
 
 
 
+    // وقتی درگ نداریم، با state.sync شو
     LaunchedEffect(tasksRenderList) {
-        if (!dragging && !freezeListDuringSortedDrag) {
-            listState.value = tasksRenderList
-        }
+        if (!dragging) listState.value = tasksRenderList
     }
-
 
     val draggingKey = remember { mutableStateOf<Int?>(null) }
 
@@ -1832,12 +1819,6 @@ private fun TasksModeContent(
     val reorderState = rememberReorderableLazyListState(
         onMove = { from, to ->
             dragging = true
-
-            // ✅ اولین حرکت در حالی که sort فعاله => sort خاموش + لیست freeze
-            if (sortMode != TaskSortMode.NONE && !freezeListDuringSortedDrag) {
-                freezeListDuringSortedDrag = true
-                sortMode = TaskSortMode.NONE
-            }
 
             val draggedId = from.key as? Int ?: return@rememberReorderableLazyListState
 
@@ -1875,16 +1856,6 @@ private fun TasksModeContent(
 
             onDragEndRestoreExpandForTask()
 
-            // ✅ اگر این drag از حالت sort شروع شده بود، الان دیگه sort نداریم
-            // (sortMode قبلاً NONE شده؛ اینجا فقط برای اطمینان)
-            if (sortWasActiveThisDrag) {
-                sortMode = TaskSortMode.NONE
-            }
-
-            // ✅ حالا اجازه بده sync از DB انجام بشه (بعد از اینکه siblingIndex ها ذخیره شد)
-            freezeListDuringSortedDrag = false
-            sortWasActiveThisDrag = false
-
             draggingKey.value = null
             fromParentId.value = null
 
@@ -1899,7 +1870,6 @@ private fun TasksModeContent(
     LaunchedEffect(reorderState.draggingItemKey) {
         val key = reorderState.draggingItemKey as? Int
         if (key != null) {
-            sortWasActiveThisDrag = (sortMode != TaskSortMode.NONE)
             draggingKey.value = key
             fromParentId.value =
                 listState.value.firstOrNull { it.task.id == key }?.task?.parentTaskId
@@ -1989,19 +1959,18 @@ private fun TasksModeContent(
         }
     }
 
-    val currentDraggingId = reorderState.draggingItemKey as? Int
-    val isDragActive = currentDraggingId != null
     var expandedForAll by rememberSaveable { mutableStateOf(true) }
 
+    var sortMode by rememberSaveable { mutableStateOf(TaskSortMode.NONE) }
 
     LaunchedEffect(sortMode, tasksRenderList) {
-        if (dragging || freezeListDuringSortedDrag) return@LaunchedEffect
-
-        listState.value = when (sortMode) {
-            TaskSortMode.NONE -> tasksRenderList // ✅ فقط DB order، بدون دستکاری
-            TaskSortMode.BY_NAME -> tasksRenderList.sortedBy { it.task.title.lowercase() }
-            TaskSortMode.BY_PRIORITY -> tasksRenderList.sortedByDescending { it.task.priority }
-            TaskSortMode.BY_COMPLETED -> tasksRenderList.sortedBy { it.task.isDone }
+        if (!dragging) {
+            listState.value = when (sortMode) {
+                TaskSortMode.NONE -> tasksRenderList
+                TaskSortMode.BY_NAME -> tasksRenderList.sortedBy { it.task.title.lowercase() }
+                TaskSortMode.BY_PRIORITY -> tasksRenderList.sortedByDescending { it.task.priority }
+                TaskSortMode.BY_COMPLETED -> tasksRenderList.sortedBy { it.task.isDone } // انجام نشده‌ها بالا
+            }
         }
     }
 
@@ -2018,6 +1987,7 @@ private fun TasksModeContent(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
                 .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -2041,9 +2011,6 @@ private fun TasksModeContent(
                     .clickable { onAddTask() }
             )
 
-            IconButton(onClick = { /* بعداً سرچ */ }) {
-                Icon(Icons.Filled.Search, contentDescription = "search")
-            }
         }
 
         HorizontalDivider()
@@ -2052,6 +2019,7 @@ private fun TasksModeContent(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
                 .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -2075,13 +2043,12 @@ private fun TasksModeContent(
             }
 
             TasksOptionsMenu(
-                categoryId = category.categoryId ?: 0,
                 sortMode = sortMode,
                 onChangeSort = { sortMode = it },
-                onCompleteAll = { /* VM call */ },
-                onUncompleteAll = { /* VM call */ },
-                onDeleteCompleted = { /* VM call */ },
-                onDeleteAll = { /* VM call */ }
+                onCompleteAll = onCompleteAll,
+                onUncompletedAll = onUncompleteAll,
+                onDeleteCompleted = onDeleteCompleted,
+                onDeleteAll = onDeleteAll
             )
 
 
@@ -2217,11 +2184,10 @@ private fun TasksModeContent(
 
 @Composable
 fun TasksOptionsMenu(
-    categoryId: Int,
     sortMode: TaskSortMode,
     onChangeSort: (TaskSortMode) -> Unit,
     onCompleteAll: () -> Unit,
-    onUncompleteAll: () -> Unit,
+    onUncompletedAll: () -> Unit,
     onDeleteCompleted: () -> Unit,
     onDeleteAll: () -> Unit
 ) {
@@ -2248,13 +2214,13 @@ fun TasksOptionsMenu(
             DropdownMenuItem(
                 text = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.Sort, contentDescription = null)
+                        Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = null)
                         Spacer(Modifier.width(10.dp))
                         Text("Sort")
                     }
                 },
                 trailingIcon = {
-                    Icon(Icons.Filled.ArrowRight, contentDescription = null)
+                    Icon(Icons.AutoMirrored.Filled.ArrowRight, contentDescription = null)
                 },
                 onClick = { sortSubOpen = true }
             )
@@ -2285,7 +2251,7 @@ fun TasksOptionsMenu(
                 },
                 onClick = {
                     menuOpen = false
-                    onUncompleteAll()
+                    onUncompletedAll()
                 }
             )
 
@@ -2392,7 +2358,7 @@ private fun SortMenuItem(
 
 
 @Composable
-private fun SheetStatRow(icon: androidx.compose.ui.graphics.vector.ImageVector, text: String) {
+private fun SheetStatRow(icon: ImageVector, text: String) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -2892,11 +2858,11 @@ private fun TimeRangeRow(
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text("${start}", style = MaterialTheme.typography.titleLarge)
+        Text("$start", style = MaterialTheme.typography.titleLarge)
         Spacer(Modifier.width(18.dp))
         Text("-", style = MaterialTheme.typography.titleLarge)
         Spacer(Modifier.width(18.dp))
-        Text("${end}", style = MaterialTheme.typography.titleLarge)
+        Text("$end", style = MaterialTheme.typography.titleLarge)
     }
 }
 
@@ -2923,9 +2889,6 @@ private enum class CategorySheetMode { OVERVIEW, TASKS }
 enum class ConfirmAction { SAVE_AND_CLOSE, SAVE_AND_CONTINUE }
 enum class TaskSortMode { NONE, BY_NAME, BY_PRIORITY, BY_COMPLETED }
 
-
-const val TASK_MAX_INDENT = 3
 const val ROOT = -1
 
-private fun uiParentToDb(p: Int?): Int? = if (p == null || p == ROOT) null else p
-private fun dbParentToUi(p: Int?): Int = p ?: ROOT
+

@@ -26,7 +26,6 @@ fun AppNavGraph(
     ) {
         composable(AppRoutes.Category2) {
             CategoryScreen(
-                onNavigateToSchedule = {} // فعلاً اگر جایی استفاده می‌کنی، خالی
             )
         }
         composable(AppRoutes.Schedule2) {

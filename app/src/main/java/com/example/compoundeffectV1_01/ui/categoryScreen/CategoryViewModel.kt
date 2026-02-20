@@ -404,20 +404,6 @@ class CategoryViewModel @Inject constructor(
     fun setTaskCategoryId(categoryId: Int) {
         _taskDraft.update { it.copy(categoryId = categoryId) }
     }
-    private fun wouldCreateCycle(
-        draggedId: Int,
-        newParentId: Int?,
-        parentById: Map<Int, Int>, // id -> parentId
-    ): Boolean {
-        var cur = newParentId
-        var guard = 0
-        while (cur != null && cur != -1 && guard < 100) {
-            if (cur == draggedId) return true
-            cur = parentById[cur]
-            guard++
-        }
-        return false
-    }
     private fun wouldCreateCycleCategory(
         draggedId: Int,
         newParentId: Int,
@@ -671,7 +657,7 @@ class CategoryViewModel @Inject constructor(
             finishEditTask()
         }
     }
-    fun flattenTaskTreeWithLevelsAndVisibility(
+    private fun flattenTaskTreeWithLevelsAndVisibility(
         all: List<TaskMiniUi>,
         collapsedIds: Set<Int>,
         rootParentId: Int = ROOT,
@@ -710,36 +696,6 @@ class CategoryViewModel @Inject constructor(
 
         dfs(rootParentId, realDepth = 1, ancestorCollapsed = false)
         return items
-    }
-
-    fun findBlockRange(list: List<TaskMiniUi>, startIndex: Int): IntRange {
-        val base = list.getOrNull(startIndex) ?: return startIndex..startIndex
-
-        // parent map از همین لیست (کافیه)
-        val parentById: Map<Int, Int> = list.associate { it.id to (it.parentTaskId ?: ROOT) }
-
-        fun depthOf(id: Int): Int {
-            var depth = 0
-            var cur = parentById[id] ?: ROOT
-            var guard = 0
-            while (cur != ROOT && guard < 200) {
-                depth++
-                cur = parentById[cur] ?: ROOT
-                guard++
-            }
-            return depth
-        }
-
-        val baseDepth = depthOf(base.id)
-
-        var end = startIndex
-        for (i in (startIndex + 1)..list.lastIndex) {
-            val curDepth = depthOf(list[i].id)
-            // ✅ وقتی به هم‌سطح یا بالاتر رسیدیم، بلوک تمام شده
-            if (curDepth <= baseDepth) break
-            end = i
-        }
-        return startIndex..end
     }
     fun applyTaskDragResult(
         draggedId: Int,
@@ -865,6 +821,26 @@ class CategoryViewModel @Inject constructor(
             guard++
         }
         return false
+    }
+    fun completeAllTasks(categoryId: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            taskRepo.completeAllInCategory(categoryId)
+        }
+    }
+    fun uncompletedAllTasks(categoryId: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            taskRepo.uncompleteAllInCategory(categoryId)
+        }
+    }
+    fun deleteCompletedTasks(categoryId: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            taskRepo.deleteCompletedInCategory(categoryId)
+        }
+    }
+    fun deleteAllTasks(categoryId: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            taskRepo.deleteAllInCategory(categoryId)
+        }
     }
 
 
@@ -1215,10 +1191,6 @@ class CategoryViewModel @Inject constructor(
         data object Success : CreateResult()
         data class Error(val message: String) : CreateResult()
     }
-
-
-
-
 }
 
 
@@ -1273,8 +1245,6 @@ data class TaskMiniUi(
     val priority: Int = 0
 )
 
-
-
 data class TaskDraft(
     val name: String = "",
     val categoryId: Int? = null,
@@ -1286,7 +1256,6 @@ data class TaskDraft(
     val insertAtTop: Boolean = false, // false=آخر لیست، true=اول لیست
     val childLevel: Int = 0           // 0..3 (0 یعنی هیچ)
 )
-
 
 data class ScheduleDraft(
     val title: String = "",
@@ -1307,7 +1276,6 @@ data class TaskRenderItem(
     val isExpanded: Boolean,
     val isVisible: Boolean
 )
-
 
 data class ChildLevelUi(
     val allowed: Set<Int> = setOf(0),

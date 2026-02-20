@@ -16,10 +16,10 @@ class TaskRepositoryImpl @Inject constructor(
         taskDao.insertTaskAndReturnId(task).toInt()
 
     override suspend fun updateTask(task: Task) =
-            taskDao.updateTask(task)
+        taskDao.updateTask(task)
 
     override suspend fun deleteTask(task: Task) =
-                taskDao.deleteTask(task)
+        taskDao.deleteTask(task)
 
     override fun observeTasksByCategory(categoryId: Int): Flow<List<Task>> =
         taskDao.observeTasksByCategory(categoryId)
@@ -28,10 +28,10 @@ class TaskRepositoryImpl @Inject constructor(
         taskDao.getTasksByCategory(categoryId)
 
     override suspend fun updateSiblingIndex(id: Int, siblingIndex: Int) =
-        taskDao.updateSiblingIndex(id,siblingIndex)
+        taskDao.updateSiblingIndex(id, siblingIndex)
 
     override suspend fun updateTaskParent(id: Int, parentTaskId: Int?) =
-        taskDao.updateTaskParent(id , parentTaskId)
+        taskDao.updateTaskParent(id, parentTaskId)
 
     override suspend fun getTaskById(id: Int): Task? =
         taskDao.getTaskById(id)
@@ -59,13 +59,25 @@ class TaskRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getSiblings(categoryId: Int, parentId: Int): List<Task> =
-        taskDao.getSiblings(categoryId,parentId)
+        taskDao.getSiblings(categoryId, parentId)
 
     override suspend fun shiftSiblingsDown(categoryId: Int, parentId: Int) =
-        taskDao.shiftSiblingsDown(categoryId,parentId)
+        taskDao.shiftSiblingsDown(categoryId, parentId)
 
     override suspend fun normalizeNullParentsToRoot() =
         taskDao.normalizeNullParentsToRoot()
+
+    override suspend fun completeAllInCategory(categoryId: Int) =
+        taskDao.completeAllInCategory(categoryId)
+
+    override suspend fun uncompleteAllInCategory(categoryId: Int) =
+        taskDao.uncompleteAllInCategory(categoryId)
+
+    override suspend fun deleteCompletedInCategory(categoryId: Int) =
+        taskDao.deleteCompletedInCategory(categoryId)
+
+    override suspend fun deleteAllInCategory(categoryId: Int) =
+        taskDao.deleteAllInCategory(categoryId)
 
 
 }
