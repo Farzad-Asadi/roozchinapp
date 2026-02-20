@@ -1,8 +1,6 @@
 package com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task
 
 
-import androidx.room.Transaction
-import com.example.compoundeffectV1_01.ui.categoryScreen.TaskReorderUpdate
 import kotlinx.coroutines.flow.Flow
 import java.time.LocalDateTime
 import javax.inject.Inject
@@ -26,6 +24,15 @@ class TaskRepositoryImpl @Inject constructor(
     override fun observeTasksByCategory(categoryId: Int): Flow<List<Task>> =
         taskDao.observeTasksByCategory(categoryId)
 
+    override suspend fun getTasksByCategory(categoryId: Int): List<Task> =
+        taskDao.getTasksByCategory(categoryId)
+
+    override suspend fun updateSiblingIndex(id: Int, siblingIndex: Int) =
+        taskDao.updateSiblingIndex(id,siblingIndex)
+
+    override suspend fun updateTaskParent(id: Int, parentTaskId: Int?) =
+        taskDao.updateTaskParent(id , parentTaskId)
+
     override suspend fun getTaskById(id: Int): Task? =
         taskDao.getTaskById(id)
 
@@ -41,31 +48,24 @@ class TaskRepositoryImpl @Inject constructor(
     override suspend fun getTasksByCategoryOrdered(categoryId: Int): List<Task> =
         taskDao.getTasksByCategoryOrdered(categoryId)
 
-    override suspend fun getMinOrderIndex(categoryId: Int): Int? =
-            taskDao.getMinOrderIndex(categoryId)
-
-    override suspend fun getMaxOrderIndex(categoryId: Int): Int? =
-                taskDao.getMaxOrderIndex(categoryId)
 
     override suspend fun countChildren(taskId: Int): Int =
         taskDao.countChildren(taskId)
 
-    override suspend fun updateTaskOrder(id: Int, orderIndex: Int) =
-        taskDao.updateTaskOrder(id,orderIndex)
-
-    override suspend fun updateTaskHierarchy(id: Int, indentLevel: Int, parentTaskId: Int?) =
-        taskDao.updateTaskHierarchy(id,indentLevel,parentTaskId)
-
-    @Transaction
-    override suspend fun applyTaskReorderAndHierarchy(updates: List<TaskReorderUpdate>) {
-        for (u in updates) {
-            updateTaskOrder(u.id, u.orderIndex)
-            updateTaskHierarchy(u.id, u.indentLevel, u.parentTaskId)
-        }
-    }
 
     override suspend fun setCompletedForIds(ids: List<Int>, done: Boolean) {
         if (ids.isEmpty()) return
         taskDao.setCompletedForIds(ids, done)
     }
+
+    override suspend fun getSiblings(categoryId: Int, parentId: Int): List<Task> =
+        taskDao.getSiblings(categoryId,parentId)
+
+    override suspend fun shiftSiblingsDown(categoryId: Int, parentId: Int) =
+        taskDao.shiftSiblingsDown(categoryId,parentId)
+
+    override suspend fun normalizeNullParentsToRoot() =
+        taskDao.normalizeNullParentsToRoot()
+
+
 }

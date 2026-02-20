@@ -541,8 +541,10 @@ fun CategoryScreen(
                     title = tws.task.name,
                     isDone = tws.task.isCompleted,
                     hasSchedule = (tws.schedule != null),
-                    indentLevel = tws.task.indentLevel,
-                    parentTaskId = tws.task.parentTaskId
+                    parentTaskId = tws.task.parentTaskId,
+                    siblingIndex = tws.task.siblingIndex,
+                    priority = tws.task.priority,
+
                 )
             },
             onDismiss = {
@@ -564,8 +566,7 @@ fun CategoryScreen(
             },
             tasksRenderList = state.taskRenderItems,
             onAddTask = {
-                val cat = menuCategory ?: return@CategoryOptionsSideSheet
-                viewModel.startAddTask(cat.categoryId!!, cat.color)
+                viewModel.startAddTask(menuCategory.categoryId!!)
                 showTaskDialog = true
             },
             tasksExpanded = tasksExpanded,
@@ -582,17 +583,6 @@ fun CategoryScreen(
             },
             deleteTask = { taskId: Int ->
                 viewModel.deleteTask(taskId)
-            },
-            flattenTaskTreeWithLevelsAndVisibility = { all, collapsedIds, rootParentId, maxDepth ->
-                viewModel.flattenTaskTreeWithLevelsAndVisibility(
-                    all,
-                    collapsedIds,
-                    rootParentId,
-                    maxDepth
-                )
-            },
-            findBlockRange = { list, startIndex ->
-                viewModel.findBlockRange(list, startIndex)
             },
             applyTaskDragResult = { draggedId, oldParentId, newParentId, categoryId, currentList ->
                 viewModel.applyTaskDragResult(
@@ -1482,13 +1472,6 @@ private fun CategoryOptionsSideSheet(
     onChangeMode: (CategorySheetMode) -> Unit,
     toggleTaskCompleted: (taskId: Int, done: Boolean) -> Unit,
     deleteTask: (taskId: Int) -> Unit,
-    flattenTaskTreeWithLevelsAndVisibility: (
-        all: List<TaskMiniUi>,
-        collapsedIds: Set<Int>,
-        rootParentId: Int?,
-        maxDepth: Int
-    ) -> List<TaskRenderItem>,
-    findBlockRange: (list: List<TaskMiniUi>, startIndex: Int) -> IntRange,
     applyTaskDragResult: (
         draggedId: Int,
         oldParentId: Int?,
@@ -1772,6 +1755,16 @@ private fun TasksModeContent(
     onDragStartMaybeCollapseForTask: (taskId: Int) -> Unit,
     toggleExpandForTask: (taskId: Int) -> Unit,
 ) {
+
+    var sortMode by rememberSaveable { mutableStateOf(TaskSortMode.NONE) }
+
+// ✅ وقتی کاربر در حالت sort درگ می‌کند، تا زمان drop اجازه‌ی sync/auto-sort نداریم
+    var freezeListDuringSortedDrag by rememberSaveable { mutableStateOf(false) }
+
+// ✅ فقط یکبار در هر drag فعال شود
+    var sortWasActiveThisDrag by rememberSaveable { mutableStateOf(false) }
+
+
     var dragging by remember { mutableStateOf(false) }
     val listState = remember { mutableStateOf(tasksRenderList) }
     Log.i("TEST", "listState=$listState")
@@ -1795,7 +1788,8 @@ private fun TasksModeContent(
             .groupBy { it.parentTaskId }
             .mapValues { entry -> entry.value.map { it.id } }
     }
-    Log.i("TEST", "childrenByParent=$childrenByParent")
+
+    fun normalizeParent(p: Int?): Int? = if (p == ROOT) null else p
 
     fun isDescendantOfDragged(candidateParentId: Int, draggedId: Int): Boolean {
         // آیا candidateParentId داخل زیر درخت draggedId است؟
@@ -1816,17 +1810,34 @@ private fun TasksModeContent(
         return pendingParentById[id] ?: item.task.parentTaskId
     }
 
-    // وقتی درگ نداریم، با state.sync شو
+
+
+
+
+
     LaunchedEffect(tasksRenderList) {
-        if (!dragging) listState.value = tasksRenderList
+        if (!dragging && !freezeListDuringSortedDrag) {
+            listState.value = tasksRenderList
+        }
     }
+
 
     val draggingKey = remember { mutableStateOf<Int?>(null) }
 
+// کمک: دسترسی سریع به آیتم‌ها با id (از لیست واقعی uiState)
+    val entityById = remember(tasks) {
+        tasks.associateBy { it.id }
+    }
 
     val reorderState = rememberReorderableLazyListState(
         onMove = { from, to ->
             dragging = true
+
+            // ✅ اولین حرکت در حالی که sort فعاله => sort خاموش + لیست freeze
+            if (sortMode != TaskSortMode.NONE && !freezeListDuringSortedDrag) {
+                freezeListDuringSortedDrag = true
+                sortMode = TaskSortMode.NONE
+            }
 
             val draggedId = from.key as? Int ?: return@rememberReorderableLazyListState
 
@@ -1846,6 +1857,7 @@ private fun TasksModeContent(
             list.add(toIndex, moved)
             listState.value = list
 
+
             // ✅ parent موقت = parentِ مقصد (عمودی)
             val targetParent = effectiveParentId(toItem) // همون fun(item)
             pendingParentById[draggedId] = targetParent
@@ -1863,6 +1875,16 @@ private fun TasksModeContent(
 
             onDragEndRestoreExpandForTask()
 
+            // ✅ اگر این drag از حالت sort شروع شده بود، الان دیگه sort نداریم
+            // (sortMode قبلاً NONE شده؛ اینجا فقط برای اطمینان)
+            if (sortWasActiveThisDrag) {
+                sortMode = TaskSortMode.NONE
+            }
+
+            // ✅ حالا اجازه بده sync از DB انجام بشه (بعد از اینکه siblingIndex ها ذخیره شد)
+            freezeListDuringSortedDrag = false
+            sortWasActiveThisDrag = false
+
             draggingKey.value = null
             fromParentId.value = null
 
@@ -1877,6 +1899,7 @@ private fun TasksModeContent(
     LaunchedEffect(reorderState.draggingItemKey) {
         val key = reorderState.draggingItemKey as? Int
         if (key != null) {
+            sortWasActiveThisDrag = (sortMode != TaskSortMode.NONE)
             draggingKey.value = key
             fromParentId.value =
                 listState.value.firstOrNull { it.task.id == key }?.task?.parentTaskId
@@ -1889,14 +1912,12 @@ private fun TasksModeContent(
         tasksRenderList.associateBy { it.task.id }
     }
 
-    // کمک: دسترسی سریع به آیتم‌ها با id (از لیست واقعی uiState)
-    val entityById = remember(tasks) {
-        tasks.associateBy { it.id }
-    }
+
 
     // parent موثر: اگر pending داریم از آن استفاده کن
     fun effectiveParentId(id: Int): Int? {
-        return pendingParentById[id] ?: entityById[id]?.parentTaskId
+        val p = pendingParentById[id] ?: entityById[id]?.parentTaskId
+        return normalizeParent(p)
     }
 
     // محاسبه level بر اساس parent موثر (حداکثر 4)
@@ -1904,12 +1925,12 @@ private fun TasksModeContent(
         var level = 1
         var curParent = effectiveParentId(id)
         var guard = 0
-        while (curParent != null && curParent != -1 && guard < 10) {
+        while (curParent != null && guard < 10) {
             level++
-            val next = effectiveParentId(curParent)
-            curParent = next
+            curParent = effectiveParentId(curParent)
             guard++
         }
+
         return level.coerceAtMost(4)
     }
 
@@ -1938,13 +1959,13 @@ private fun TasksModeContent(
 
         val currentParent = pendingParentById[id] ?: current.task.parentTaskId
         // اگر همین الان ریشه است، دیگه چیزی برای outdent نداریم
-        if (currentParent == null || currentParent == -1) return
+        if (currentParent == null) return
 
         val parentItem = allById[currentParent] ?: return
         val newParent = parentItem.task.parentTaskId
 
         // ✅ ریشه را با -1 نگه دار (نه null)
-        pendingParentById[id] = newParent ?: -1
+        pendingParentById[id] = newParent
     }
 
 
@@ -1972,18 +1993,19 @@ private fun TasksModeContent(
     val isDragActive = currentDraggingId != null
     var expandedForAll by rememberSaveable { mutableStateOf(true) }
 
-    var sortMode by rememberSaveable { mutableStateOf(TaskSortMode.NONE) }
 
     LaunchedEffect(sortMode, tasksRenderList) {
-        if (!dragging) {
-            listState.value = when (sortMode) {
-                TaskSortMode.NONE -> tasksRenderList
-                TaskSortMode.BY_NAME -> tasksRenderList.sortedBy { it.task.title.lowercase() }
-                TaskSortMode.BY_PRIORITY -> tasksRenderList.sortedByDescending { it.task.priority }
-                TaskSortMode.BY_COMPLETED -> tasksRenderList.sortedBy { it.task.isDone } // انجام نشده‌ها بالا
-            }
+        if (dragging || freezeListDuringSortedDrag) return@LaunchedEffect
+
+        listState.value = when (sortMode) {
+            TaskSortMode.NONE -> tasksRenderList // ✅ فقط DB order، بدون دستکاری
+            TaskSortMode.BY_NAME -> tasksRenderList.sortedBy { it.task.title.lowercase() }
+            TaskSortMode.BY_PRIORITY -> tasksRenderList.sortedByDescending { it.task.priority }
+            TaskSortMode.BY_COMPLETED -> tasksRenderList.sortedBy { it.task.isDone }
         }
     }
+
+
 
 
 
@@ -2903,4 +2925,7 @@ enum class TaskSortMode { NONE, BY_NAME, BY_PRIORITY, BY_COMPLETED }
 
 
 const val TASK_MAX_INDENT = 3
+const val ROOT = -1
 
+private fun uiParentToDb(p: Int?): Int? = if (p == null || p == ROOT) null else p
+private fun dbParentToUi(p: Int?): Int = p ?: ROOT

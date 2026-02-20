@@ -7,7 +7,6 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
-import com.example.compoundeffectV1_01.ui.categoryScreen.TaskReorderUpdate
 import kotlinx.coroutines.flow.Flow
 import java.time.LocalDateTime
 
@@ -49,55 +48,81 @@ interface TaskDao {
     fun observeAllScheduledTasksWithSchedule(): Flow<List<TaskWithSchedule>>
 
     @Query("""
-    SELECT * FROM task 
+    SELECT * FROM task
     WHERE categoryId = :categoryId
-    ORDER BY orderIndex ASC, id ASC
-""")
+    """)
     fun observeTasksByCategory(categoryId: Int): Flow<List<Task>>
+
+
+    @Query("""
+    SELECT * FROM task
+    WHERE categoryId = :categoryId
+""")
+    suspend fun getTasksByCategory(categoryId: Int): List<Task>
+
+
+    @Query("UPDATE task SET siblingIndex = :siblingIndex WHERE id = :id")
+    suspend fun updateSiblingIndex(id: Int, siblingIndex: Int)
+
+    @Query("UPDATE task SET parentTaskId = :parentTaskId WHERE id = :id")
+    suspend fun updateTaskParent(id: Int, parentTaskId: Int?)
+
+
+
+
+
+
+
+
 
     @Transaction
     @Query("""
     SELECT * FROM task
     WHERE categoryId = :categoryId
-    ORDER BY orderIndex ASC, id ASC
-""")
+    """)
     fun observeTasksWithScheduleByCategory(categoryId: Int): Flow<List<TaskWithSchedule>>
 
 
     @Query("""
     SELECT * FROM task
     WHERE categoryId = :categoryId
-    ORDER BY orderIndex ASC, id ASC
-""")
+    """)
     suspend fun getTasksByCategoryOrdered(categoryId: Int): List<Task>
 
-    @Query("SELECT MIN(orderIndex) FROM task WHERE categoryId = :categoryId")
-    suspend fun getMinOrderIndex(categoryId: Int): Int?
-
-    @Query("SELECT MAX(orderIndex) FROM task WHERE categoryId = :categoryId")
-    suspend fun getMaxOrderIndex(categoryId: Int): Int?
 
     @Query("SELECT COUNT(*) FROM task WHERE parentTaskId = :taskId")
     suspend fun countChildren(taskId: Int): Int
 
 
-    @Query("UPDATE task SET orderIndex = :orderIndex WHERE id = :id")
-    suspend fun updateTaskOrder(id: Int, orderIndex: Int)
-
-    @Query("UPDATE task SET indentLevel = :indentLevel, parentTaskId = :parentTaskId WHERE id = :id")
-    suspend fun updateTaskHierarchy(id: Int, indentLevel: Int, parentTaskId: Int?)
-
-
-    @Transaction
-    suspend fun applyTaskReorderAndHierarchy(updates: List<TaskReorderUpdate>) {
-        for (u in updates) {
-            updateTaskOrder(u.id, u.orderIndex)
-            updateTaskHierarchy(u.id, u.indentLevel, u.parentTaskId)
-        }
-    }
 
     @Query("UPDATE Task SET isCompleted = :done WHERE id IN (:ids)")
     suspend fun setCompletedForIds(ids: List<Int>, done: Boolean)
+
+    @Query("""
+    SELECT * FROM task
+    WHERE categoryId = :categoryId 
+      AND parentTaskId = :parentId
+    ORDER BY siblingIndex ASC, id ASC
+    """)
+    suspend fun getSiblings(categoryId: Int, parentId: Int): List<Task>
+
+
+    @Query("""
+    UPDATE task
+    SET siblingIndex = siblingIndex + 1
+    WHERE categoryId = :categoryId
+      AND parentTaskId = :parentId
+    """)
+    suspend fun shiftSiblingsDown(categoryId: Int, parentId: Int)
+
+
+
+
+
+
+    @Query("UPDATE task SET parentTaskId = -1 WHERE parentTaskId IS NULL")
+    suspend fun normalizeNullParentsToRoot()
+
 
 
 }

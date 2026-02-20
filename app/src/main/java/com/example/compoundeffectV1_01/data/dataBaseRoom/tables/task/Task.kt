@@ -39,10 +39,8 @@ data class Task(
     val priority: Int = 0,
     val isExtended: Boolean = true,
 
-    // ✅ جدیدها
-    val orderIndex: Int = 0,        // ترتیب داخل category
-    val indentLevel: Int = 0,       // 0..3 (برای > >> >>>)
-    val parentTaskId: Int? = null   // برای ارتباط والد/فرزند
+    val parentTaskId: Int? = null,
+    val siblingIndex: Int = 0
 )
 
 

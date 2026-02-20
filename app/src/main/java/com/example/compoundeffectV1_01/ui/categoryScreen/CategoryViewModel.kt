@@ -70,10 +70,11 @@ class CategoryViewModel @Inject constructor(
                         title = t.name,
                         isDone = t.isCompleted,
                         hasSchedule = (tws.schedule != null),
-                        indentLevel = t.indentLevel,
                         parentTaskId = t.parentTaskId,
+                        siblingIndex = t.siblingIndex,
                         priority = t.priority
                     )
+
                 }
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -106,9 +107,10 @@ class CategoryViewModel @Inject constructor(
             val taskRender = flattenTaskTreeWithLevelsAndVisibility(
                 all = tasksMini,
                 collapsedIds = taskCollapsed,
-                rootParentId = null,
+                rootParentId = ROOT,
                 maxDepth = 4
             )
+
 
             CategoryUiState2(
                 isLoading = false,
@@ -181,33 +183,41 @@ class CategoryViewModel @Inject constructor(
 
     val childLevelUi: StateFlow<ChildLevelUi> =
         combine(
-            tasksForMenuCategory,   // لیست Task های کتگوری فعلی شیت
+            tasksForMenuCategory,
             _taskDraft,
             _editingTaskId
         ) { tasks, draft, editingId ->
 
             val selectedCatId = draft.categoryId
-            // tasksForMenuCategory مربوط به menuCategoryId است؛
-            // فعلاً ساده: اگر draft.categoryId با menuCategoryId یکی نبود،
-            // اجازه‌ها را محافظه‌کارانه فقط 0 بده (یا بعداً observe بر اساس categoryId بسازیم)
             val sameCategory = selectedCatId != null && selectedCatId == _menuCategoryId.value
             if (!sameCategory) return@combine ChildLevelUi(setOf(0), 0)
+            if (draft.insertAtTop) return@combine ChildLevelUi(setOf(0), 0)
 
-            // مرتب
-            val ordered = tasks.sortedBy { it.orderIndex }
+            val parentById = buildParentById(tasks)
+            val miniAll = buildTaskMiniAll(tasks)
+            val flat = flattenAllTasks(miniAll)
 
-            val allowed = computeAllowedChildLevels2(
-                ordered = ordered,
-                insertAtTop = draft.insertAtTop,
-                editingTaskId = editingId
-            )
+            fun depthOfId(id: Int): Int = depthOf(id, parentById)
+
+            val insertionIndex =
+                if (editingId == null) flat.size
+                else flat.indexOfFirst { it.id == editingId }.let { if (it == -1) flat.size else it }
+
+            val prevId = flat.getOrNull(insertionIndex - 1)?.id
+            val prevDepth = if (prevId == null) -1 else depthOfId(prevId)
+
+            val cap = (prevDepth + 1).coerceIn(0, 3)
+
+            val allowed = (0..cap).toMutableSet()
+
+            // در edit سطح فعلی همیشه مجاز
+            if (editingId != null) allowed += depthOfId(editingId)
 
             ChildLevelUi(
                 allowed = allowed,
                 maxAllowed = allowed.maxOrNull() ?: 0
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ChildLevelUi())
-
 
 
 
@@ -283,20 +293,29 @@ class CategoryViewModel @Inject constructor(
             val all = uiState.value.categories
             val dragged = all.firstOrNull { it.categoryId == draggedId } ?: return@launch
 
-            val finalNewParent = newParentId ?: dragged.parentCategoryId
+            val finalNewParent = newParentId ?: dragged.parentCategoryId ?: ROOT
 
             // ✅ 1) self-parent ممنوع
             if (finalNewParent == draggedId) return@launch
 
             // ✅ 2) cycle ممنوع
-            val parentById = all.associate { it.categoryId!! to it.parentCategoryId }
-            if (wouldCreateCycle(draggedId, finalNewParent, parentById)) {
-                // اینجا می‌تونی یا ignore کنی، یا parent رو برگردونی به oldParent
+            // ✅ 2) cycle ممنوع (Category) — Root = -1
+            val parentById: Map<Int, Int> =
+                all.mapNotNull { c ->
+                    val id = c.categoryId ?: return@mapNotNull null
+                    id to (c.parentCategoryId ?: -1)
+                }.toMap()
+
+            if (wouldCreateCycleCategory(draggedId, finalNewParent, parentById)) {
                 return@launch
             }
 
+
             // parent جدید باید سطحش < 4 باشد
-            val parentLevel = uiState.value.levelById[finalNewParent ?: return@launch] ?: 1
+            val parentLevel =
+                if (finalNewParent == -1) 1
+                else (uiState.value.levelById[finalNewParent] ?: 1)
+
             if (parentLevel >= 4) return@launch
 
             // آپدیت parent (اگر تغییر کرده)
@@ -388,7 +407,7 @@ class CategoryViewModel @Inject constructor(
     private fun wouldCreateCycle(
         draggedId: Int,
         newParentId: Int?,
-        parentById: Map<Int, Int?>, // id -> parentId
+        parentById: Map<Int, Int>, // id -> parentId
     ): Boolean {
         var cur = newParentId
         var guard = 0
@@ -399,12 +418,26 @@ class CategoryViewModel @Inject constructor(
         }
         return false
     }
+    private fun wouldCreateCycleCategory(
+        draggedId: Int,
+        newParentId: Int,
+        parentById: Map<Int, Int> // id -> parentId (Root = -1)
+    ): Boolean {
+        var cur = newParentId
+        var guard = 0
+        while (cur != -1 && guard < 100) {
+            if (cur == draggedId) return true
+            cur = parentById[cur] ?: -1
+            guard++
+        }
+        return false
+    }
 
 
 
 
     //تسک ها
-    fun startAddTask(categoryId: Int, categoryColor: String) {
+    fun startAddTask(categoryId: Int) {
         _taskDraft.value = TaskDraft(categoryId = categoryId)
         _scheduleDraft.value = ScheduleDraft()          // ✅ ریست
         _scheduleConfirmedForNewTask.value = false
@@ -412,6 +445,11 @@ class CategoryViewModel @Inject constructor(
     fun startEditTask(taskId: Int) {
         viewModelScope.launch {
             val t = taskRepo.getTaskById(taskId) ?: return@launch
+
+            val categoryId = t.categoryId ?: return@launch
+            val all = withContext(Dispatchers.IO) { taskRepo.getTasksByCategory(categoryId) }
+            val parentById = buildParentById(all)
+            val depth = t.id?.let { depthOf(it, parentById) } ?: 0
 
             _editingTaskId.value = taskId
             _taskDraft.value = TaskDraft(
@@ -421,15 +459,13 @@ class CategoryViewModel @Inject constructor(
                 isCompleted = t.isCompleted,
                 note = t.description,
                 insertAtTop = false,
-                childLevel = t.indentLevel
+                childLevel = depth
             )
-
-
 
             val sch = scheduleRepo.getByTaskId(taskId)
 
-            fun minuteOfDayToLocalTime(min: Int): java.time.LocalTime =
-                java.time.LocalTime.of(min / 60, min % 60)
+            fun minuteOfDayToLocalTime(min: Int): LocalTime =
+                LocalTime.of(min / 60, min % 60)
 
             _scheduleDraft.value =
                 if (sch == null) {
@@ -438,11 +474,9 @@ class CategoryViewModel @Inject constructor(
                     ScheduleDraft(
                         title = sch.title.orEmpty(),
                         mode = sch.mode,
-
-                        date = sch.dateEpochDay?.let(java.time.LocalDate::ofEpochDay) ?: java.time.LocalDate.now(),
-                        start = sch.startMinuteOfDay?.let(::minuteOfDayToLocalTime) ?: java.time.LocalTime.of(20, 0),
-                        end = sch.endMinuteOfDay?.let(::minuteOfDayToLocalTime) ?: java.time.LocalTime.of(21, 0),
-
+                        date = sch.dateEpochDay?.let(LocalDate::ofEpochDay) ?: LocalDate.now(),
+                        start = sch.startMinuteOfDay?.let(::minuteOfDayToLocalTime) ?: LocalTime.of(20, 0),
+                        end = sch.endMinuteOfDay?.let(::minuteOfDayToLocalTime) ?: LocalTime.of(21, 0),
                         durationMinutes = sch.durationMinutes ?: 60,
                         repeating = sch.repeating
                     )
@@ -478,28 +512,42 @@ class CategoryViewModel @Inject constructor(
         val categoryId = d.categoryId ?: return
 
         viewModelScope.launch {
-            val ordered = withContext(Dispatchers.IO) {
-                taskRepo.getTasksByCategoryOrdered(categoryId)
-            }
+            val all = withContext(Dispatchers.IO) { taskRepo.getTasksByCategory(categoryId) }
+            val parentById = buildParentById(all)
+            val miniAll = buildTaskMiniAll(all)
+            val flat = flattenAllTasks(miniAll)
 
-            val minIdx = ordered.minOfOrNull { it.orderIndex }
-            val maxIdx = ordered.maxOfOrNull { it.orderIndex }
+            val insertionIndex = if (d.insertAtTop) 0 else flat.size
 
-            val newOrderIndex =
-                if (d.insertAtTop) (minIdx?.minus(1) ?: 0)
-                else (maxIdx?.plus(1) ?: 0)
+            val desiredDepth = d.childLevel.coerceIn(0, 3)
 
-            val newIndent = d.childLevel.coerceIn(0, 3)
+            val parentId = pickParentIdForDesiredDepth(
+                flat = flat,
+                parentById = parentById,
+                desiredDepth = desiredDepth,
+                insertionIndex = insertionIndex
+            ) ?: ROOT
 
-            // ✅ parent ساده و پایدار:
-            // اگر insertAtTop => parent=null
-            // اگر indent>0 و insertAtTop=false => آخرین آیتم با indent-1
-            val parentId: Int? =
-                if (newIndent <= 0) null
-                else if (d.insertAtTop) null
-                else {
-                    val targetIndent = newIndent - 1
-                    ordered.asReversed().firstOrNull { it.indentLevel == targetIndent }?.id
+
+
+
+
+            // ✅ siblingIndex مثل category
+            val siblings = all
+                .filter { it.parentTaskId == parentId }
+
+            val newSiblingIndex =
+                if (d.insertAtTop) {
+                    // شیفت دادن بقیه
+                    withContext(Dispatchers.IO) {
+                        siblings.forEach { s ->
+                            val sid = s.id ?: return@forEach
+                            taskRepo.updateSiblingIndex(sid, s.siblingIndex + 1)
+                        }
+                    }
+                    0
+                } else {
+                    siblings.size
                 }
 
             val newTask = Task(
@@ -513,19 +561,17 @@ class CategoryViewModel @Inject constructor(
                 categoryId = categoryId,
                 isCompleted = d.isCompleted,
                 priority = d.priority,
-                orderIndex = newOrderIndex,
-                indentLevel = newIndent,
-                parentTaskId = parentId
+                parentTaskId = parentId,
+                siblingIndex = newSiblingIndex
             )
 
-            val newId = withContext(Dispatchers.IO) {
-                taskRepo.insertTaskAndReturnId(newTask) // ✅ اینجا Int برمی‌گرده
+            val newIdLong = withContext(Dispatchers.IO) {
+                taskRepo.insertTaskAndReturnId(newTask) // Long
             }
+            val newId = newIdLong.toInt()
 
-            // ✅ اگر schedule تایید شده بود، همینجا ذخیره کن
             if (_scheduleConfirmedForNewTask.value) {
                 val sd = _scheduleDraft.value
-
                 fun LocalTime.toMinuteOfDay(): Int = hour * 60 + minute
 
                 val schedule = TaskSchedule(
@@ -541,12 +587,8 @@ class CategoryViewModel @Inject constructor(
                     repeating = sd.repeating
                 )
 
-                withContext(Dispatchers.IO) {
-                    scheduleRepo.upsert(schedule)
-                }
+                withContext(Dispatchers.IO) { scheduleRepo.upsert(schedule) }
             }
-
-            // ✅ اینجا چیزی ریست نکن؛ کنترل close/continue بیرون دیالوگه
         }
     }
     fun deleteTask(taskId: Int) {
@@ -568,36 +610,50 @@ class CategoryViewModel @Inject constructor(
             val newCategoryId = d.categoryId ?: current.categoryId ?: return@launch
             val categoryChanged = (newCategoryId != current.categoryId)
 
-            // اگر کتگوری عوض شد => مثل حذف از قبلی:
-            // از درخت قبلی جدا کن و در کتگوری جدید ته لیست ببر
-            val (finalIndent, parentId, finalOrderIndex) =
+            val childrenCount = withContext(Dispatchers.IO) { taskRepo.countChildren(taskId) }
+
+            val (finalParentId, finalSiblingIndex) =
                 if (categoryChanged) {
-                    val orderedNew = withContext(Dispatchers.IO) {
-                        taskRepo.getTasksByCategoryOrdered(newCategoryId)
-                    }
-                    val maxIdx = orderedNew.maxOfOrNull { it.orderIndex } ?: -1
-                    Triple(0, null, maxIdx + 1)
+                    val allNew = withContext(Dispatchers.IO) { taskRepo.getTasksByCategory(newCategoryId) }
+                    val rootSiblings = allNew.filter { it.parentTaskId == ROOT }
+                    ROOT to rootSiblings.size
+
                 } else {
-                    // رفتار قبلی برای همان کتگوری
                     val categoryId = current.categoryId ?: return@launch
+                    val all = withContext(Dispatchers.IO) { taskRepo.getTasksByCategory(categoryId) }
+                    val parentById = buildParentById(all)
+                    val curDepth = current.id?.let { depthOf(it, parentById) } ?: 0
 
-                    val childrenCount = withContext(Dispatchers.IO) { taskRepo.countChildren(taskId) }
-                    if (childrenCount > 0 && d.childLevel < current.indentLevel) return@launch
+                    // ✅ اگر بچه دارد، اجازه‌ی کم‌عمق‌تر شدن نده (مثل قبل)
+                    if (childrenCount > 0 && d.childLevel < curDepth) return@launch
 
-                    val ordered = withContext(Dispatchers.IO) {
-                        taskRepo.getTasksByCategoryOrdered(categoryId)
-                    }
-                    val selfIndex = ordered.indexOfFirst { it.id == taskId }
-                    if (selfIndex == -1) return@launch
+                    val miniAll = buildTaskMiniAll(all)
+                    val flat = flattenAllTasks(miniAll)
 
-                    val (ind, p) = computeParentForIndent(
-                        ordered = ordered,
-                        selfIndex = selfIndex,
-                        desiredIndent = d.childLevel
+                    // محل درج برای edit: قبل از خود آیتم
+                    val insertionIndex = flat.indexOfFirst { it.id == taskId }.let { if (it == -1) flat.size else it }
+
+                    val desiredDepth = d.childLevel.coerceIn(0, 3)
+
+
+
+                    val newParent = pickParentIdForDesiredDepth(
+                        flat = flat,
+                        parentById = parentById,
+                        desiredDepth = desiredDepth,
+                        insertionIndex = insertionIndex
                     )
-                    Triple(ind, p, current.orderIndex)
-                }
 
+
+                    if (newParent == current.parentTaskId) {
+                        // parent ثابت => siblingIndex رو دست نزن
+                        newParent to current.siblingIndex
+                    } else {
+                        val newSiblings = all.filter { it.parentTaskId == newParent }
+                        newParent to newSiblings.size
+                    }
+                }
+            val safeFinalParentId = finalParentId ?: ROOT
             val updated = current.copy(
                 name = d.name.trim(),
                 description = d.note,
@@ -606,98 +662,81 @@ class CategoryViewModel @Inject constructor(
                 color = categoryColor,
 
                 categoryId = newCategoryId,
-                indentLevel = finalIndent,
-                parentTaskId = parentId,
-                orderIndex = finalOrderIndex
+                parentTaskId = safeFinalParentId,
+                siblingIndex = finalSiblingIndex
             )
 
-            withContext(Dispatchers.IO) {
-                taskRepo.updateTask(updated)
-            }
+            withContext(Dispatchers.IO) { taskRepo.updateTask(updated) }
 
             finishEditTask()
         }
     }
-    private fun computeParentForIndent(
-        ordered: List<Task>,
-        selfIndex: Int,
-        desiredIndent: Int
-    ): Pair<Int, Int?> {
-        // خروجی: (finalIndent, parentId)
-        if (desiredIndent <= 0) return 0 to null
-
-        val prev = ordered.getOrNull(selfIndex - 1)
-        // قانون ساده: indent بیشتر از (indent قبلی + 1) نشه
-        val maxAllowedIndent = ((prev?.indentLevel ?: 0) + 1).coerceAtMost(3)
-        val finalIndent = desiredIndent.coerceIn(0, maxAllowedIndent)
-
-        if (finalIndent <= 0) return 0 to null
-
-        val targetIndent = finalIndent - 1
-        val parent = ordered
-            .subList(0, selfIndex)
-            .asReversed()
-            .firstOrNull { it.indentLevel == targetIndent }
-
-        return if (parent == null) (0 to null) else (finalIndent to parent.id)
-    }
     fun flattenTaskTreeWithLevelsAndVisibility(
         all: List<TaskMiniUi>,
         collapsedIds: Set<Int>,
-        rootParentId: Int? = null,
+        rootParentId: Int = ROOT,
         maxDepth: Int = 4
     ): List<TaskRenderItem> {
-
-        // مرتب‌سازی: چون orderIndex داخل TaskMiniUi نداریم،
-        // همین لیستی که از DB میاد را به ترتیب دریافت می‌کنیم (در DAO باید ORDER BY داشته باشد)
-        // پس اینجا فرض می‌کنیم all همین ترتیب درست است.
 
         val byParent = all.groupBy { it.parentTaskId }
         val items = mutableListOf<TaskRenderItem>()
 
-        fun dfs(parentId: Int?, realDepth: Int, ancestorCollapsed: Boolean) {
+        fun dfs(parentId: Int, realDepth: Int, ancestorCollapsed: Boolean) {
             if (realDepth > 50) return
 
             val renderLevel = realDepth.coerceAtMost(maxDepth)
             val children = byParent[parentId].orEmpty()
+                .sortedWith(compareBy<TaskMiniUi> { it.siblingIndex }.thenBy { it.id })
 
             for (child in children) {
                 val id = child.id
-                if (id < 0) continue
-
                 val hasChildrenRaw = byParent[id].orEmpty().isNotEmpty()
                 val hasChildren = (renderLevel < maxDepth) && hasChildrenRaw
 
                 val selfCollapsed = collapsedIds.contains(id)
-                val isExpanded = !selfCollapsed
                 val visible = !ancestorCollapsed
 
                 items += TaskRenderItem(
                     task = child,
                     level = renderLevel,
                     hasChildren = hasChildren,
-                    isExpanded = isExpanded,
+                    isExpanded = !selfCollapsed,
                     isVisible = visible
                 )
 
-                dfs(
-                    parentId = id,
-                    realDepth = realDepth + 1,
-                    ancestorCollapsed = ancestorCollapsed || selfCollapsed
-                )
+                dfs(id, realDepth + 1, ancestorCollapsed || selfCollapsed)
             }
         }
 
         dfs(rootParentId, realDepth = 1, ancestorCollapsed = false)
         return items
     }
+
     fun findBlockRange(list: List<TaskMiniUi>, startIndex: Int): IntRange {
-        val base = list[startIndex]
-        val baseIndent = base.indentLevel // یا childLevel/indentLevel نمایشی‌ات
+        val base = list.getOrNull(startIndex) ?: return startIndex..startIndex
+
+        // parent map از همین لیست (کافیه)
+        val parentById: Map<Int, Int> = list.associate { it.id to (it.parentTaskId ?: ROOT) }
+
+        fun depthOf(id: Int): Int {
+            var depth = 0
+            var cur = parentById[id] ?: ROOT
+            var guard = 0
+            while (cur != ROOT && guard < 200) {
+                depth++
+                cur = parentById[cur] ?: ROOT
+                guard++
+            }
+            return depth
+        }
+
+        val baseDepth = depthOf(base.id)
+
         var end = startIndex
-        for (i in startIndex + 1 .. list.lastIndex) {
-            val cur = list[i]
-            if (cur.indentLevel <= baseIndent) break
+        for (i in (startIndex + 1)..list.lastIndex) {
+            val curDepth = depthOf(list[i].id)
+            // ✅ وقتی به هم‌سطح یا بالاتر رسیدیم، بلوک تمام شده
+            if (curDepth <= baseDepth) break
             end = i
         }
         return startIndex..end
@@ -711,105 +750,60 @@ class CategoryViewModel @Inject constructor(
     ) {
         viewModelScope.launch {
 
-            // 1) گرفتن تسک درگ‌شده از DB (قابل اعتمادتر از uiState)
-            val dragged = withContext(Dispatchers.IO) {
-                taskRepo.getTaskById(draggedId)
-            } ?: return@launch
+            val all = withContext(Dispatchers.IO) { taskRepo.getTasksByCategory(categoryId) }
+            val dragged = all.firstOrNull { it.id == draggedId } ?: return@launch
 
-            // ✅ 0) نرمال‌سازی parent
-            val finalNewParent: Int? = when (newParentId) {
-                -1 -> null
-                null -> dragged.parentTaskId
+            val finalNewParent: Int = when (newParentId) {
+                null -> dragged.parentTaskId ?: ROOT
                 else -> newParentId
             }
 
-            // ✅ 1) self-parent ممنوع
+
             if (finalNewParent == draggedId) return@launch
 
-            // ✅ 2) cycle-check با داده‌ی واقعی DB (قابل اعتماد)
-            val allInCategory = withContext(Dispatchers.IO) {
-                taskRepo.getTasksByCategoryOrdered(categoryId)
-            }
-            val parentById = allInCategory
-                .filter { it.id != null }
-                .associate { it.id!! to it.parentTaskId }
-
-            if (wouldCreateTaskCycle(draggedId, finalNewParent, parentById)) {
-                // اینجا می‌تونی ignore کنی یا parent رو برگردونی به oldParent
-                return@launch
-            }
+            // cycle check
+            val parentById = all.filter { it.id != null }.associate { it.id!! to (it.parentTaskId ?: ROOT) }
+            if (wouldCreateTaskCycle(draggedId, finalNewParent, parentById)) return@launch
 
 
-            // 2) محاسبه indent مناسب بر اساس parent جدید
-            val finalIndent: Int = if (finalNewParent == null) {
-                0
-            } else {
-                val parentIndent = withContext(Dispatchers.IO) {
-                    taskRepo.getTaskById(finalNewParent)?.indentLevel
-                } ?: return@launch
-
-                val desired = parentIndent + 1
-                if (desired > 3) return@launch   // سقف عمق
-                desired
-            }
-
-            // 3) اگر parent/indent تغییر کرده، خود تسک را آپدیت کن
-            if (finalNewParent != dragged.parentTaskId || finalIndent != dragged.indentLevel) {
+            // 1) parent update (اگر تغییر کرده)
+            if (finalNewParent != dragged.parentTaskId) {
                 withContext(Dispatchers.IO) {
-                    taskRepo.updateTask(
-                        dragged.copy(
-                            parentTaskId = finalNewParent,
-                            indentLevel = finalIndent
-                        )
-                    )
+                    taskRepo.updateTask(dragged.copy(parentTaskId = finalNewParent))
                 }
             }
 
-            suspend fun reorderFor(parentId: Int?) {
-                // ترتیب جدید siblings زیر این parent بر اساس currentList (فقط visible)
+            suspend fun reorderFor(parentId: Int) {
                 val orderedIds = currentList
                     .asSequence()
                     .filter { it.isVisible }
                     .filter { item ->
                         val id = item.task.id
-                        val p = if (id == draggedId) finalNewParent else item.task.parentTaskId
+                        val p = if (id == draggedId) finalNewParent else (item.task.parentTaskId ?: ROOT)
                         p == parentId
+
                     }
                     .map { it.task.id }
                     .toList()
 
                 if (orderedIds.isEmpty()) return
 
-                // همه تسک‌های دسته برای mapping (orderIndex/parentTaskId اصلی از DB)
-                val all = withContext(Dispatchers.IO) {
-                    taskRepo.getTasksByCategoryOrdered(categoryId)
-                }
-                val byId = all.associateBy { it.id }
+                val freshAll = withContext(Dispatchers.IO) { taskRepo.getTasksByCategory(categoryId) }
+                val byId = freshAll.associateBy { it.id }
 
                 withContext(Dispatchers.IO) {
                     orderedIds.forEachIndexed { index, id ->
-                        val entity =
-                            if (id == draggedId) {
-                                // ممکنه هنوز در DB با وضعیت قبلی باشد؛ نسخه نهایی را اعمال کن
-                                dragged.copy(
-                                    parentTaskId = finalNewParent,
-                                    indentLevel = finalIndent
-                                )
-                            } else {
-                                byId[id] ?: return@forEachIndexed
-                            }
-
-                        // اینجا فقط orderIndex را sync می‌کنیم
-                        taskRepo.updateTask(entity.copy(orderIndex = index))
+                        val e = byId[id] ?: return@forEachIndexed
+                        if (e.siblingIndex != index) {
+                            taskRepo.updateTask(e.copy(siblingIndex = index))
+                        }
                     }
                 }
             }
 
-            // مثل کتگوری: هم oldParent و هم newParent را reorder کن
-            reorderFor(oldParentId)
-            if (finalNewParent != oldParentId) {
-                reorderFor(finalNewParent)
-            }
+            reorderFor(oldParentId ?: ROOT)
+            if (finalNewParent != (oldParentId ?: ROOT)) reorderFor(finalNewParent)
+
         }
     }
     fun onDragEndRestoreExpandForTask() {
@@ -852,55 +846,6 @@ class CategoryViewModel @Inject constructor(
             taskRepo.updateTask(current.copy(isExtended = !willCollapse))
         }
     }
-    private fun computeAllowedChildLevels2(
-        ordered: List<Task>,
-        insertAtTop: Boolean,
-        editingTaskId: Int?
-    ): Set<Int> {
-
-        // اگر بالای لیست درج شود، فقط سطح 0 معنی دارد
-        if (insertAtTop) return setOf(0)
-
-        val selfIndex =
-            if (editingTaskId == null) -1
-            else ordered.indexOfFirst { it.id == editingTaskId }
-
-        val insertionIndex =
-            if (editingTaskId == null) ordered.size
-            else if (selfIndex == -1) ordered.size else selfIndex
-
-        val currentIndent =
-            if (editingTaskId == null) 0
-            else ordered.getOrNull(selfIndex)?.indentLevel?.coerceIn(0, 3) ?: 0
-
-        val prevIndent =
-            ordered.getOrNull(insertionIndex - 1)?.indentLevel?.coerceIn(0, 3) ?: -1
-
-        val capByPrev = (prevIndent + 1).coerceIn(0, 3)
-
-        // ✅ در edit، سطح فعلی همیشه قابل انتخاب باشد
-        val cap = maxOf(capByPrev, currentIndent).coerceIn(0, 3)
-
-        val before = ordered.take(insertionIndex)
-
-        // وجود حداقل یک والدِ ممکن برای هر سطح:
-        // برای سطح L باید در before یک تسک با indent=L-1 وجود داشته باشد
-        val hasIndent = BooleanArray(4) // 0..3
-        before.forEach { t ->
-            val ind = t.indentLevel.coerceIn(0, 3)
-            hasIndent[ind] = true
-        }
-
-        val allowed = mutableSetOf(0)
-        for (lvl in 1..cap) {
-            if (hasIndent[lvl - 1]) allowed += lvl
-        }
-
-        // ✅ باز هم تضمین: سطح فعلی در edit disable نشود
-        if (editingTaskId != null) allowed += currentIndent
-
-        return allowed
-    }
     fun clampTaskChildLevel(allowed: Set<Int>) {
         val cur = _taskDraft.value.childLevel
         if (cur !in allowed) {
@@ -909,18 +854,19 @@ class CategoryViewModel @Inject constructor(
     }
     private fun wouldCreateTaskCycle(
         draggedId: Int,
-        newParentId: Int?,              // null یعنی ریشه
-        parentById: Map<Int, Int?>      // id -> parentId (null یعنی ریشه)
+        newParentId: Int,
+        parentById: Map<Int, Int>
     ): Boolean {
         var cur = newParentId
         var guard = 0
-        while (cur != null && cur != -1 && guard < 200) {
+        while (cur != ROOT && guard < 200) {
             if (cur == draggedId) return true
-            cur = parentById[cur]
+            cur = parentById[cur] ?: ROOT
             guard++
         }
         return false
     }
+
 
 
 
@@ -972,12 +918,86 @@ class CategoryViewModel @Inject constructor(
 
 
 
+    private fun buildTaskMiniAll(tasks: List<Task>, schedules: Map<Int, Boolean> = emptyMap()): List<TaskMiniUi> =
+        tasks.mapNotNull { t ->
+            val id = t.id ?: return@mapNotNull null
+            TaskMiniUi(
+                id = id,
+                title = t.name,
+                isDone = t.isCompleted,
+                hasSchedule = schedules[id] == true,
+                parentTaskId = t.parentTaskId,
+                siblingIndex = t.siblingIndex,
+                priority = t.priority
+            )
+        }
+
+    private fun flattenAllTasks(allMini: List<TaskMiniUi>): List<TaskMiniUi> {
+        val byParent = allMini.groupBy { it.parentTaskId }
+        val out = mutableListOf<TaskMiniUi>()
+
+        fun dfs(parentId: Int) {
+            val children = byParent[parentId].orEmpty()
+                .sortedWith(compareBy<TaskMiniUi> { it.siblingIndex }.thenBy { it.id })
+            for (c in children) {
+                out += c
+                dfs(c.id)
+            }
+        }
+        dfs(ROOT)
+        return out
+    }
+
+    private fun pickParentIdForDesiredDepth(
+        flat: List<TaskMiniUi>,
+        parentById: Map<Int, Int?>,
+        desiredDepth: Int,
+        insertionIndex: Int
+    ): Int? {
+        if (desiredDepth <= 0) return null
+
+        // parent depth = desiredDepth - 1
+        val parentDepth = desiredDepth - 1
+
+        fun depthOfLocal(id: Int): Int {
+            var d = 0
+            var cur = parentById[id] ?: ROOT
+            var guard = 0
+            while (cur != ROOT && guard < 200) {
+                d++
+                cur = parentById[id] ?: ROOT
+                guard++
+            }
+            return d
+        }
+
+        // فقط آیتم‌های قبل از محل درج
+        val before = flat.take(insertionIndex.coerceIn(0, flat.size))
+
+        // آخرین آیتمی که depthش == parentDepth
+        val parent = before.lastOrNull { depthOfLocal(it.id) == parentDepth } ?: return null
+        return parent.id
+    }
 
 
 
+    private fun buildParentById(tasks: List<Task>): Map<Int, Int> =
+        tasks.mapNotNull { t ->
+            val id = t.id ?: return@mapNotNull null
+            id to (t.parentTaskId ?: ROOT)
+        }.toMap()
 
-
-
+    private fun depthOf(id: Int, parentById: Map<Int, Int>): Int {
+        var depth = 0
+        var cur = parentById[id] ?: ROOT
+        var guard = 0
+        while (cur != ROOT && guard < 100) {
+            depth++
+            cur = parentById[cur] ?: ROOT
+            guard++
+        }
+        return depth.coerceIn(0, 3)
+    }
 
     fun trySetDraftParent(parentId: Int): Boolean {
         val parentLevel = uiState.value.levelById[parentId] ?: 1
@@ -1248,11 +1268,11 @@ data class TaskMiniUi(
     val isDone: Boolean = false,
     val hasSchedule: Boolean = false,
 
-    // ✅ برای tree
-    val indentLevel: Int = 0,      // 0..3
-    val parentTaskId: Int? = null,  // null یعنی ریشه
-    val priority: Int = 0,
+    val parentTaskId: Int? = null,
+    val siblingIndex: Int = 0,
+    val priority: Int = 0
 )
+
 
 
 data class TaskDraft(
@@ -1288,12 +1308,6 @@ data class TaskRenderItem(
     val isVisible: Boolean
 )
 
-data class TaskReorderUpdate(
-    val id: Int,
-    val orderIndex: Int,
-    val indentLevel: Int,
-    val parentTaskId: Int?
-)
 
 data class ChildLevelUi(
     val allowed: Set<Int> = setOf(0),

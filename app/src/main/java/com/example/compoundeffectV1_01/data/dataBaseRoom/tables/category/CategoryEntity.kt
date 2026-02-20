@@ -12,14 +12,16 @@ data class CategoryEntity(
     val categoryId : Int?=null,
 
     val name: String,
-    val parentCategoryId: Int?=null,
-    val iconName: String,
     val color: String ,
     val description: String,
+
+    val iconName: String,
     val expandable:Boolean = false,
     val isExtended: Boolean = true,
     val visible: Boolean = true,
-    val siblingIndex: Int = 0
+
+    val parentCategoryId: Int?=null,
+    val siblingIndex: Int = 0,
 )
 
 data class CategoryWithChildren(

@@ -6,7 +6,6 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
-import com.example.compoundeffectV1_01.ui.categoryScreen.TaskReorderUpdate
 import kotlinx.coroutines.flow.Flow
 import java.time.LocalDateTime
 
@@ -24,28 +23,30 @@ interface TaskRepository {
 
     fun observeTasksByCategory(categoryId: Int): Flow<List<Task>>
 
+    suspend fun getTasksByCategory(categoryId: Int): List<Task>
+
+    suspend fun updateSiblingIndex(id: Int, siblingIndex: Int)
+
+    suspend fun updateTaskParent(id: Int, parentTaskId: Int?)
+
     suspend fun getTaskById(id: Int): Task?
 
-    fun observeTasksWithScheduleByCategory(categoryId: Int): kotlinx.coroutines.flow.Flow<List<TaskWithSchedule>>
+    fun observeTasksWithScheduleByCategory(categoryId: Int): Flow<List<TaskWithSchedule>>
 
-    fun observeScheduledCountByCategory(categoryId: Int): kotlinx.coroutines.flow.Flow<Int>
+    fun observeScheduledCountByCategory(categoryId: Int): Flow<Int>
 
     fun observeAllScheduledTasksWithSchedule(): Flow<List<TaskWithSchedule>>
 
     suspend fun getTasksByCategoryOrdered(categoryId: Int): List<Task>
 
-    suspend fun getMinOrderIndex(categoryId: Int): Int?
-
-    suspend fun getMaxOrderIndex(categoryId: Int): Int?
-
     suspend fun countChildren(taskId: Int): Int
 
-    suspend fun updateTaskOrder(id: Int, orderIndex: Int)
-
-    suspend fun updateTaskHierarchy(id: Int, indentLevel: Int, parentTaskId: Int?)
-
-    suspend fun applyTaskReorderAndHierarchy(updates: List<TaskReorderUpdate>)
-
     suspend fun setCompletedForIds(ids: List<Int>, done: Boolean)
+
+    suspend fun getSiblings(categoryId: Int, parentId: Int): List<Task>
+
+    suspend fun shiftSiblingsDown(categoryId: Int, parentId: Int)
+
+    suspend fun normalizeNullParentsToRoot()
 
 }
