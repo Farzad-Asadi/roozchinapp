@@ -21,6 +21,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -30,11 +31,11 @@ import androidx.compose.ui.window.DialogProperties
 fun DimmedDialog(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
-    dimAlpha: Float = 0.5f,
+    dimAlpha: Float = 0.2f,
     usePlatformDefaultWidth: Boolean = false,
     decorFitsSystemWindows: Boolean = false,
-    // اگر true باشد کلیک روی بک‌دراپ دیالوگ را می‌بندد
     dismissOnBackdropClick: Boolean = true,
+    shape: Shape = RoundedCornerShape(12.dp),   // 👈 کنترل گردی
     content: @Composable () -> Unit
 ) {
     Dialog(
@@ -59,19 +60,27 @@ fun DimmedDialog(
                 ),
             contentAlignment = Alignment.Center
         ) {
-            // کلیک‌ها به بک‌دراپ نشت نکنن
-            Box(
-                modifier = modifier.clickable(
-                    onClick = {},
-                    indication = null,
-                    interactionSource = remember { MutableInteractionSource() }
-                )
+
+            Surface(
+                shape = shape, // 👈 اینجا اعمال می‌شود
+                color = MaterialTheme.colorScheme.surface,
+                shadowElevation = 10.dp,
+                modifier = modifier
             ) {
-                content()
+                Box(
+                    modifier = Modifier.clickable(
+                        onClick = {},
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() }
+                    )
+                ) {
+                    content()
+                }
             }
         }
     }
 }
+
 
 //یک Confirm Dialog عمومی (برای حذف‌ها)
 @Composable

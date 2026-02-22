@@ -264,6 +264,9 @@ class CategoryViewModel @Inject constructor(
     fun setDraftName(value: String) {
         _draft.update { it.copy(name = value) }
     }
+    fun setDraftDescription(value: String) {
+        _draft.update { it.copy(description = value) }
+    }
     fun setDraftIconName(value: String) {
         _draft.update { it.copy(iconName = value) }
     }
@@ -313,6 +316,13 @@ class CategoryViewModel @Inject constructor(
         viewModelScope.launch {
             val current = uiState.value.categories.firstOrNull { it.categoryId == categoryId } ?: return@launch
             categoryRepository.updateCategory(current.copy(iconName = iconName))
+        }
+    }
+    fun updateCategoryDescription(categoryId: Int?, description: String) {
+        viewModelScope.launch {
+            if (categoryId==null)return@launch
+            val current = uiState.value.categories.firstOrNull { it.categoryId == categoryId } ?: return@launch
+            categoryRepository.updateCategory(current.copy(description = description))
         }
     }
     fun updateCategoryColor(categoryId: Int, colorHex: String) {
@@ -1455,6 +1465,8 @@ data class ScheduleDraft(
     val start: LocalTime = LocalTime.of(20, 0),
     val end: LocalTime = LocalTime.of(21, 0),
     val durationMinutes: Int = 60,
+
+    val note: String = "",
 
     val repeat: RepeatDraft = RepeatDraft()
 )

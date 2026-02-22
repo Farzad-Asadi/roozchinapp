@@ -9,6 +9,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.navigation
 import com.example.compoundeffectV1_01.ui.categoryScreen.CategoryScreen
 import com.example.compoundeffectV1_01.ui.scheduleScreen.ScheduleScreen2
 
@@ -17,24 +18,25 @@ import com.example.compoundeffectV1_01.ui.scheduleScreen.ScheduleScreen2
 fun AppNavGraph(
     navController: NavHostController,
     modifier: Modifier = Modifier,
-    startDestination: String = AppRoutes.SCHEDULE
+    startDestination: String = AppRoutes.CATEGORY
 ) {
     NavHost(
         navController = navController,
-        startDestination = startDestination,
+        startDestination = AppGraphRoutes.ROOT,
         modifier = modifier
     ) {
-        composable(AppRoutes.CATEGORY) {
-            CategoryScreen(
-            )
-        }
-        composable(AppRoutes.SCHEDULE) {
-            ScheduleScreen2(
-
-            )
+        navigation(
+            route = AppGraphRoutes.ROOT,
+            startDestination = startDestination
+        ) {
+            composable(AppRoutes.CATEGORY) {
+                CategoryScreen(navController = navController)
+            }
+            composable(AppRoutes.SCHEDULE) { ScheduleScreen2() }
         }
     }
 }
+
 
 
 
@@ -48,6 +50,9 @@ object AppRoutes {
     const val SCHEDULE = "schedule"
 }
 
+object AppGraphRoutes {
+    const val ROOT = "root"
+}
 
 
 

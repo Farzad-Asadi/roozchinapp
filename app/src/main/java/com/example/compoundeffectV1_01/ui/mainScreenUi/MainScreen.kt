@@ -1,5 +1,6 @@
 package com.example.compoundeffectV1_01.ui.mainScreenUi
 
+import android.annotation.SuppressLint
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -14,9 +15,14 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.FabPosition
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -33,15 +39,21 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.example.compoundeffectV1_01.data.sharedViewModel.MainSharedViewModel
 import com.example.compoundeffectV1_01.ui.navigation.AppBottomBarDestination
+import com.example.compoundeffectV1_01.ui.navigation.AppGraphRoutes
 import com.example.compoundeffectV1_01.ui.navigation.AppNavGraph
+import com.example.compoundeffectV1_01.ui.navigation.AppRoutes
 import com.example.compoundeffectV1_01.ui.navigation.bottomBarDestinations
 
+@SuppressLint("UnrememberedGetBackStackEntry")
 @Composable
 fun MainScreen(
     navController: NavHostController = rememberNavController()
@@ -49,7 +61,29 @@ fun MainScreen(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
+    // ✅ فقط وقتی graph واقعاً حاضر شد
+    val rootEntry = remember(navBackStackEntry) {
+        runCatching { navController.getBackStackEntry(AppGraphRoutes.ROOT) }.getOrNull()
+    }
+
+    val sharedVm: MainSharedViewModel? =
+        rootEntry?.let { hiltViewModel<MainSharedViewModel>(it) }
+
+    // فقط روی صفحه Category نمایش بده (اگر خواستی)
+    val showFab = currentRoute == AppRoutes.CATEGORY
+
     Scaffold(
+        floatingActionButton = {
+            if (showFab) {
+                FloatingActionButton(
+                    onClick = { sharedVm?.onAddCategoryClicked() },
+                    modifier = Modifier.offset(y = 28.dp) // ✅ نصف FAB میره روی BottomBar
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = "Add Category")
+                }
+            }
+        },
+        floatingActionButtonPosition = FabPosition.Start, // ✅ وسطِ پایین
         bottomBar = {
             CustomBottomBar(
                 destinations = bottomBarDestinations,
@@ -140,7 +174,7 @@ fun CustomBottomBarItem(
 
     val tint by animateColorAsState(
         targetValue = if (selected)
-            MaterialTheme.colorScheme.primary
+            Color.Black
         else
             MaterialTheme.colorScheme.onSurface.copy(alpha = 0.40f),
         label = "iconColor"

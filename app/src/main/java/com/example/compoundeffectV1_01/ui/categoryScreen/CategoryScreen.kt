@@ -3,6 +3,7 @@ package com.example.compoundeffectV1_01.ui.categoryScreen
 import android.annotation.SuppressLint
 import android.os.SystemClock
 import android.util.Log
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -27,19 +29,22 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowRight
+import androidx.compose.material.icons.automirrored.filled.Note
 import androidx.compose.material.icons.automirrored.filled.Sort
-import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.ArrowBackIosNew
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteSweep
@@ -47,37 +52,49 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Event
+import androidx.compose.material.icons.filled.EventRepeat
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Note
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.PriorityHigh
 import androidx.compose.material.icons.filled.RadioButtonChecked
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.RemoveDone
+import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SignalCellularAlt
+import androidx.compose.material.icons.filled.Stairs
+import androidx.compose.material.icons.filled.SubdirectoryArrowRight
 import androidx.compose.material.icons.filled.Task
 import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.Today
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FabPosition
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
+import androidx.compose.material3.MenuItemColors
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Switch
@@ -102,6 +119,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
@@ -118,11 +138,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.NavHostController
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.category.CategoryEntity
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.Task
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.RepeatUnit
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.ScheduleMode
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.TaskSchedule
+import com.example.compoundeffectV1_01.data.sharedViewModel.MainSharedViewModel
+import com.example.compoundeffectV1_01.ui.navigation.AppGraphRoutes
 import com.example.compoundeffectV1_01.utils.DimmedDialog
 import com.example.compoundeffectV1_01.utils.IconOption
 import com.example.compoundeffectV1_01.utils.buildColorOptions
@@ -144,9 +167,10 @@ import org.burnoutcrew.reorderable.reorderable
 import java.time.LocalDate
 import java.time.LocalTime
 
-@SuppressLint("SuspiciousIndentation")
+@SuppressLint("SuspiciousIndentation", "UnrememberedGetBackStackEntry")
 @Composable
 fun CategoryScreen(
+    navController: NavHostController,
     viewModel: CategoryViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -162,10 +186,10 @@ fun CategoryScreen(
     val scheduledCount by viewModel.scheduledCountForMenu.collectAsState()
     val childLevelUi by viewModel.childLevelUi.collectAsState()
     val schedules by viewModel.schedulesUiForTaskDialog.collectAsState()
+    val editingScheduleKey by viewModel.editingScheduleKey.collectAsState()
 
 
     var showPickParent by rememberSaveable { mutableStateOf(false) }
-    var showAddCategory by rememberSaveable { mutableStateOf(false) }
 
     var showIconPicker by rememberSaveable { mutableStateOf(false) }
     var showColorPicker by rememberSaveable { mutableStateOf(false) }
@@ -194,6 +218,20 @@ fun CategoryScreen(
     var showPickTaskCategory by rememberSaveable { mutableStateOf(false) }
 
 
+    val rootEntry = remember(navController) {
+        navController.getBackStackEntry(AppGraphRoutes.ROOT)
+    }
+    val sharedVm: MainSharedViewModel = hiltViewModel(rootEntry)
+    var showAddCategory by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        sharedVm.events.collect { e ->
+            when (e) {
+                MainSharedViewModel.Event.AddCategoryClicked -> {
+                    showAddCategory = true
+                }
+            }
+        }
+    }
 
 
     LaunchedEffect(createResult) {
@@ -226,15 +264,7 @@ fun CategoryScreen(
 
 
     Scaffold(
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showAddCategory = true }
-            ) {
-                Icon(Icons.Filled.Add, contentDescription = "Add Category")
-            }
 
-
-        },
         floatingActionButtonPosition = FabPosition.Start
     ) { padding ->
         Column(modifier = Modifier.padding(padding)) {
@@ -481,7 +511,7 @@ fun CategoryScreen(
                                 modifier = rowDragModifier,
                                 onOpenMenu = { id -> viewModel.setMenuCategoryId(id) }
                             )
-                            HorizontalDivider(thickness = 0.5.dp) // ✅ خط باریک
+
                         }
                     }
                 }
@@ -502,12 +532,12 @@ fun CategoryScreen(
                 viewModel.resetDraft()
             },
             onPickParent = { showPickParent = true },
-            onPickIcon = { showIconPicker = true },   // ✅
-            onPickColor = { showColorPicker = true }, // ✅
+            onPickIcon = { showIconPicker = true },
+            onPickColor = { showColorPicker = true },
             onNameChange = viewModel::setDraftName,
-            onDescriptionChange = {
-                // اگر draft.description را در VM نداری، فعلاً همینجا نگه دار یا یک setter اضافه کن
-                // پیشنهاد: viewModel.setDraftDescription(desc)
+            onDescriptionChange = { desc ->
+
+                viewModel.setDraftDescription(desc)
             },
             onConfirm = {
                 viewModel.createCategoryFromDraft()
@@ -618,8 +648,11 @@ fun CategoryScreen(
             onUncompletedAll = { viewModel.uncompletedAllTasks(it) },
             onDeleteCompleted = { viewModel.deleteCompletedTasks(it) },
             onDeleteAll = { viewModel.deleteAllTasks(it) },
+            onDescriptionChange = { categoryId, description ->
+                viewModel.updateCategoryDescription(categoryId, description)
+            }
 
-            )
+        )
     }
 
     if (showDeleteConfirm && menuCategoryId != null) {
@@ -719,7 +752,7 @@ fun CategoryScreen(
 
         val isEdit = (editingTaskId != null)
 
-        AddTaskDialog(
+        AddEditeTaskDialog(
             addTaskMod = !isEdit,
             categoryName = selectedCategory.name,
             categoryIconName = selectedCategory.iconName,
@@ -773,7 +806,9 @@ fun CategoryScreen(
     }
 
     if (showScheduleDialog && menuCategory != null) {
-        TaskScheduleDialog(
+        val addSchedule = (editingScheduleKey == null)
+        AddEditeScheduleDialog(
+            addSchedule = addSchedule,
             taskName = taskDraft.name.ifBlank { "Task" },
             draft = scheduleDraft,
             onDismiss = {
@@ -794,7 +829,8 @@ fun CategoryScreen(
             onDateChange = viewModel::setScheduleDate,
             onRepeatIntervalChange = viewModel::setRepeatInterval,
             onRepeatUnitChange = viewModel::setRepeatUnit,
-            onWeekdaysMaskChange=viewModel::setRepeatWeekdaysMask,
+            onWeekdaysMaskChange = viewModel::setRepeatWeekdaysMask,
+            onNoteChange = {}
         )
     }
 
@@ -813,919 +849,8 @@ fun CategoryScreen(
 
 }
 
-@Composable
-fun AddCategoryDialog(
-    draft: CategoryDraft2,
-    parentName: String,
-    parentIconName: String,   // ✅ جدید
-    parentColorHex: String,
-    onDismiss: () -> Unit,
-    onPickParent: () -> Unit,
-    onPickIcon: () -> Unit,   // ✅ جدید
-    onPickColor: () -> Unit,  // ✅ جدید
-    onNameChange: (String) -> Unit,
-    onDescriptionChange: (String) -> Unit, // ✅ جدید (فعلاً اگر نداری، می‌تونی خالی پاس بدی)
-    onConfirm: () -> Unit,
-) {
-    DimmedDialog(
-        onDismiss = onDismiss,
-        modifier = Modifier
-            .fillMaxWidth(0.92f)
-            .fillMaxHeight(0.85f)
-            .background(MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.extraLarge),
-        dimAlpha = 0.6f,
-        dismissOnBackdropClick = true
-    ) {
-        Column(modifier = Modifier.fillMaxSize()) {
 
-            // --- Top bar داخل دیالوگ (مثل عکس) ---
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                TextButton(onClick = onDismiss) { Text("Back") }
-                Text(text = "New category", style = MaterialTheme.typography.titleLarge)
-                TextButton(onClick = onConfirm) { Text("✓") }
-            }
-
-            HorizontalDivider()
-
-            // --- محتوا ---
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 12.dp, vertical = 8.dp)
-            ) {
-                // Name*
-                OutlinedTextField(
-                    value = draft.name,
-                    onValueChange = onNameChange,
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Name *") },
-                    singleLine = true
-                )
-
-                Spacer(Modifier.size(10.dp))
-
-
-                // Parent row (مثل عکس یک ردیف ساده)
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onPickParent() }
-                        .padding(vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Parent", modifier = Modifier.weight(1f))
-
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = iconFromKey(parentIconName),
-                            contentDescription = parentIconName,
-                            tint = colorFromHex(parentColorHex),
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(parentName, style = MaterialTheme.typography.titleMedium)
-                    }
-                }
-
-                HorizontalDivider()
-
-
-                // Icon row
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onPickIcon() }
-                        .padding(vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Icon", modifier = Modifier.weight(1f))
-
-                    Icon(
-                        imageVector = iconFromKey(draft.iconName),
-                        contentDescription = draft.iconName,
-                        tint = colorFromHex(draft.color),   // ✅ مهم
-                        modifier = Modifier.size(24.dp)
-                    )
-
-                }
-
-                HorizontalDivider()
-
-
-                // Color row
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onPickColor() }
-                        .padding(vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Color", modifier = Modifier.weight(1f))
-
-                    Box(
-                        modifier = Modifier
-                            .size(22.dp)
-                            .border(1.dp, Color.Black.copy(alpha = 0.15f), CircleShape)
-                            .background(colorFromHex(draft.color), CircleShape)
-                    )
-                }
-
-                HorizontalDivider()
-
-                Spacer(Modifier.size(10.dp))
-
-
-                // Description (اختیاری)
-                OutlinedTextField(
-                    value = draft.description,
-                    onValueChange = onDescriptionChange,
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Add description") },
-                    minLines = 2
-                )
-
-                Spacer(Modifier.weight(1f))
-
-
-                // (اختیاری) نمایش parentId برای دیباگ
-                Text(
-                    text = "ParentId: ${draft.parentId}",
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.padding(top = 8.dp)
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun JalaliDateRow(
-    selectedDate: LocalDate,
-    onChangeDate: (LocalDate) -> Unit
-) {
-    val openDialog = remember { mutableStateOf(false) }
-
-    val jalali = remember(selectedDate) { selectedDate.toJalali() }
-    val dateText = remember(selectedDate) { jalali.toFaText() }
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { openDialog.value = true }
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(Icons.Filled.CalendarMonth, contentDescription = null)
-        Spacer(Modifier.width(12.dp))
-
-        Text(
-            text = dateText,
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.weight(1f)
-        )
-
-        IconButton(onClick = { onChangeDate(LocalDate.now()) }) {
-            Icon(Icons.Filled.Refresh, contentDescription = "today")
-        }
-    }
-
-
-    // دیالوگ تقویم شمسی
-    JalaliDatePickerDialog(
-        openDialog = openDialog,
-        initialDate = jalali,
-
-        onConfirm = { picked: JalaliCalendar ->
-            onChangeDate(picked.toLocalDate())
-        },
-
-        // محدودیت تاریخ نداشته باشیم
-        disableBeforeDate = null,
-        disableAfterDate = null,
-
-        onSelectDay = { /* لازم نیست کاری کنیم */ },
-
-        // رنگ‌ها از تم فعلی
-        backgroundColor = Color(0xFFF8F9FB),         // خیلی روشن، نرم و مدرن
-
-        textColor = Color(0xFF1C1C1E),                // مشکی نرم (نه کاملاً سیاه)
-        textDisabledColor = Color(0xFFB0B3B8),       // خاکستری ملایم
-
-        selectedIconColor = Color(0xFF00B894),        // سبز فیروزه‌ای زنده
-        textColorHighlight = Color(0xFF009E84),       // سبز کمی تیره‌تر برای انتخاب
-
-        dropDownColor = Color(0xFF1C1C1E),
-        dayOfWeekLabelColor = Color(0xFF6B7280),      // خاکستری متوسط برای شنبه/یکشنبه...
-
-        confirmBtnColor = Color(0xFF00B894),          // هم‌رنگ انتخاب
-        cancelBtnColor = Color(0xFF9CA3AF),           // خاکستری خنثی
-        todayBtnColor = Color(0xFF1C1C1E),
-        nextPreviousBtnColor = Color(0xFF00B894),    // فلش‌های ماه
-
-        fontFamily = FontFamily.Default,   // پیش‌فرض سیستم
-        fontSize = 18.sp     // پیش‌فرض کتابخانه
-    )
-
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun RepeatEveryRow(
-    interval: Int,
-    unit: RepeatUnit,
-    onIntervalChange: (Int) -> Unit,
-    onUnitChange: (RepeatUnit) -> Unit,
-) {
-    var expanded by remember { mutableStateOf(false) }
-    val focusManager = LocalFocusManager.current
-    val keyboardController = LocalSoftwareKeyboardController.current
-
-    val unitLabel = when (unit) {
-        RepeatUnit.DAY -> "days"
-        RepeatUnit.WEEK -> "weeks"
-        RepeatUnit.MONTH -> "months"
-        RepeatUnit.YEAR -> "years"
-    }
-
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Center
-    ) {
-        Text("Repeat every")
-
-        Spacer(Modifier.width(10.dp))
-
-        // عدد 0..99 (ولی بهتره ذخیره رو 1..99 کنی)
-        TextField(
-            value = interval.toString(),
-            onValueChange = { v ->
-                val n = v.filter(Char::isDigit).take(2).toIntOrNull() ?: 0
-                onIntervalChange(n.coerceIn(0, 99))
-            },
-            singleLine = true,
-            modifier = Modifier
-                .width(54.dp),
-            colors = TextFieldDefaults.colors(
-                focusedContainerColor = Color.Transparent,
-                unfocusedContainerColor = Color.Transparent,
-                disabledContainerColor = Color.Transparent,
-                errorContainerColor = Color.Transparent
-            ),
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Number,   // ✅ فقط عدد
-                imeAction = ImeAction.Done
-            ),
-            keyboardActions = KeyboardActions(
-                onDone = {
-                    keyboardController?.hide()   // کیبورد بسته شود
-                    focusManager.clearFocus()    // فوکوس برداشته شود
-                }
-            )
-        )
-
-        Spacer(Modifier.width(10.dp))
-
-        // واحد (مثل مود، کشویی)
-        ExposedDropdownMenuBox(
-            expanded = expanded,
-            onExpandedChange = { expanded = !expanded },
-            modifier = Modifier.weight(1f)
-        ) {
-            TextField(
-                value = unitLabel,
-                onValueChange = {},
-                readOnly = true,
-                singleLine = true,
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
-                modifier = Modifier
-                    .width(132.dp)
-                    .menuAnchor(MenuAnchorType.PrimaryNotEditable),
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    disabledContainerColor = Color.Transparent,
-                    errorContainerColor = Color.Transparent
-                ),
-            )
-
-            ExposedDropdownMenu(
-                expanded = expanded,
-                onDismissRequest = { expanded = false },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                DropdownMenuItem(
-                    text = { Text("days") },
-                    onClick = { onUnitChange(RepeatUnit.DAY); expanded = false })
-                DropdownMenuItem(
-                    text = { Text("weeks") },
-                    onClick = { onUnitChange(RepeatUnit.WEEK); expanded = false })
-                DropdownMenuItem(
-                    text = { Text("months") },
-                    onClick = { onUnitChange(RepeatUnit.MONTH); expanded = false })
-                DropdownMenuItem(
-                    text = { Text("years") },
-                    onClick = { onUnitChange(RepeatUnit.YEAR); expanded = false })
-            }
-        }
-    }
-}
-
-@Composable
-private fun WeekdayPickerRow(
-    selectedMask: Int,
-    onChangeMask: (Int) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    // Sa Su Mo Tu We Th Fr => بیت‌های 0..6
-    val days = listOf(
-        0 to "Sa", 1 to "Su", 2 to "Mo", 3 to "Tu",
-        4 to "We", 5 to "Th", 6 to "Fr",
-    )
-
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .padding(top = 6.dp, bottom = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        days.forEach { (bit, label) ->
-            val selected = (selectedMask and (1 shl bit)) != 0
-
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .background(
-                        color = if (selected) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.surfaceVariant,
-                        shape = CircleShape
-                    )
-                    .border(
-                        1.dp,
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
-                        CircleShape
-                    )
-                    .clickable {
-                        val newMask =
-                            if (selected) selectedMask and (1 shl bit).inv()
-                            else selectedMask or (1 shl bit)
-                        onChangeMask(newMask)
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = if (selected) MaterialTheme.colorScheme.onPrimary
-                    else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    }
-}
-
-
-
-@Composable
-private fun CategoryRow(
-    item: CategoryRenderItem,
-    computedLevel: Int,
-    onToggleExpand: (Int) -> Unit,
-    modifier: Modifier = Modifier,
-    onOpenMenu: (Int) -> Unit, // ✅ جدید
-) {
-    val id = item.category.categoryId ?: return
-    val indent = (computedLevel - 1).coerceAtLeast(0) * 16
-    val bg = containerColorForLevel(computedLevel)
-
-    ListItem(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(start = indent.dp),
-        colors = ListItemDefaults.colors(containerColor = bg),
-        leadingContent = {
-            Icon(
-                imageVector = iconFromKey(item.category.iconName),
-                contentDescription = null,
-                tint = colorFromHex(item.category.color),
-                modifier = Modifier.size(30.dp)
-            )
-        },
-        headlineContent = { Text(item.category.name) },
-        trailingContent = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                val canHaveChildren = computedLevel < 4
-                if (item.hasChildren && canHaveChildren) {
-                    IconButton(onClick = { onToggleExpand(id) }) {
-                        Icon(
-                            imageVector = if (item.isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                            contentDescription = "expand"
-                        )
-                    }
-                }
-
-                IconButton(onClick = { onOpenMenu(id) }) {
-                    Icon(Icons.Filled.MoreVert, contentDescription = "menu")
-                }
-            }
-        }
-    )
-}
-
-
-@Composable
-private fun TaskRow(
-    item: TaskRenderItem,
-    computedLevel: Int,
-    onToggleExpand: (Int) -> Unit,
-    onClickTask: (Int) -> Unit,
-    onToggleDone: (Int) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val id = item.task.id
-    val indent = ((computedLevel - 1).coerceAtLeast(0) * 16).dp
-    val bg = containerColorForLevel(computedLevel)
-
-    val canHaveChildren = computedLevel < 4
-    val showExpand = item.hasChildren && canHaveChildren
-
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(52.dp) // ✅ ارتفاع ثابت
-            .background(bg)
-            .clickable { onClickTask(id) }
-            .padding(start = indent, end = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-
-        Spacer(Modifier.width(6.dp))
-
-
-        // ✅ دایره done
-        Box(
-            modifier = Modifier
-                .size(22.dp)
-                .border(
-                    2.dp,
-                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
-                    CircleShape
-                )
-                .background(
-                    color = if (item.task.isDone)
-                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
-                    else Color.Transparent,
-                    shape = CircleShape
-                )
-                .clickable(
-                    // ✅ مهم: کلیک دایره به کلیک ردیف نره
-                    indication = null,
-                    interactionSource = remember { MutableInteractionSource() }
-                ) { onToggleDone(id) }
-        )
-
-
-        // ✅ Priority marker
-        val (pText, pColor) = when (item.task.priority) {
-            1 -> "*" to Color(0xFF2E7D32) // سبز
-            2 -> "!" to Color(0xFFF9A825) // زرد
-            3 -> "!!" to Color(0xFFC62828) // قرمز
-            else -> "" to Color.Unspecified
-        }
-        if (pText.isNotBlank()) {
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text = pText,
-                color = pColor,
-                style = MaterialTheme.typography.titleMedium
-            )
-            Spacer(Modifier.width(8.dp))
-        } else {
-            Spacer(Modifier.width(12.dp))
-        }
-
-        Spacer(Modifier.width(12.dp))
-
-
-        // ✅ عنوان (یک خط، ellipsis)
-        Text(
-            text = item.task.title,
-            modifier = Modifier.weight(1f),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-
-
-        // ✅ schedule icon (اگر نبود، فضا نمی‌گیرد)
-        if (item.task.hasSchedule) {
-            Spacer(Modifier.width(8.dp))
-            Icon(
-                imageVector = Icons.Filled.Event,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.error
-            )
-        }
-
-        Spacer(Modifier.width(8.dp))
-
-
-        // ✅ جایگاه expand همیشه رزرو می‌شود تا چیدمان ثابت بماند
-        // اندازه‌ی IconButton معمولاً 48.dp است، پس اینجا دقیقاً همان را رزرو می‌کنیم.
-        Box(
-            modifier = Modifier.size(48.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            if (showExpand) {
-                IconButton(
-                    onClick = { onToggleExpand(id) },
-                    modifier = Modifier.size(48.dp)
-                ) {
-                    Icon(
-                        imageVector = if (item.isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                        contentDescription = "expand"
-                    )
-                }
-            } else {
-                // هیچ چیز نمایش نده، ولی فضا محفوظ است ✅
-            }
-        }
-    }
-}
-
-
-@Composable
-fun PickParentDialogSmall(
-    items: List<CategoryRenderItem>,
-    levelById: Map<Int, Int>,
-    onDismiss: () -> Unit,
-    onPick: (parentId: Int) -> Unit,
-) {
-    DimmedDialog(
-        onDismiss = onDismiss,
-        modifier = Modifier
-            .fillMaxWidth(0.86f)
-            .fillMaxHeight(0.65f)
-            .background(MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.extraLarge),
-        dimAlpha = 0.4f,
-        dismissOnBackdropClick = true
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(12.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                TextButton(onClick = onDismiss) { Text("Close") }
-                Text("انتخاب والد", style = MaterialTheme.typography.titleMedium)
-                Spacer(modifier = Modifier.size(48.dp)) // برای بالانس
-            }
-
-            HorizontalDivider(modifier = Modifier.padding(top = 8.dp, bottom = 8.dp))
-
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
-                items(items, key = { it.category.categoryId ?: it.hashCode() }) { item ->
-                    val id = item.category.categoryId ?: return@items
-
-                    // level واقعی/نمایشی (از map بهتره)
-                    val level = levelById[id] ?: item.level
-
-                    // همون قانون قبلی: والد نباید سطح 4 باشه
-                    val enabled = level < 4
-
-                    ParentPickerRow(
-                        item = item,
-                        computedLevel = level,
-                        enabled = enabled,
-                        onPick = { onPick(id) }
-                    )
-
-                    HorizontalDivider(thickness = 0.5.dp) // مثل صفحه اصلی
-                }
-            }
-
-        }
-    }
-}
-
-
-@Composable
-fun ChooseIconDialog(
-    selectedKey: String,
-    onDismiss: () -> Unit,
-    onPick: (IconOption) -> Unit,
-) {
-    val sections = remember { buildIconSections() }
-    val expanded = remember {
-        mutableStateMapOf<String, Boolean>().apply {
-            sections.forEach { put(it.title, true) }
-        }
-    }
-
-    DimmedDialog(
-        onDismiss = onDismiss,
-        modifier = Modifier
-            .fillMaxWidth(0.92f)
-            .fillMaxHeight(0.80f)
-            .background(MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.extraLarge),
-        dimAlpha = 0.6f,
-        dismissOnBackdropClick = true
-    ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-
-            Text(
-                text = "Choose icon",
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.padding(16.dp)
-            )
-
-            HorizontalDivider()
-
-            LazyColumn(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 12.dp)
-            ) {
-                items(sections) { section ->
-                    SectionHeaderRow(
-                        title = section.title,
-                        isExpanded = expanded[section.title] == true,
-                        onToggle = { expanded[section.title] = expanded[section.title] != true }
-                    )
-
-                    if (expanded[section.title] == true) {
-                        IconGrid4(
-                            options = section.options,
-                            selectedKey = selectedKey,
-                            onPick = onPick
-                        )
-                    }
-
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                }
-            }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(12.dp),
-                horizontalArrangement = Arrangement.End
-            ) {
-                TextButton(onClick = onDismiss) { Text("CANCEL") }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SectionHeaderRow(
-    title: String,
-    isExpanded: Boolean,
-    onToggle: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 12.dp, bottom = 6.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.weight(1f)
-        )
-        IconButton(onClick = onToggle) {
-            Icon(
-                imageVector = if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                contentDescription = "toggle"
-            )
-        }
-    }
-}
-
-@Composable
-private fun IconGrid4(
-    options: List<IconOption>,
-    selectedKey: String,
-    onPick: (IconOption) -> Unit,
-) {
-    // ساده و سبک: ۴تایی در هر ردیف، بدون LazyVerticalGrid
-    val rows = (options.size + 3) / 4
-    Column(modifier = Modifier.fillMaxWidth()) {
-        repeat(rows) { r ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 6.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                for (c in 0 until 4) {
-                    val idx = r * 4 + c
-                    if (idx < options.size) {
-                        val opt = options[idx]
-                        val selected = opt.key == selectedKey
-
-                        IconButton(
-                            onClick = { onPick(opt) },
-                            modifier = Modifier
-                                .size(56.dp)
-                                .then(
-                                    if (selected) Modifier.border(
-                                        width = 2.dp,
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        shape = MaterialTheme.shapes.small
-                                    ) else Modifier
-                                )
-                        ) {
-                            Icon(
-                                imageVector = opt.icon,
-                                contentDescription = opt.key,
-                                modifier = Modifier.size(28.dp)
-                            )
-                        }
-                    } else {
-                        Spacer(modifier = Modifier.size(56.dp))
-                    }
-                }
-            }
-        }
-    }
-}
-
-
-@Composable
-fun ChooseColorDialog(
-    initialHex: String,
-    onDismiss: () -> Unit,
-    onConfirm: (hex: String) -> Unit
-) {
-    val options = remember { buildColorOptions() }
-    var selectedHex by remember { mutableStateOf(initialHex.ifBlank { options.first().hex }) }
-
-    DimmedDialog(
-        onDismiss = onDismiss,
-        modifier = Modifier
-            .fillMaxWidth(0.92f)
-            .fillMaxHeight(0.62f)
-            .background(MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.extraLarge),
-        dimAlpha = 0.6f,
-        dismissOnBackdropClick = true
-    ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-
-            Text(
-                text = "Choose color",
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.padding(16.dp)
-            )
-
-            HorizontalDivider()
-
-            Spacer(Modifier.height(18.dp))
-
-            // Grid ساده: 6 ستون * چند ردیف
-            val cols = 6
-            val rows = (options.size + cols - 1) / cols
-
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 14.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                repeat(rows) { r ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        for (c in 0 until cols) {
-                            val idx = r * cols + c
-                            if (idx < options.size) {
-                                val opt = options[idx]
-                                val selected = opt.hex.equals(selectedHex, ignoreCase = true)
-
-                                Box(
-                                    modifier = Modifier
-                                        .size(42.dp)
-                                        .border(
-                                            width = if (selected) 4.dp else 0.dp,
-                                            color = if (selected) Color.Black else Color.Transparent,
-                                            shape = CircleShape
-                                        )
-                                        .padding(if (selected) 4.dp else 0.dp)
-                                        .border(
-                                            width = 1.dp,
-                                            color = Color.Black.copy(alpha = 0.08f),
-                                            shape = CircleShape
-                                        )
-                                        .clickable { selectedHex = opt.hex },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .border(0.dp, Color.Transparent, CircleShape)
-                                            .background(opt.color, CircleShape)
-                                    )
-                                }
-                            } else {
-                                Spacer(Modifier.size(42.dp))
-                            }
-                        }
-                    }
-                }
-            }
-
-            Spacer(Modifier.weight(1f))
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(12.dp),
-                horizontalArrangement = Arrangement.End
-            ) {
-                TextButton(onClick = onDismiss) { Text("CANCEL") }
-                Spacer(Modifier.width(8.dp))
-                TextButton(onClick = { onConfirm(selectedHex) }) { Text("OK") }
-            }
-        }
-    }
-}
-
-
-@Composable
-private fun ParentPickerRow(
-    item: CategoryRenderItem,
-    computedLevel: Int,
-    enabled: Boolean,
-    onPick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val indent = (computedLevel - 1).coerceAtLeast(0) * 16
-    val bg = containerColorForLevel(computedLevel)
-
-    ListItem(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(start = indent.dp)
-            .then(if (enabled) Modifier.clickable { onPick() } else Modifier),
-        colors = ListItemDefaults.colors(
-            containerColor = bg
-        ),
-        leadingContent = {
-            Icon(
-                imageVector = iconFromKey(item.category.iconName),
-                contentDescription = item.category.iconName,
-                tint = if (enabled) colorFromHex(item.category.color)
-                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f),
-                modifier = Modifier.size(28.dp)
-            )
-        },
-        headlineContent = {
-            Text(
-                text = item.category.name,
-                color = if (enabled) LocalContentColor.current
-                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
-            )
-        },
-        supportingContent = {
-            if (!enabled) {
-                Text(
-                    text = "حداکثر عمق",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.error
-                )
-            }
-        }
-    )
-}
-
-
-@Composable
-private fun containerColorForLevel(level: Int): Color {
-    val e = when (level.coerceIn(1, 4)) {
-        1 -> 0.dp
-        2 -> 2.dp
-        3 -> 6.dp
-        else -> 12.dp
-    }
-    return MaterialTheme.colorScheme.surfaceColorAtElevation(e)
-}
-
+//>>>>>>>>>>>>>>>> Sheets <<<<<<<<<<<<<<<<<<
 
 @Composable
 private fun CategoryOptionsSideSheet(
@@ -1756,12 +881,13 @@ private fun CategoryOptionsSideSheet(
     onDragEndRestoreExpandForTask: () -> Unit,
     onDragStartMaybeCollapseForTask: (taskId: Int) -> Unit,
     toggleExpandForTask: (taskId: Int) -> Unit,
+    onDescriptionChange: (categoryId: Int?, description: String) -> Unit,
     onCompleteAll: (Int) -> Unit,
     onUncompletedAll: (Int) -> Unit,
     onDeleteCompleted: (Int) -> Unit,
     onDeleteAll: (Int) -> Unit,
 ) {
-
+    val surfaceColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -1771,251 +897,262 @@ private fun CategoryOptionsSideSheet(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.45f))
+//                .background(Color.Black.copy(alpha = 0.45f))
                 .clickable(
                     indication = null,
                     interactionSource = remember { MutableInteractionSource() }
                 ) { onDismiss() }
         )
-        Column(
+        Surface(
+            color = MaterialTheme.colorScheme.background,
+            tonalElevation = 0.dp,
+            shadowElevation = 12.dp,
             modifier = Modifier
                 .align(Alignment.CenterEnd)
                 .fillMaxHeight()
-                .fillMaxWidth(0.78f)
-                .background(MaterialTheme.colorScheme.surface)
-        ) {
-            when (sheetMode) {
-                CategorySheetMode.OVERVIEW -> {
-                    // ✅ هدر فعلی کتگوری
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(colorFromHex(category.color).copy(alpha = 0.15f))
-                            .padding(horizontal = 16.dp, vertical = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = iconFromKey(category.iconName),
-                            contentDescription = null,
-                            tint = colorFromHex(category.color),
-                            modifier = Modifier.size(28.dp)
-                        )
-                        Spacer(Modifier.width(12.dp))
-                        Text(
-                            text = category.name,
-                            style = MaterialTheme.typography.titleLarge,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-
-                    HorizontalDivider()
-
-                    // ✅ بدنه اسکرول‌دار (Overview)
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f)
-                    ) {
-                        item {
-                            // ✅ ردیف Tasks ساده (فقط یک ردیف، بدون expand/منو/لیست)
-                            SheetTasksCompactRow(
-                                count = tasks.size,
-                                onClick = { onChangeMode(CategorySheetMode.TASKS) }
-                            )
-                            HorizontalDivider(thickness = 0.5.dp)
-
-                            // آمارها مثل قبل (اگر می‌خوای نگه داریم)
-                            SheetStatRow(
-                                icon = Icons.Filled.Event,
-                                text = "$scheduledCount scheduled activities"
-                            )
-                            SheetStatRow(icon = Icons.Filled.History, text = "0 logged activities")
-                            SheetStatRow(icon = Icons.Filled.Description, text = "0 notes")
-                            SheetStatRow(icon = Icons.Filled.AttachFile, text = "0 attachments")
-
-                            Spacer(Modifier.height(10.dp))
-                            HorizontalDivider()
-                        }
-
-                        item {
-                            // ✅ Parameters همون قبلی (بدون تغییر)
-                            var paramsExpanded by rememberSaveable { mutableStateOf(true) }
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { paramsExpanded = !paramsExpanded }
-                                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(Icons.Filled.Settings, contentDescription = null)
-                                Spacer(Modifier.width(12.dp))
-                                Text(
-                                    "Parameters",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                Icon(
-                                    imageVector = if (paramsExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                                    contentDescription = null
-                                )
-                            }
-
-                            if (paramsExpanded) {
-                                HorizontalDivider()
-
-                                SheetActionRow(
-                                    leading = {
-                                        Icon(
-                                            iconFromKey(category.iconName),
-                                            contentDescription = null,
-                                            tint = colorFromHex(category.color)
-                                        )
-                                    },
-                                    title = "Icon",
-                                    trailing = {
-                                        Icon(
-                                            Icons.Filled.GridView,
-                                            contentDescription = null
-                                        )
-                                    },
-                                    onClick = onClickPickIcon
-                                )
-
-                                SheetActionRow(
-                                    leading = {
-                                        Box(
-                                            Modifier
-                                                .size(22.dp)
-                                                .border(
-                                                    1.dp,
-                                                    Color.Black.copy(alpha = 0.12f),
-                                                    CircleShape
-                                                )
-                                                .background(
-                                                    colorFromHex(category.color),
-                                                    CircleShape
-                                                )
-                                        )
-                                    },
-                                    title = "Color",
-                                    trailing = {
-                                        Icon(
-                                            Icons.Filled.Palette,
-                                            contentDescription = null
-                                        )
-                                    },
-                                    onClick = onClickPickColor
-                                )
-
-                                SheetActionRow(
-                                    leading = {
-                                        Icon(
-                                            Icons.Filled.Edit,
-                                            contentDescription = null
-                                        )
-                                    },
-                                    title = "Rename",
-                                    onClick = onClickRename
-                                )
-
-                                SheetActionRow(
-                                    leading = {
-                                        Icon(
-                                            Icons.Filled.Description,
-                                            contentDescription = null
-                                        )
-                                    },
-                                    title = "Add description",
-                                    onClick = onClickEditDescription
-                                )
-
-                                SheetActionRow(
-                                    leading = {
-                                        Icon(
-                                            Icons.Filled.Delete,
-                                            contentDescription = null
-                                        )
-                                    },
-                                    title = "Delete",
-                                    titleColor = MaterialTheme.colorScheme.error,
-                                    onClick = onClickDelete
-                                )
-                            }
-
-                            Spacer(Modifier.height(24.dp))
-                        }
-                    }
-                }
-
-                CategorySheetMode.TASKS -> {
-                    // ✅ حالت Tasks: کل سایدشیت عوض میشه
-                    TasksModeContent(
-                        category = category,
-                        tasks = tasks,
-                        taskMiniList = taskMiniUis,
-                        tasksRenderList = tasksRenderList,
-                        onBack = { onChangeMode(CategorySheetMode.OVERVIEW) },
-                        onAddTask = onAddTask,
-                        onClickTask = onClickTask,
-                        toggleTaskCompleted = { taskId: Int, done: Boolean ->
-                            toggleTaskCompleted(taskId, done)
-                        },
-                        deleteTask = { taskId: Int ->
-                            deleteTask(taskId)
-                        },
-                        applyTaskDragResult = { draggedId, oldParentId, newParentId, categoryId, currentList ->
-                            applyTaskDragResult(
-                                draggedId,
-                                oldParentId,
-                                newParentId,
-                                categoryId,
-                                currentList
-                            )
-                        },
-                        onDragEndRestoreExpandForTask = { onDragEndRestoreExpandForTask() },
-                        onDragStartMaybeCollapseForTask = { onDragStartMaybeCollapseForTask(it) },
-                        toggleExpandForTask = { toggleExpandForTask(it) },
-                        onCompleteAll = { onCompleteAll(category.categoryId!!) },
-                        onUncompletedAll = { onUncompletedAll(category.categoryId!!) },
-                        onDeleteCompleted = { onDeleteCompleted(category.categoryId!!) },
-                        onDeleteAll = { onDeleteAll(category.categoryId!!) },
+                .fillMaxWidth(0.73f)
+//                .background(MaterialTheme.colorScheme.surface)
+                .drawBehind {
+                    val strokeWidth = 2.dp.toPx()
+                    drawLine(
+                        color = surfaceColor,
+                        start = Offset(size.width, 0f),
+                        end = Offset(0f, 0f),
+                        strokeWidth = strokeWidth
                     )
+                }
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+            ) {
+                when (sheetMode) {
+                    CategorySheetMode.OVERVIEW -> {
+
+
+                        CategorySheetOverviewMode(
+                            category = category,
+                            tasksCount = tasks.size,
+                            scheduledCount = scheduledCount,
+                            onChangeMode = onChangeMode,
+                            onClickPickIcon = onClickPickIcon,
+                            onClickPickColor = onClickPickColor,
+                            onClickRename = onClickRename,
+                            onDescriptionChange = { description ->
+                                onDescriptionChange(category.categoryId, description)
+                            },
+                            onClickEditDescription = onClickEditDescription,
+                            onClickDelete = onClickDelete
+                        )
+
+                    }
+
+                    CategorySheetMode.TASKS -> {
+                        // ✅ حالت Tasks: کل سایدشیت عوض میشه
+                        CategorySheetTasksMode(
+                            category = category,
+                            tasks = tasks,
+                            taskMiniList = taskMiniUis,
+                            tasksRenderList = tasksRenderList,
+                            onBack = { onChangeMode(CategorySheetMode.OVERVIEW) },
+                            onAddTask = onAddTask,
+                            onClickTask = onClickTask,
+                            toggleTaskCompleted = { taskId: Int, done: Boolean ->
+                                toggleTaskCompleted(taskId, done)
+                            },
+                            deleteTask = { taskId: Int ->
+                                deleteTask(taskId)
+                            },
+                            applyTaskDragResult = { draggedId, oldParentId, newParentId, categoryId, currentList ->
+                                applyTaskDragResult(
+                                    draggedId,
+                                    oldParentId,
+                                    newParentId,
+                                    categoryId,
+                                    currentList
+                                )
+                            },
+                            onDragEndRestoreExpandForTask = { onDragEndRestoreExpandForTask() },
+                            onDragStartMaybeCollapseForTask = { onDragStartMaybeCollapseForTask(it) },
+                            toggleExpandForTask = { toggleExpandForTask(it) },
+                            onCompleteAll = { onCompleteAll(category.categoryId!!) },
+                            onUncompletedAll = { onUncompletedAll(category.categoryId!!) },
+                            onDeleteCompleted = { onDeleteCompleted(category.categoryId!!) },
+                            onDeleteAll = { onDeleteAll(category.categoryId!!) },
+                        )
+                    }
                 }
             }
         }
+
+
     }
 }
 
-
 @Composable
-private fun SheetTasksCompactRow(
-    count: Int,
-    onClick: () -> Unit
+private fun CategorySheetOverviewMode(
+    category: CategoryEntity,
+    tasksCount: Int,
+    scheduledCount: Int,
+    onChangeMode: (CategorySheetMode) -> Unit,
+    onClickPickIcon: () -> Unit,
+    onClickPickColor: () -> Unit,
+    onClickRename: () -> Unit,
+    onDescriptionChange: (String) -> Unit,
+    onClickEditDescription: () -> Unit,
+    onClickDelete: () -> Unit,
 ) {
-    Row(
+
+    var showEditDescriptionDialog by rememberSaveable { mutableStateOf(false) }
+
+
+    // ✅ هدر کتگوری
+    Surface(
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 0.dp,
+        shadowElevation = 8.dp,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(colorFromHex(category.color).copy(alpha = 0.15f))
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = iconFromKey(category.iconName),
+                contentDescription = null,
+                tint = colorFromHex(category.color),
+                modifier = Modifier.size(28.dp)
+            )
+            Spacer(Modifier.width(14.dp))
+            Text(
+                text = category.name,
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+
+    // ✅ بدنه اسکرول‌دار
+    LazyColumn(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .fillMaxHeight()
     ) {
-        Icon(
-            Icons.Filled.Task,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(Modifier.width(12.dp))
+        item {
+            SheetTasksCompactRow(
+                count = tasksCount,
+                onClick = { onChangeMode(CategorySheetMode.TASKS) }
+            )
 
-        // "Tasks" چسبیده به تعداد
-        Text("Tasks", style = MaterialTheme.typography.bodyLarge)
-        Spacer(Modifier.width(8.dp))
-        Text("$count", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            SheetStatRow(
+                icon = Icons.Filled.Event,
+                text = "$scheduledCount scheduled activities"
+            )
+            SheetStatRow(
+                icon = Icons.Filled.History,
+                text = "0 logged activities"
+            )
+            SheetStatRow(icon = Icons.Filled.Description, text = "0 notes")
+            SheetStatRow(
+                icon = Icons.Filled.AttachFile,
+                text = "0 attachments",
+                showDivider = false
+            )
+        }
+
+        item {
+            var paramsExpanded by rememberSaveable { mutableStateOf(true) }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(colorFromHex(category.color).copy(alpha = 0.15f))
+                    .clickable { paramsExpanded = !paramsExpanded }
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Filled.Settings, contentDescription = null)
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    "Parameters",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f)
+                )
+                Icon(
+                    imageVector = if (paramsExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                    contentDescription = null
+                )
+            }
+
+            if (paramsExpanded) {
+                SheetActionRow(
+                    leading = {
+                        Icon(
+                            iconFromKey(category.iconName),
+                            contentDescription = null,
+                            tint = colorFromHex(category.color)
+                        )
+                    },
+                    title = "Icon",
+                    trailing = { Icon(Icons.Filled.GridView, contentDescription = null) },
+                    onClick = onClickPickIcon
+                )
+
+                SheetActionRow(
+                    leading = {
+                        Box(
+                            Modifier
+                                .size(22.dp)
+                                .border(1.dp, Color.Black.copy(alpha = 0.12f), CircleShape)
+                                .background(colorFromHex(category.color), CircleShape)
+                        )
+                    },
+                    title = "Color",
+                    trailing = { Icon(Icons.Filled.Palette, contentDescription = null) },
+                    onClick = onClickPickColor
+                )
+
+                SheetActionRow(
+                    leading = { Icon(Icons.Filled.Edit, contentDescription = null) },
+                    title = "Rename",
+                    onClick = onClickRename
+                )
+
+                SheetActionRow(
+                    leading = { Icon(Icons.Filled.Description, contentDescription = null) },
+                    title = "description",
+                    onClick = { showEditDescriptionDialog = true }
+                )
+
+                SheetActionRow(
+                    leading = { Icon(Icons.Filled.Delete, contentDescription = null) },
+                    title = "Delete",
+                    titleColor = MaterialTheme.colorScheme.error,
+                    onClick = onClickDelete
+                )
+            }
+
+            Spacer(Modifier.height(24.dp))
+        }
     }
-    HorizontalDivider(thickness = 0.5.dp)
+
+    if (showEditDescriptionDialog) {
+        AddEditDescriptionDialog(
+            title = "Add Description",
+            value = category.description,
+            onValueChange = onDescriptionChange,
+            onDismiss = { showEditDescriptionDialog = false },
+            onConfirm = { showEditDescriptionDialog = false }
+        )
+    }
 }
 
+
 @Composable
-private fun TasksModeContent(
+private fun CategorySheetTasksMode(
     category: CategoryEntity,
     tasks: List<Task>,
     taskMiniList: List<TaskMiniUi>,
@@ -2473,6 +1610,1581 @@ private fun TasksModeContent(
     }
 }
 
+
+//>>>>>>>>>>>>>>>> Dialogs <<<<<<<<<<<<<<<<<<
+
+
+@Composable
+fun AddCategoryDialog(
+    draft: CategoryDraft2,
+    parentName: String,
+    parentIconName: String,
+    parentColorHex: String,
+    onDismiss: () -> Unit,
+    onPickParent: () -> Unit,
+    onPickIcon: () -> Unit,
+    onPickColor: () -> Unit,
+    onNameChange: (String) -> Unit,
+    onDescriptionChange: (String) -> Unit, // ✅ جدید (فعلاً اگر نداری، می‌تونی خالی پاس بدی)
+    onConfirm: () -> Unit,
+) {
+
+    var showAddDescription by rememberSaveable { mutableStateOf(false) }
+
+    DimmedDialog(
+        onDismiss = onDismiss,
+        modifier = Modifier
+            .fillMaxWidth(0.92f)
+            .fillMaxHeight(0.85f)
+            .background(MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.extraLarge),
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+
+            //  Top bar
+            AddEditeDialogTopBar(
+                title = "New category",
+                onNavigationClick = onDismiss,
+                actions = {
+                    IconButton(
+                        onClick = { onConfirm() },
+                        enabled = draft.name.isNotBlank()
+                    ) {
+                        Icon(Icons.Filled.Check, contentDescription = "Check")
+                    }
+                }
+            )
+
+            //title
+            AddEditeDialogTextField(
+                value = draft.name,
+                onValueChange = onNameChange,
+                hint = "Name *",
+            )
+
+            //parent
+            AddEditeDialogRow(
+                onClick = onPickParent,
+                content = {
+                    Text("Parent", modifier = Modifier.weight(1f))
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = iconFromKey(parentIconName),
+                            contentDescription = parentIconName,
+                            tint = colorFromHex(parentColorHex),
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(parentName, style = MaterialTheme.typography.titleMedium)
+                    }
+                },
+            )
+
+            //icon
+            AddEditeDialogRow(
+                onClick = onPickIcon,
+                content = {
+                    Text("Icon", modifier = Modifier.weight(1f))
+
+                    Icon(
+                        imageVector = iconFromKey(draft.iconName),
+                        contentDescription = draft.iconName,
+                        tint = colorFromHex(draft.color),   // ✅ مهم
+                        modifier = Modifier.size(24.dp)
+                    )
+                },
+            )
+
+            //Color
+            AddEditeDialogRow(
+                onClick = onPickColor,
+                content = {
+                    Text("Color", modifier = Modifier.weight(1f))
+
+                    Box(
+                        modifier = Modifier
+                            .size(22.dp)
+                            .border(1.dp, Color.Black.copy(alpha = 0.15f), CircleShape)
+                            .background(colorFromHex(draft.color), CircleShape)
+                    )
+                },
+            )
+
+            // Description
+            AddEditeDialogRow(
+                onClick = { showAddDescription = true },
+                content = {
+                    Text("Add description", modifier = Modifier.weight(1f))
+
+                },
+            )
+
+            if (showAddDescription) {
+                AddEditDescriptionDialog(
+                    title = "Add Description",
+                    value = draft.description,
+                    onValueChange = onDescriptionChange,
+                    onDismiss = { showAddDescription = false },
+                    onConfirm = { showAddDescription = false }
+                )
+            }
+
+
+        }
+    }
+}
+
+@Composable
+fun AddEditeTaskDialog(
+    addTaskMod: Boolean,
+    categoryName: String,
+    categoryIconName: String,
+    categoryColorHex: String,
+    draft: TaskDraft,
+    onDismiss: () -> Unit,
+    onNameChange: (String) -> Unit,
+    onPriorityChange: (Int) -> Unit,
+    onCompletedToggle: (Boolean) -> Unit,
+    onNoteChange: (String) -> Unit,
+    onInsertAtTopChange: (Boolean) -> Unit,   // ✅ جدید
+    onChildLevelChange: (Int) -> Unit,        // ✅ جدید
+    onConfirm: (ConfirmAction) -> Unit,       // ✅ جدید
+    onOpenSchedule: () -> Unit,
+    onPickCategory: () -> Unit,
+    allowedChildLevels: Set<Int>,
+    schedules: List<TaskScheduleUi>,
+    onClickSchedule: (Int) -> Unit,
+    onDeleteSchedule: (Int) -> Unit,
+) {
+
+    var pendingDeleteScheduleId by rememberSaveable { mutableStateOf<Int?>(null) }
+    var pendingDeleteScheduleTitle by rememberSaveable { mutableStateOf("") }
+    var showAddNote by rememberSaveable { mutableStateOf(false) }
+
+    DimmedDialog(
+        onDismiss = onDismiss,
+        modifier = Modifier
+            .fillMaxWidth(0.92f)
+            .fillMaxHeight(0.85f)
+            .background(MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.extraLarge),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+        )
+
+        {
+
+            // Top bar
+            AddEditeDialogTopBar(
+                title = if (addTaskMod) "New Task" else "Edit Task",
+                onNavigationClick = onDismiss,
+                actions = {
+                    if (addTaskMod) {
+                        IconButton(
+                            onClick = { onConfirm(ConfirmAction.SAVE_AND_CONTINUE) },
+                            enabled = draft.name.isNotBlank()
+                        ) {
+                            Icon(Icons.Filled.DoneAll, contentDescription = null)
+                        }
+                    }
+
+                    IconButton(
+                        onClick = { onConfirm(ConfirmAction.SAVE_AND_CLOSE) },
+                        enabled = draft.name.isNotBlank()
+                    ) {
+                        Icon(Icons.Filled.Check, contentDescription = null)
+                    }
+                }
+            )
+
+
+            //title
+            AddEditeDialogTextField(
+                value = draft.name,
+                onValueChange = onNameChange,
+                hint = "Name *",
+            )
+
+            // Category
+            AddEditeDialogRow(
+                onClick = onPickCategory,
+                content = {
+                    Icon(
+                        imageVector = iconFromKey(categoryIconName),
+                        contentDescription = null,
+                        tint = colorFromHex(categoryColorHex),
+                        modifier = Modifier.size(26.dp)
+                    )
+                    Spacer(Modifier.width(14.dp))
+                    Text(
+                        categoryName,
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    Spacer(Modifier.weight(1f))
+
+                    VerticalDivider(thickness = 1.dp, modifier = Modifier.height(24.dp))
+
+                    Spacer(Modifier.width(8.dp))
+
+                    IconButton(onClick = { onInsertAtTopChange(!draft.insertAtTop) }) {
+                        Icon(
+                            imageVector = if (draft.insertAtTop) Icons.Filled.ArrowUpward else Icons.Filled.ArrowDownward,
+                            contentDescription = "insert position"
+                        )
+                    }
+                },
+            )
+
+            // Priority
+            AddEditeDialogRow(
+                onClick = null,
+                content = {
+                    Icon(Icons.Filled.Flag, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Priority", modifier = Modifier.width(70.dp))
+                    PriorityDots(
+                        selected = draft.priority,
+                        onPick = onPriorityChange
+                    )
+                },
+            )
+
+            //Child
+            AddEditeDialogRow(
+                onClick = null,
+                content = {
+                    Icon(Icons.Filled.SubdirectoryArrowRight, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Child", modifier = Modifier.width(70.dp))
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+
+                        ChildLevelChip(
+                            "-",
+                            selected = draft.childLevel == 0,
+                            enabled = 0 in allowedChildLevels
+                        ) { onChildLevelChange(0) }
+                        ChildLevelChip(
+                            ">",
+                            selected = draft.childLevel == 1,
+                            enabled = 1 in allowedChildLevels
+                        ) { onChildLevelChange(1) }
+                        ChildLevelChip(
+                            ">>",
+                            selected = draft.childLevel == 2,
+                            enabled = 2 in allowedChildLevels
+                        ) { onChildLevelChange(2) }
+                        ChildLevelChip(
+                            ">>>",
+                            selected = draft.childLevel == 3,
+                            enabled = 3 in allowedChildLevels
+                        ) { onChildLevelChange(3) }
+
+                    }
+                },
+            )
+
+
+            //Completed
+            AddEditeDialogRow(
+                onClick = { onCompletedToggle(!draft.isCompleted) },
+                content = {
+                    Icon(
+                        imageVector = if (draft.isCompleted)
+                            Icons.Filled.CheckCircle
+                        else
+                            Icons.Filled.RadioButtonUnchecked,
+                        contentDescription = null,
+                        tint = if (draft.isCompleted)
+                            Color(0xFF2E7D32)
+                        else
+                            Color.Gray
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        if (draft.isCompleted) "Completed" else "Uncompleted",
+                        modifier = Modifier.weight(1f)
+                    )
+
+                },
+            )
+
+            // Note
+            AddEditeDialogRow(
+                onClick = { showAddNote = true },
+                content = {
+                    Icon(Icons.AutoMirrored.Filled.Note, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Add note", modifier = Modifier.weight(1f))
+
+                },
+            )
+
+            //Schedule
+            AddEditeDialogRow(
+                onClick = onOpenSchedule,
+                content = {
+                    Icon(Icons.Filled.Event, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Schedule this task", modifier = Modifier.weight(1f))
+                },
+            )
+
+            //Schedule List
+            if (schedules.isNotEmpty()) {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(start = 44.dp)
+                ) {
+                    schedules.forEach { ui ->
+                        ScheduleRow(
+                            schedule = ui.schedule,
+                            onClick = { onClickSchedule(ui.key) },
+                            onRequestDelete = {
+                                // ✅ فقط درخواست حذف => دیالوگ باز شود
+                                pendingDeleteScheduleId = ui.key
+                                pendingDeleteScheduleTitle =
+                                    ui.schedule.title?.takeIf { it.isNotBlank() }
+                                        ?: taskNameForScheduleFallback(draft.name) // پایین تعریف می‌کنیم
+                            }
+                        )
+
+                        HorizontalDivider(thickness = 0.5.dp)
+                    }
+                }
+            }
+
+
+
+
+
+            if (pendingDeleteScheduleId != null) {
+                AlertDialog(
+                    onDismissRequest = { pendingDeleteScheduleId = null },
+                    title = { Text("Delete schedule?") },
+                    text = { Text("آیا از حذف این اسکچول مطمئن هستی؟\n\n$pendingDeleteScheduleTitle") },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            val key = pendingDeleteScheduleId!!
+                            onDeleteSchedule(key) // وصل به viewModel.deleteScheduleByKey(key)
+                            pendingDeleteScheduleId = null
+                        }) { Text("Delete") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = {
+                            pendingDeleteScheduleId = null
+                        }) { Text("Cancel") }
+                    }
+                )
+            }
+
+            if (showAddNote) {
+                AddEditDescriptionDialog(
+                    title = "Add Note",
+                    value = draft.note,
+                    onValueChange = onNoteChange,
+                    onDismiss = { showAddNote = false },
+                    onConfirm = { showAddNote = false }
+                )
+            }
+
+
+        }
+    }
+}
+
+@Composable
+fun AddEditeScheduleDialog(
+    addSchedule: Boolean,
+    taskName: String,
+    draft: ScheduleDraft,
+    onDismiss: () -> Unit,
+    onTitleChange: (String) -> Unit,
+    onModeChange: (ScheduleMode) -> Unit,
+    onStartChange: (LocalTime) -> Unit,
+    onEndChange: (LocalTime) -> Unit,
+    onDurationChange: (Int) -> Unit,
+    onRepeatingChange: (Boolean) -> Unit,
+    onConfirm: () -> Unit,
+    onDateChange: (LocalDate) -> Unit,
+    onRepeatIntervalChange: (Int) -> Unit,
+    onRepeatUnitChange: (RepeatUnit) -> Unit,
+    onWeekdaysMaskChange: (Int) -> Unit,
+    onNoteChange: (String) -> Unit,
+) {
+    var showAddNote by rememberSaveable { mutableStateOf(false) }
+
+    DimmedDialog(
+        onDismiss = onDismiss,
+        modifier = Modifier
+            .fillMaxWidth(0.92f)
+            .fillMaxHeight(0.85f)
+            .background(MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.extraLarge),
+    ) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+
+
+            // Top bar
+            AddEditeDialogTopBar(
+                title = if (addSchedule) "New scheduled" else "Edit scheduled",
+                onNavigationClick = onDismiss,
+                actions = {
+                    IconButton(
+                        onClick = onConfirm,
+                        enabled = true
+                    ) {
+                        Icon(Icons.Filled.Check, contentDescription = null)
+                    }
+                }
+            )
+
+            //title
+            AddEditeDialogTextField(
+                value = draft.title,
+                onValueChange = onTitleChange,
+                hint = "Title (optional)",
+            )
+
+            // mode dropdown
+            AddEditeDialogRow(
+                onClick = null,
+                content = {
+                    ModeDropdownRow(
+                        mode = draft.mode,
+                        onPick = onModeChange
+                    )
+                },
+                startPadding = 0
+            )
+
+            //  TimePicker
+            AddEditeDialogRow(
+                onClick = null,
+                content = {
+                    if (draft.mode == ScheduleMode.TIME_RANGE) {
+                        // فعلاً ساده: نمایش متن + بعداً TimePicker
+                        TimeRangeRow(
+                            start = draft.start,
+                            end = draft.end,
+                            onStartChange = onStartChange,
+                            onEndChange = onEndChange
+                        )
+                    } else {
+                        AmountOfTimeRow(   //TODO
+                            minutes = draft.durationMinutes,
+                            onMinutesChange = onDurationChange
+                        )
+                    }
+                },
+            )
+
+            //DateRow
+            if (draft.mode == ScheduleMode.TIME_RANGE || draft.mode == ScheduleMode.AMOUNT_OF_TIME) {
+
+                AddEditeDialogRow(
+                    onClick = null,
+                    content = {
+                        JalaliDateRow(
+                            selectedDate = draft.date,
+                            onChangeDate = { onDatePicked ->
+                                // چون draft از VM میاد، باید setter داشته باشی:
+                                // viewModel.setScheduleDate(onDatePicked)
+                                // اینجا فقط callback می‌گیریم:
+                                onDateChange(onDatePicked)
+                            }
+                        )
+                    },
+                    startPadding = 0
+                )
+            }
+
+            // Repeating
+            AddEditeDialogRow(
+                onClick = null,
+                content = {
+                    Icon(Icons.Filled.Repeat, contentDescription = "Repeat")
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Repeating", modifier = Modifier.weight(1f))
+                        Switch(checked = draft.repeat.enabled, onCheckedChange = onRepeatingChange)
+                    }
+                },
+            )
+
+            //RepeatOptions
+            if (draft.repeat.enabled) {
+                AddEditeDialogRow(
+                    onClick = null,
+                    content = {
+                        Icon(Icons.Filled.EventRepeat, contentDescription = "Repeat")
+                        RepeatEveryRow(
+                            interval = draft.repeat.interval,
+                            unit = draft.repeat.unit,
+                            onIntervalChange = { onRepeatIntervalChange(it) },
+                            onUnitChange = { onRepeatUnitChange(it) }
+                        )
+                    }, showDivider = if (draft.repeat.unit == RepeatUnit.WEEK) false else true
+                )
+                if (draft.repeat.unit == RepeatUnit.WEEK) {
+                    WeekdayPickerRow(
+                        selectedMask = draft.repeat.weekdaysMask,
+                        onChangeMask = onWeekdaysMaskChange
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(start = 66.dp))
+                }
+            }
+
+            // Note
+            AddEditeDialogRow(
+                onClick = { showAddNote = true },
+                content = {
+                    Icon(Icons.AutoMirrored.Filled.Note, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Add note", modifier = Modifier.weight(1f))
+                },
+            )
+
+
+            //add Reminder
+            AddEditeDialogRow(
+                onClick = null,
+                content = {
+                    Icon(Icons.Filled.History, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Add reminder",  modifier = Modifier.weight(1f))
+                },
+            )
+
+
+            if (showAddNote) {
+                AddEditDescriptionDialog(
+                    title = "Add Note",
+                    value = draft.note,
+                    onValueChange = onNoteChange,
+                    onDismiss = { showAddNote = false },
+                    onConfirm = { showAddNote = false }
+                )
+            }
+
+        }
+    }
+}
+
+@Composable
+fun AddEditDescriptionDialog(
+    title: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+    confirmEnabled: Boolean = value.isNotBlank()
+) {
+
+    DimmedDialog(
+        onDismiss = onDismiss,
+        shape = RoundedCornerShape(28.dp),
+        modifier = Modifier
+            .fillMaxWidth(0.92f)
+            .fillMaxHeight(0.85f)
+    ) {
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+        ) {
+
+            // 🔹 Top Bar عمومی
+            AddEditeDialogTopBar(
+                title = title,
+                onNavigationClick = onDismiss,
+                actions = {
+                    IconButton(
+                        onClick = onConfirm,
+                        enabled = confirmEnabled
+                    ) {
+                        Icon(Icons.Filled.Check, contentDescription = null)
+                    }
+                }
+            )
+
+            // 🔹 متن بزرگ (تقریباً کل دیالوگ)
+            TextField(
+                value = value,
+                onValueChange = onValueChange,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)           // 👈 کل فضای باقی‌مانده را می‌گیرد
+                    .padding(20.dp),
+                placeholder = {
+                    Text(
+                        "Write description...",
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                    )
+                },
+                textStyle = MaterialTheme.typography.bodyLarge,
+                singleLine = false,
+                maxLines = Int.MAX_VALUE,
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    disabledContainerColor = Color.Transparent,
+                    errorContainerColor = Color.Transparent,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                    disabledIndicatorColor = Color.Transparent,
+                    errorIndicatorColor = Color.Transparent
+                )
+            )
+        }
+    }
+}
+
+
+//>>>>>>>>>>>>>>>> Component <<<<<<<<<<<<<<<<<<
+
+@Composable
+fun AddEditeDialogTopBar(
+    title: String,
+    onNavigationClick: (() -> Unit)? = null,
+    navigationIcon: ImageVector = Icons.Filled.ArrowBackIosNew,
+    actions: @Composable RowScope.() -> Unit = {},
+    showDivider: Boolean = true
+) {
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+
+            // 🔹 آیکن سمت چپ (اختیاری)
+            if (onNavigationClick != null) {
+                IconButton(onClick = onNavigationClick) {
+                    Icon(navigationIcon, contentDescription = null)
+                }
+            } else {
+                Spacer(Modifier.width(48.dp)) // جای خالی هم‌تراز
+            }
+
+            Spacer(Modifier.width(8.dp))
+
+            // 🔹 عنوان
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.weight(1f)
+            )
+
+            // 🔹 اکشن‌های سمت راست (هرچی بدی رندر میشه)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                content = actions
+            )
+        }
+
+        if (showDivider) {
+            HorizontalDivider()
+        }
+    }
+}
+
+@Composable
+fun AddEditeDialogTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    hint: String,
+    modifier: Modifier = Modifier,
+    singleLine: Boolean = true,
+    showDivider: Boolean = true
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(66.dp) // ارتفاع دقیق
+    ) {
+
+        TextField(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            placeholder = {
+                Text(
+                    text = hint,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
+                )
+            },
+            singleLine = singleLine,
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = Color.Transparent,
+                unfocusedContainerColor = Color.Transparent,
+                disabledContainerColor = Color.Transparent,
+                errorContainerColor = Color.Transparent,
+
+                // خط پایین حذف
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent,
+                disabledIndicatorColor = Color.Transparent,
+                errorIndicatorColor = Color.Transparent
+            )
+        )
+
+        if (showDivider) HorizontalDivider()
+    }
+}
+
+@Composable
+fun AddEditeDialogRow(
+    onClick: (() -> Unit)? = null,
+    content: @Composable () -> Unit,
+    showDivider: Boolean = true,
+    startPadding: Int = 14
+) {
+    val clickableModifier =
+        if (onClick != null) {
+            Modifier.clickable { onClick() }
+        } else {
+            Modifier
+        }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(66.dp)
+            .then(clickableModifier)
+            .padding(start = startPadding.dp, end = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        content()
+    }
+    if (showDivider) HorizontalDivider(modifier = Modifier.padding(start = 66.dp))
+}
+
+
+@Composable
+private fun JalaliDateRow(
+    selectedDate: LocalDate,
+    onChangeDate: (LocalDate) -> Unit
+) {
+    val openDialog = remember { mutableStateOf(false) }
+
+    val jalali = remember(selectedDate) { selectedDate.toJalali() }
+    val dateText = remember(selectedDate) { jalali.toFaText() }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { openDialog.value = true }
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(Icons.Filled.CalendarMonth, contentDescription = null)
+        Spacer(Modifier.width(12.dp))
+
+        Text(
+            text = dateText,
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.weight(1f)
+        )
+
+        IconButton(onClick = { onChangeDate(LocalDate.now()) }) {
+            Icon(Icons.Filled.Today, contentDescription = "today")
+        }
+    }
+
+
+    // دیالوگ تقویم شمسی
+    JalaliDatePickerDialog(
+        openDialog = openDialog,
+        initialDate = jalali,
+
+        onConfirm = { picked: JalaliCalendar ->
+            onChangeDate(picked.toLocalDate())
+        },
+
+        // محدودیت تاریخ نداشته باشیم
+        disableBeforeDate = null,
+        disableAfterDate = null,
+
+        onSelectDay = { /* لازم نیست کاری کنیم */ },
+
+        // رنگ‌ها از تم فعلی
+        backgroundColor = Color(0xFFF8F9FB),         // خیلی روشن، نرم و مدرن
+
+        textColor = Color(0xFF1C1C1E),                // مشکی نرم (نه کاملاً سیاه)
+        textDisabledColor = Color(0xFFB0B3B8),       // خاکستری ملایم
+
+        selectedIconColor = Color(0xFF00B894),        // سبز فیروزه‌ای زنده
+        textColorHighlight = Color(0xFF009E84),       // سبز کمی تیره‌تر برای انتخاب
+
+        dropDownColor = Color(0xFF1C1C1E),
+        dayOfWeekLabelColor = Color(0xFF6B7280),      // خاکستری متوسط برای شنبه/یکشنبه...
+
+        confirmBtnColor = Color(0xFF00B894),          // هم‌رنگ انتخاب
+        cancelBtnColor = Color(0xFF9CA3AF),           // خاکستری خنثی
+        todayBtnColor = Color(0xFF1C1C1E),
+        nextPreviousBtnColor = Color(0xFF00B894),    // فلش‌های ماه
+
+        fontFamily = FontFamily.Default,   // پیش‌فرض سیستم
+        fontSize = 18.sp     // پیش‌فرض کتابخانه
+    )
+
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RepeatEveryRow(
+    interval: Int,
+    unit: RepeatUnit,
+    onIntervalChange: (Int) -> Unit,
+    onUnitChange: (RepeatUnit) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    val unitLabel = when (unit) {
+        RepeatUnit.DAY -> "days"
+        RepeatUnit.WEEK -> "weeks"
+        RepeatUnit.MONTH -> "months"
+        RepeatUnit.YEAR -> "years"
+    }
+
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center
+    ) {
+        Text("Repeat every")
+
+        Spacer(Modifier.width(10.dp))
+
+        // عدد 0..99 (ولی بهتره ذخیره رو 1..99 کنی)
+        TextField(
+            value = interval.toString(),
+            onValueChange = { v ->
+                val n = v.filter(Char::isDigit).take(2).toIntOrNull() ?: 0
+                onIntervalChange(n.coerceIn(0, 99))
+            },
+            singleLine = true,
+            modifier = Modifier
+                .width(54.dp),
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = Color.Transparent,
+                unfocusedContainerColor = Color.Transparent,
+                disabledContainerColor = Color.Transparent,
+                errorContainerColor = Color.Transparent,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent,
+                disabledIndicatorColor = Color.Transparent,
+                errorIndicatorColor = Color.Transparent
+            ),
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Number,   // ✅ فقط عدد
+                imeAction = ImeAction.Done
+            ),
+            keyboardActions = KeyboardActions(
+                onDone = {
+                    keyboardController?.hide()   // کیبورد بسته شود
+                    focusManager.clearFocus()    // فوکوس برداشته شود
+                }
+            )
+        )
+
+        Spacer(Modifier.width(4.dp))
+
+        // واحد (مثل مود، کشویی)
+        ExposedDropdownMenuBox(
+            expanded = expanded,
+            onExpandedChange = { expanded = !expanded },
+            modifier = Modifier.weight(1f)
+        ) {
+            TextField(
+                value = unitLabel,
+                onValueChange = {},
+                readOnly = true,
+                singleLine = true,
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+                modifier = Modifier
+//                    .width(132.dp)
+                    .menuAnchor(MenuAnchorType.PrimaryNotEditable),
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    disabledContainerColor = Color.Transparent,
+                    errorContainerColor = Color.Transparent,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                    disabledIndicatorColor = Color.Transparent,
+                    errorIndicatorColor = Color.Transparent
+                ),
+            )
+
+            ExposedDropdownMenu(
+                expanded = expanded,
+                containerColor = MaterialTheme.colorScheme.surface,
+                onDismissRequest = { expanded = false },
+                modifier = Modifier.fillMaxWidth(0.8f)
+            ) {
+                DropdownMenuItem(
+                    text = { Text("days") },
+                    onClick = { onUnitChange(RepeatUnit.DAY); expanded = false })
+                DropdownMenuItem(
+                    text = { Text("weeks") },
+                    onClick = { onUnitChange(RepeatUnit.WEEK); expanded = false })
+                DropdownMenuItem(
+                    text = { Text("months") },
+                    onClick = { onUnitChange(RepeatUnit.MONTH); expanded = false })
+                DropdownMenuItem(
+                    text = { Text("years") },
+                    onClick = { onUnitChange(RepeatUnit.YEAR); expanded = false })
+            }
+        }
+    }
+}
+
+@Composable
+private fun WeekdayPickerRow(
+    selectedMask: Int,
+    onChangeMask: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    // Sa Su Mo Tu We Th Fr => بیت‌های 0..6
+    val days = listOf(
+        0 to "Sa", 1 to "Su", 2 to "Mo", 3 to "Tu",
+        4 to "We", 5 to "Th", 6 to "Fr",
+    )
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .padding(top = 6.dp, bottom = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        days.forEach { (bit, label) ->
+            val selected = (selectedMask and (1 shl bit)) != 0
+
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(
+                        color = if (selected) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.surfaceVariant,
+                        shape = CircleShape
+                    )
+                    .border(
+                        1.dp,
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+                        CircleShape
+                    )
+                    .clickable {
+                        val newMask =
+                            if (selected) selectedMask and (1 shl bit).inv()
+                            else selectedMask or (1 shl bit)
+                        onChangeMask(newMask)
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (selected) MaterialTheme.colorScheme.onPrimary
+                    else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CategoryRow(
+    item: CategoryRenderItem,
+    computedLevel: Int,
+    onToggleExpand: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    onOpenMenu: (Int) -> Unit,
+) {
+    val id = item.category.categoryId ?: return
+    val indent = (computedLevel - 1).coerceAtLeast(0) * 16
+    val bg = containerColorForLevel(computedLevel)
+
+    Surface(
+        shape = RoundedCornerShape(
+            bottomStart = 12.dp   // 👈 فقط پایین راست گرد
+        ),
+        color = bg,
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(start = indent.dp)
+    ) {
+        ListItem(
+            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+            leadingContent = {
+                Icon(
+                    imageVector = iconFromKey(item.category.iconName),
+                    contentDescription = null,
+                    tint = colorFromHex(item.category.color),
+                    modifier = Modifier.size(30.dp)
+                )
+            },
+            headlineContent = { Text(item.category.name) },
+            trailingContent = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val canHaveChildren = computedLevel < 4
+                    if (item.hasChildren && canHaveChildren) {
+                        IconButton(onClick = { onToggleExpand(id) }) {
+                            Icon(
+                                imageVector = if (item.isExpanded)
+                                    Icons.Filled.ExpandLess
+                                else
+                                    Icons.Filled.ExpandMore,
+                                contentDescription = "expand"
+                            )
+                        }
+                    }
+
+                    IconButton(onClick = { onOpenMenu(id) }) {
+                        Icon(Icons.Filled.MoreVert, contentDescription = "menu")
+                    }
+                }
+            }
+        )
+    }
+
+    HorizontalDivider(
+        thickness = 0.5.dp,
+        modifier = Modifier.padding(start = indent.dp)
+    )
+}
+
+
+@Composable
+private fun TaskRow(
+    item: TaskRenderItem,
+    computedLevel: Int,
+    onToggleExpand: (Int) -> Unit,
+    onClickTask: (Int) -> Unit,
+    onToggleDone: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val id = item.task.id
+    val indent = ((computedLevel - 1).coerceAtLeast(0) * 16).dp
+    val bg = containerColorForLevel(computedLevel)
+
+    val canHaveChildren = computedLevel < 4
+    val showExpand = item.hasChildren && canHaveChildren
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(52.dp) // ✅ ارتفاع ثابت
+            .background(bg)
+            .clickable { onClickTask(id) }
+            .padding(start = indent, end = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+
+        Spacer(Modifier.width(6.dp))
+
+
+        // ✅ دایره done
+        Box(
+            modifier = Modifier
+                .size(22.dp)
+                .border(
+                    2.dp,
+                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
+                    CircleShape
+                )
+                .background(
+                    color = if (item.task.isDone)
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
+                    else Color.Transparent,
+                    shape = CircleShape
+                )
+                .clickable(
+                    // ✅ مهم: کلیک دایره به کلیک ردیف نره
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() }
+                ) { onToggleDone(id) }
+        )
+
+
+        // ✅ Priority marker
+        val (pText, pColor) = when (item.task.priority) {
+            1 -> "*" to Color(0xFF2E7D32) // سبز
+            2 -> "!" to Color(0xFFF9A825) // زرد
+            3 -> "!!" to Color(0xFFC62828) // قرمز
+            else -> "" to Color.Unspecified
+        }
+        if (pText.isNotBlank()) {
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = pText,
+                color = pColor,
+                style = MaterialTheme.typography.titleMedium
+            )
+            Spacer(Modifier.width(8.dp))
+        } else {
+            Spacer(Modifier.width(12.dp))
+        }
+
+        Spacer(Modifier.width(12.dp))
+
+
+        // ✅ عنوان (یک خط، ellipsis)
+        Text(
+            text = item.task.title,
+            modifier = Modifier.weight(1f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+
+
+        // ✅ schedule icon (اگر نبود، فضا نمی‌گیرد)
+        if (item.task.hasSchedule) {
+            Spacer(Modifier.width(8.dp))
+            Icon(
+                imageVector = Icons.Filled.Event,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.error
+            )
+        }
+
+        Spacer(Modifier.width(8.dp))
+
+
+        // ✅ جایگاه expand همیشه رزرو می‌شود تا چیدمان ثابت بماند
+        // اندازه‌ی IconButton معمولاً 48.dp است، پس اینجا دقیقاً همان را رزرو می‌کنیم.
+        Box(
+            modifier = Modifier.size(48.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            if (showExpand) {
+                IconButton(
+                    onClick = { onToggleExpand(id) },
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Icon(
+                        imageVector = if (item.isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                        contentDescription = "expand"
+                    )
+                }
+            } else {
+                // هیچ چیز نمایش نده، ولی فضا محفوظ است ✅
+            }
+        }
+    }
+}
+
+@Composable
+fun PickParentDialogSmall(
+    items: List<CategoryRenderItem>,
+    levelById: Map<Int, Int>,
+    onDismiss: () -> Unit,
+    onPick: (parentId: Int) -> Unit,
+) {
+    DimmedDialog(
+        onDismiss = onDismiss,
+        modifier = Modifier
+            .fillMaxWidth(0.86f)
+            .fillMaxHeight(0.65f)
+            .background(MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.extraLarge),
+        dimAlpha = 0.4f,
+        dismissOnBackdropClick = true
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                TextButton(onClick = onDismiss) { Text("Close") }
+                Text("انتخاب والد", style = MaterialTheme.typography.titleMedium)
+                Spacer(modifier = Modifier.size(48.dp)) // برای بالانس
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(top = 8.dp, bottom = 8.dp))
+
+            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                items(items, key = { it.category.categoryId ?: it.hashCode() }) { item ->
+                    val id = item.category.categoryId ?: return@items
+
+                    // level واقعی/نمایشی (از map بهتره)
+                    val level = levelById[id] ?: item.level
+
+                    // همون قانون قبلی: والد نباید سطح 4 باشه
+                    val enabled = level < 4
+
+                    ParentPickerRow(
+                        item = item,
+                        computedLevel = level,
+                        enabled = enabled,
+                        onPick = { onPick(id) }
+                    )
+
+                    HorizontalDivider(thickness = 0.5.dp) // مثل صفحه اصلی
+                }
+            }
+
+        }
+    }
+}
+
+@Composable
+fun ChooseIconDialog(
+    selectedKey: String,
+    onDismiss: () -> Unit,
+    onPick: (IconOption) -> Unit,
+) {
+    val sections = remember { buildIconSections() }
+    val expanded = remember {
+        mutableStateMapOf<String, Boolean>().apply {
+            sections.forEach { put(it.title, true) }
+        }
+    }
+
+    DimmedDialog(
+        onDismiss = onDismiss,
+        modifier = Modifier
+            .fillMaxWidth(0.92f)
+            .fillMaxHeight(0.80f)
+            .background(MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.extraLarge),
+        dimAlpha = 0.6f,
+        dismissOnBackdropClick = true
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+
+            Text(
+                text = "Choose icon",
+                style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.padding(16.dp)
+            )
+
+            HorizontalDivider()
+
+            LazyColumn(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 12.dp)
+            ) {
+                items(sections) { section ->
+                    SectionHeaderRow(
+                        title = section.title,
+                        isExpanded = expanded[section.title] == true,
+                        onToggle = { expanded[section.title] = expanded[section.title] != true }
+                    )
+
+                    if (expanded[section.title] == true) {
+                        IconGrid4(
+                            options = section.options,
+                            selectedKey = selectedKey,
+                            onPick = onPick
+                        )
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                }
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+                horizontalArrangement = Arrangement.End
+            ) {
+                TextButton(onClick = onDismiss) { Text("CANCEL") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SectionHeaderRow(
+    title: String,
+    isExpanded: Boolean,
+    onToggle: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 12.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.weight(1f)
+        )
+        IconButton(onClick = onToggle) {
+            Icon(
+                imageVector = if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                contentDescription = "toggle"
+            )
+        }
+    }
+}
+
+@Composable
+private fun IconGrid4(
+    options: List<IconOption>,
+    selectedKey: String,
+    onPick: (IconOption) -> Unit,
+) {
+    // ساده و سبک: ۴تایی در هر ردیف، بدون LazyVerticalGrid
+    val rows = (options.size + 3) / 4
+    Column(modifier = Modifier.fillMaxWidth()) {
+        repeat(rows) { r ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                for (c in 0 until 4) {
+                    val idx = r * 4 + c
+                    if (idx < options.size) {
+                        val opt = options[idx]
+                        val selected = opt.key == selectedKey
+
+                        IconButton(
+                            onClick = { onPick(opt) },
+                            modifier = Modifier
+                                .size(56.dp)
+                                .then(
+                                    if (selected) Modifier.border(
+                                        width = 2.dp,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        shape = MaterialTheme.shapes.small
+                                    ) else Modifier
+                                )
+                        ) {
+                            Icon(
+                                imageVector = opt.icon,
+                                contentDescription = opt.key,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
+                    } else {
+                        Spacer(modifier = Modifier.size(56.dp))
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+@Composable
+fun ChooseColorDialog(
+    initialHex: String,
+    onDismiss: () -> Unit,
+    onConfirm: (hex: String) -> Unit
+) {
+    val options = remember { buildColorOptions() }
+    var selectedHex by remember { mutableStateOf(initialHex.ifBlank { options.first().hex }) }
+
+    DimmedDialog(
+        onDismiss = onDismiss,
+        modifier = Modifier
+            .fillMaxWidth(0.92f)
+            .fillMaxHeight(0.62f)
+            .background(MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.extraLarge),
+        dimAlpha = 0.6f,
+        dismissOnBackdropClick = true
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+
+            Text(
+                text = "Choose color",
+                style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.padding(16.dp)
+            )
+
+            HorizontalDivider()
+
+            Spacer(Modifier.height(18.dp))
+
+            // Grid ساده: 6 ستون * چند ردیف
+            val cols = 6
+            val rows = (options.size + cols - 1) / cols
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                repeat(rows) { r ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        for (c in 0 until cols) {
+                            val idx = r * cols + c
+                            if (idx < options.size) {
+                                val opt = options[idx]
+                                val selected = opt.hex.equals(selectedHex, ignoreCase = true)
+
+                                Box(
+                                    modifier = Modifier
+                                        .size(42.dp)
+                                        .border(
+                                            width = if (selected) 4.dp else 0.dp,
+                                            color = if (selected) Color.Black else Color.Transparent,
+                                            shape = CircleShape
+                                        )
+                                        .padding(if (selected) 4.dp else 0.dp)
+                                        .border(
+                                            width = 1.dp,
+                                            color = Color.Black.copy(alpha = 0.08f),
+                                            shape = CircleShape
+                                        )
+                                        .clickable { selectedHex = opt.hex },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .border(0.dp, Color.Transparent, CircleShape)
+                                            .background(opt.color, CircleShape)
+                                    )
+                                }
+                            } else {
+                                Spacer(Modifier.size(42.dp))
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.weight(1f))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+                horizontalArrangement = Arrangement.End
+            ) {
+                TextButton(onClick = onDismiss) { Text("CANCEL") }
+                Spacer(Modifier.width(8.dp))
+                TextButton(onClick = { onConfirm(selectedHex) }) { Text("OK") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ParentPickerRow(
+    item: CategoryRenderItem,
+    computedLevel: Int,
+    enabled: Boolean,
+    onPick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val indent = (computedLevel - 1).coerceAtLeast(0) * 16
+    val bg = containerColorForLevel(computedLevel)
+
+    ListItem(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(start = indent.dp)
+            .then(if (enabled) Modifier.clickable { onPick() } else Modifier),
+        colors = ListItemDefaults.colors(
+            containerColor = bg
+        ),
+        leadingContent = {
+            Icon(
+                imageVector = iconFromKey(item.category.iconName),
+                contentDescription = item.category.iconName,
+                tint = if (enabled) colorFromHex(item.category.color)
+                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f),
+                modifier = Modifier.size(28.dp)
+            )
+        },
+        headlineContent = {
+            Text(
+                text = item.category.name,
+                color = if (enabled) LocalContentColor.current
+                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
+            )
+        },
+        supportingContent = {
+            if (!enabled) {
+                Text(
+                    text = "حداکثر عمق",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+        }
+    )
+}
+
+@Composable
+private fun containerColorForLevel(level: Int): Color {
+    val e = when (level.coerceIn(1, 4)) {
+        1 -> 0.dp
+        2 -> 2.dp
+        3 -> 6.dp
+        else -> 12.dp
+    }
+    return MaterialTheme.colorScheme.surfaceColorAtElevation(e)
+}
+
+@Composable
+private fun SheetTasksCompactRow(
+    count: Int,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(horizontal = 16.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            Icons.Filled.Task,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.width(12.dp))
+        Text("$count", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.width(8.dp))
+        // "Tasks" چسبیده به تعداد
+        Text("Tasks", style = MaterialTheme.typography.bodyLarge)
+
+
+    }
+    HorizontalDivider(thickness = 0.5.dp, modifier = Modifier.padding(start = 48.dp))
+}
+
 @Composable
 fun TasksOptionsMenu(
     sortMode: TaskSortMode,
@@ -2649,18 +3361,25 @@ private fun SortMenuItem(
 
 
 @Composable
-private fun SheetStatRow(icon: ImageVector, text: String) {
+private fun SheetStatRow(
+    icon: ImageVector,
+    text: String,
+    showDivider: Boolean = true
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 16.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.width(12.dp))
         Text(text)
     }
-    HorizontalDivider(thickness = 0.5.dp)
+    if (showDivider) {
+        HorizontalDivider(thickness = 0.5.dp, modifier = Modifier.padding(start = 48.dp))
+    }
+
 }
 
 @Composable
@@ -2675,7 +3394,7 @@ private fun SheetActionRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() }
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .padding(horizontal = 16.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(Modifier.size(26.dp), contentAlignment = Alignment.Center) { leading() }
@@ -2685,293 +3404,7 @@ private fun SheetActionRow(
             Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) { trailing() }
         }
     }
-    HorizontalDivider(thickness = 0.5.dp)
-}
-
-
-@Composable
-fun AddTaskDialog(
-    addTaskMod: Boolean,
-    categoryName: String,
-    categoryIconName: String,
-    categoryColorHex: String,
-    draft: TaskDraft,
-    onDismiss: () -> Unit,
-    onNameChange: (String) -> Unit,
-    onPriorityChange: (Int) -> Unit,
-    onCompletedToggle: (Boolean) -> Unit,
-    onNoteChange: (String) -> Unit,
-    onInsertAtTopChange: (Boolean) -> Unit,   // ✅ جدید
-    onChildLevelChange: (Int) -> Unit,        // ✅ جدید
-    onConfirm: (ConfirmAction) -> Unit,       // ✅ جدید
-    onOpenSchedule: () -> Unit,
-    onPickCategory: () -> Unit,
-    allowedChildLevels: Set<Int>,
-    schedules: List<TaskScheduleUi>,
-    onClickSchedule: (Int) -> Unit,
-    onDeleteSchedule: (Int) -> Unit,
-) {
-
-    var pendingDeleteScheduleId by rememberSaveable { mutableStateOf<Int?>(null) }
-    var pendingDeleteScheduleTitle by rememberSaveable { mutableStateOf("") }
-
-
-    DimmedDialog(
-        onDismiss = onDismiss,
-        modifier = Modifier
-            .fillMaxWidth(0.92f)
-            .fillMaxHeight(0.88f)
-            .background(MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.extraLarge),
-        dimAlpha = 0.6f,
-        dismissOnBackdropClick = true
-    ) {
-        Column(modifier = Modifier.fillMaxSize())
-
-        {
-
-            // Top bar
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                IconButton(onClick = onDismiss) {
-                    Icon(Icons.Filled.ArrowBackIosNew, contentDescription = "close")
-                }
-
-                Spacer(Modifier.width(16.dp))
-
-                Text(
-                    if (addTaskMod) "New task" else "Edit Task",
-                    style = MaterialTheme.typography.titleLarge
-                )
-
-                Spacer(Modifier.weight(1f))
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    // ✅✅ فقط در حالت Add
-                    IconButton(
-                        onClick = { onConfirm(ConfirmAction.SAVE_AND_CONTINUE) },
-                        enabled = addTaskMod && draft.name.isNotBlank()
-                    ) {
-                        Icon(Icons.Filled.DoneAll, contentDescription = "save_and_continue")
-                    }
-
-                    IconButton(
-                        onClick = { onConfirm(ConfirmAction.SAVE_AND_CLOSE) },
-                        enabled = draft.name.isNotBlank()
-                    ) {
-                        Icon(Icons.Filled.Check, contentDescription = "save")
-                    }
-                }
-            }
-            HorizontalDivider()
-
-
-            // ناحیه اسکرول دار
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f) // مهم
-                    .verticalScroll(rememberScrollState())
-            ) {
-
-                // Title row
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-//                    Icon(Icons.Filled.Check, contentDescription = null)
-//                    Spacer(Modifier.width(10.dp))
-                    OutlinedTextField(
-                        value = draft.name,
-                        onValueChange = onNameChange,
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("Title") },
-                        singleLine = true
-                    )
-                }
-                HorizontalDivider()
-
-
-                // Category row
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onPickCategory() }
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = iconFromKey(categoryIconName),
-                        contentDescription = null,
-                        tint = colorFromHex(categoryColorHex),
-                        modifier = Modifier.size(26.dp)
-                    )
-                    Spacer(Modifier.width(14.dp))
-                    Text(
-                        categoryName,
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.weight(1f)
-                    )
-
-                    Spacer(Modifier.weight(1f))
-
-                    VerticalDivider(thickness = 1.dp, modifier = Modifier.height(24.dp))
-
-                    Spacer(Modifier.width(8.dp))
-
-                    IconButton(onClick = { onInsertAtTopChange(!draft.insertAtTop) }) {
-                        Icon(
-                            imageVector = if (draft.insertAtTop) Icons.Filled.ArrowUpward else Icons.Filled.ArrowDownward,
-                            contentDescription = "insert position"
-                        )
-                    }
-
-                }
-                HorizontalDivider()
-
-
-                // Priority row
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Priority", modifier = Modifier.width(90.dp))
-                    PriorityDots(
-                        selected = draft.priority,
-                        onPick = onPriorityChange
-                    )
-                }
-                HorizontalDivider()
-
-
-                //ردیف فرزند کردن
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Child", modifier = Modifier.width(90.dp))
-
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-
-                        ChildLevelChip(
-                            "-",
-                            selected = draft.childLevel == 0,
-                            enabled = 0 in allowedChildLevels
-                        ) { onChildLevelChange(0) }
-                        ChildLevelChip(
-                            ">",
-                            selected = draft.childLevel == 1,
-                            enabled = 1 in allowedChildLevels
-                        ) { onChildLevelChange(1) }
-                        ChildLevelChip(
-                            ">>",
-                            selected = draft.childLevel == 2,
-                            enabled = 2 in allowedChildLevels
-                        ) { onChildLevelChange(2) }
-                        ChildLevelChip(
-                            ">>>",
-                            selected = draft.childLevel == 3,
-                            enabled = 3 in allowedChildLevels
-                        ) { onChildLevelChange(3) }
-
-                    }
-
-                }
-                HorizontalDivider()
-
-
-                // Completed row
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        if (draft.isCompleted) "Completed" else "Uncompleted",
-                        modifier = Modifier.weight(1f)
-                    )
-                    Switch(checked = draft.isCompleted, onCheckedChange = onCompletedToggle)
-                }
-                HorizontalDivider()
-
-
-                // Note
-                OutlinedTextField(
-                    value = draft.note,
-                    onValueChange = onNoteChange,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp),
-                    label = { Text("Add note") },
-                    minLines = 2
-                )
-
-
-
-
-
-                SheetActionRow(
-                    leading = { Icon(Icons.Filled.Event, contentDescription = null) },
-                    title = "Schedule this task",
-                    onClick = { onOpenSchedule() }
-                )
-
-                if (schedules.isNotEmpty()) {
-                    Column(Modifier.fillMaxWidth()) {
-                        schedules.forEach { ui ->
-                            ScheduleRow(
-                                schedule = ui.schedule,
-                                onClick = { onClickSchedule(ui.key) },
-                                onRequestDelete = {
-                                    // ✅ فقط درخواست حذف => دیالوگ باز شود
-                                    pendingDeleteScheduleId = ui.key
-                                    pendingDeleteScheduleTitle =
-                                        ui.schedule.title?.takeIf { it.isNotBlank() }
-                                            ?: taskNameForScheduleFallback(draft.name) // پایین تعریف می‌کنیم
-                                }
-                            )
-
-                            HorizontalDivider(thickness = 0.5.dp)
-                        }
-                    }
-                }
-
-
-                if (pendingDeleteScheduleId != null) {
-                    AlertDialog(
-                        onDismissRequest = { pendingDeleteScheduleId = null },
-                        title = { Text("Delete schedule?") },
-                        text = { Text("آیا از حذف این اسکچول مطمئن هستی؟\n\n$pendingDeleteScheduleTitle") },
-                        confirmButton = {
-                            TextButton(onClick = {
-                                val key = pendingDeleteScheduleId!!
-                                onDeleteSchedule(key) // وصل به viewModel.deleteScheduleByKey(key)
-                                pendingDeleteScheduleId = null
-                            }) { Text("Delete") }
-                        },
-                        dismissButton = {
-                            TextButton(onClick = {
-                                pendingDeleteScheduleId = null
-                            }) { Text("Cancel") }
-                        }
-                    )
-                }
-
-
-            }
-        }
-    }
+    HorizontalDivider(thickness = 0.5.dp, modifier = Modifier.padding(start = 48.dp))
 }
 
 private fun taskNameForScheduleFallback(taskName: String): String =
@@ -3080,6 +3513,7 @@ private fun PriorityDots(selected: Int, onPick: (Int) -> Unit) {
             Box(
                 modifier = Modifier
                     .size(36.dp)
+                    .clip(CircleShape)
                     .background(
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (isSel) 1f else 0.5f),
                         shape = CircleShape
@@ -3114,7 +3548,8 @@ private fun ChildLevelChip(
 
     Box(
         modifier = Modifier
-            .size(44.dp)
+            .size(36.dp)
+            .clip(CircleShape)
             .background(
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (selected) 1f else 0.5f),
                 shape = CircleShape
@@ -3137,176 +3572,6 @@ private fun ChildLevelChip(
     }
 }
 
-
-@Composable
-fun TaskScheduleDialog(
-    taskName: String,
-    draft: ScheduleDraft,
-    onDismiss: () -> Unit,
-    onTitleChange: (String) -> Unit,
-    onModeChange: (ScheduleMode) -> Unit,
-    onStartChange: (LocalTime) -> Unit,
-    onEndChange: (LocalTime) -> Unit,
-    onDurationChange: (Int) -> Unit,
-    onRepeatingChange: (Boolean) -> Unit,
-    onConfirm: () -> Unit,
-    onDateChange: (LocalDate) -> Unit,
-    onRepeatIntervalChange: (Int) -> Unit,
-    onRepeatUnitChange: (RepeatUnit) -> Unit,
-    onWeekdaysMaskChange: (Int) -> Unit
-) {
-    DimmedDialog(
-        onDismiss = onDismiss,
-        modifier = Modifier
-            .fillMaxWidth(0.92f)
-            .fillMaxHeight(0.88f)
-            .background(MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.extraLarge),
-        dimAlpha = 0.6f,
-        dismissOnBackdropClick = true
-    ) {
-        Column(
-            Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-            ,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-
-            // top bar
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                TextButton(onClick = onDismiss) { Text("Back") }
-                Text("New scheduled activity", style = MaterialTheme.typography.titleLarge)
-                TextButton(onClick = onConfirm) { Text("✓") }
-            }
-
-            HorizontalDivider()
-
-            // title (کم‌رنگ پیش‌فرض)
-            TextField(
-                value = draft.title,
-                onValueChange = onTitleChange,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(12.dp),
-                label = { Text("Title (optional)") },
-                placeholder = {
-                    Text(
-                        taskName,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
-                    )
-                },
-                singleLine = true,
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    disabledContainerColor = Color.Transparent,
-                    errorContainerColor = Color.Transparent
-                ),
-            )
-
-            HorizontalDivider()
-
-            // mode dropdown: Time range / Amount of time
-            ModeDropdownRow(
-                mode = draft.mode,
-                onPick = onModeChange
-            )
-
-            HorizontalDivider(Modifier.padding(top = 8.dp))
-
-            //  TimePicker
-            if (draft.mode == ScheduleMode.TIME_RANGE) {
-                // فعلاً ساده: نمایش متن + بعداً TimePicker
-                TimeRangeRow(
-                    start = draft.start,
-                    end = draft.end,
-                    onStartChange = onStartChange,
-                    onEndChange = onEndChange
-                )
-            } else {
-                AmountOfTimeRow(
-                    minutes = draft.durationMinutes,
-                    onMinutesChange = onDurationChange
-                )
-            }
-
-            HorizontalDivider()
-
-
-            if (draft.mode == ScheduleMode.TIME_RANGE || draft.mode == ScheduleMode.AMOUNT_OF_TIME) {
-
-
-                JalaliDateRow(
-                    selectedDate = draft.date,
-                    onChangeDate = { onDatePicked ->
-                        // چون draft از VM میاد، باید setter داشته باشی:
-                        // viewModel.setScheduleDate(onDatePicked)
-                        // اینجا فقط callback می‌گیریم:
-                        onDateChange(onDatePicked)
-                    }
-                )
-
-                HorizontalDivider()
-            }
-
-
-            // Repeating
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("Repeating", modifier = Modifier.weight(1f))
-                Switch(checked = draft.repeat.enabled, onCheckedChange = onRepeatingChange)
-            }
-
-            HorizontalDivider()
-
-            //RepeatOptions
-            if (draft.repeat.enabled) {
-
-                RepeatEveryRow(
-                    interval = draft.repeat.interval,
-                    unit = draft.repeat.unit,
-                    onIntervalChange = { onRepeatIntervalChange(it) },
-                    onUnitChange = { onRepeatUnitChange(it) }
-                )
-
-                if (draft.repeat.unit == RepeatUnit.WEEK) {
-                    WeekdayPickerRow(
-                        selectedMask = draft.repeat.weekdaysMask,
-                        onChangeMask = onWeekdaysMaskChange
-                    )
-                }
-
-                HorizontalDivider()
-            }
-
-
-
-
-            // Note / Reminder placeholder (فعلاً)
-            SheetActionRow(
-                leading = { Icon(Icons.Filled.Description, null) },
-                title = "Add note",
-                onClick = { /* بعداً */ }
-            )
-            SheetActionRow(
-                leading = { Icon(Icons.Filled.History, null) },
-                title = "Add reminder",
-                onClick = { /* بعداً */ }
-            )
-        }
-    }
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ModeDropdownRow(
@@ -3324,6 +3589,10 @@ private fun ModeDropdownRow(
         ScheduleMode.TIME_RANGE to "Time range",
         ScheduleMode.AMOUNT_OF_TIME to "Amount of time"
     )
+    val icon = when (mode) {
+        ScheduleMode.TIME_RANGE -> Icons.Filled.DateRange
+        ScheduleMode.AMOUNT_OF_TIME -> Icons.Filled.Timer
+    }
 
     ExposedDropdownMenuBox(
         expanded = expanded,
@@ -3342,17 +3611,21 @@ private fun ModeDropdownRow(
                 onValueChange = {},
                 readOnly = true,
                 singleLine = true,
-                label = { Text("Type") },
+                leadingIcon = { Icon(icon, contentDescription = null) },
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                modifier = Modifier.width(220.dp), // ✅ کوچیک‌تر و وسط
+                modifier = Modifier.fillMaxWidth(), // ✅ کوچیک‌تر و وسط
                 textStyle = MaterialTheme.typography.bodyLarge.copy(
-                    textAlign = TextAlign.Center // ✅ متن وسط
+                    textAlign = TextAlign.Start // ✅ متن وسط
                 ),
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.Transparent,
                     unfocusedContainerColor = Color.Transparent,
                     disabledContainerColor = Color.Transparent,
-                    errorContainerColor = Color.Transparent
+                    errorContainerColor = Color.Transparent,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                    disabledIndicatorColor = Color.Transparent,
+                    errorIndicatorColor = Color.Transparent
                 ),
             )
         }
@@ -3360,16 +3633,22 @@ private fun ModeDropdownRow(
         // ✅ منو هم‌عرض anchor (یعنی هم‌عرض دیالوگ) و زیر ردیف
         ExposedDropdownMenu(
             expanded = expanded,
+            containerColor = MaterialTheme.colorScheme.surface,
             onDismissRequest = { expanded = false },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(0.8f)
         ) {
             items.forEach { (value, label) ->
+                val iconForDropdownMenuItem = when (value) {
+                    ScheduleMode.TIME_RANGE -> Icons.Filled.DateRange
+                    ScheduleMode.AMOUNT_OF_TIME -> Icons.Filled.Timer
+                }
                 DropdownMenuItem(
+                    leadingIcon = { Icon(iconForDropdownMenuItem, contentDescription = null) },
                     text = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     onClick = {
                         onPick(value)
                         expanded = false
-                    }
+                    },
                 )
             }
         }
@@ -3377,7 +3656,6 @@ private fun ModeDropdownRow(
 }
 
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TimeRangeRow(
     start: LocalTime,
@@ -3397,13 +3675,13 @@ private fun TimeRangeRow(
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 18.dp),
+            .padding(horizontal = 44.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        TimeChip(label = "Start", time = start) { showStartPicker = true }
+        TimeChip(time = start) { showStartPicker = true }
         Text("-", style = MaterialTheme.typography.titleLarge)
-        TimeChip(label = "End", time = end) { showEndPicker = true }
+        TimeChip(time = end) { showEndPicker = true }
     }
 
     if (showStartPicker) {
@@ -3465,13 +3743,11 @@ private fun TimeRangeRow(
 
 @Composable
 private fun TimeChip(
-    label: String,
     time: LocalTime,
     onClick: () -> Unit
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(label, style = MaterialTheme.typography.labelMedium)
-        Spacer(Modifier.height(6.dp))
+
         TextButton(onClick = onClick) {
             Text(
                 "%02d:%02d".format(time.hour, time.minute),
