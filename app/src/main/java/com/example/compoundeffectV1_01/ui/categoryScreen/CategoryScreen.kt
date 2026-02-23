@@ -1,7 +1,11 @@
 package com.example.compoundeffectV1_01.ui.categoryScreen
 
 import android.annotation.SuppressLint
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.os.SystemClock
+import android.provider.Settings
 import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -37,9 +41,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowRight
 import androidx.compose.material.icons.automirrored.filled.Note
 import androidx.compose.material.icons.automirrored.filled.Sort
-import androidx.compose.material.icons.filled.AccountTree
+import androidx.compose.material.icons.filled.Anchor
 import androidx.compose.material.icons.filled.ArrowBackIosNew
 import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.CalendarMonth
@@ -59,23 +64,22 @@ import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Note
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Palette
-import androidx.compose.material.icons.filled.PriorityHigh
+import androidx.compose.material.icons.filled.Pattern
 import androidx.compose.material.icons.filled.RadioButtonChecked
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.RemoveDone
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.SignalCellularAlt
-import androidx.compose.material.icons.filled.Stairs
 import androidx.compose.material.icons.filled.SubdirectoryArrowRight
 import androidx.compose.material.icons.filled.Task
+import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Today
+import androidx.compose.material.icons.filled.Vibration
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -85,13 +89,11 @@ import androidx.compose.material3.FabPosition
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
-import androidx.compose.material3.MenuItemColors
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -121,16 +123,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
@@ -140,6 +146,10 @@ import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.category.CategoryEntity
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.BeforeAfter
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.ReminderMode
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.ReminderStrengthMode
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.StartEnd
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.Task
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.RepeatUnit
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.ScheduleMode
@@ -166,6 +176,7 @@ import org.burnoutcrew.reorderable.rememberReorderableLazyListState
 import org.burnoutcrew.reorderable.reorderable
 import java.time.LocalDate
 import java.time.LocalTime
+import kotlin.math.roundToInt
 
 @SuppressLint("SuspiciousIndentation", "UnrememberedGetBackStackEntry")
 @Composable
@@ -187,6 +198,10 @@ fun CategoryScreen(
     val childLevelUi by viewModel.childLevelUi.collectAsState()
     val schedules by viewModel.schedulesUiForTaskDialog.collectAsState()
     val editingScheduleKey by viewModel.editingScheduleKey.collectAsState()
+    var showReminderDialog by rememberSaveable { mutableStateOf(false) }
+    val reminders by viewModel.remindersUiForScheduleDialog.collectAsState()
+    val reminderDraft by viewModel.reminderDraft.collectAsState()
+    val editingReminderKey by viewModel.editingReminderKey.collectAsState()
 
 
     var showPickParent by rememberSaveable { mutableStateOf(false) }
@@ -830,7 +845,18 @@ fun CategoryScreen(
             onRepeatIntervalChange = viewModel::setRepeatInterval,
             onRepeatUnitChange = viewModel::setRepeatUnit,
             onWeekdaysMaskChange = viewModel::setRepeatWeekdaysMask,
-            onNoteChange = {}
+            reminders = reminders,
+            onOpenAddReminder = {
+                viewModel.startAddReminder()
+                showReminderDialog = true
+            },
+            onClickReminder = { key ->
+                viewModel.startEditReminderByKey(key)
+                showReminderDialog = true
+            },
+            onDeleteReminder = { key ->
+                viewModel.deleteReminderByKey(key)
+            },
         )
     }
 
@@ -845,6 +871,57 @@ fun CategoryScreen(
             }
         )
     }
+
+    if (showReminderDialog) {
+        val addReminder = (editingReminderKey == null)
+
+        val scheduleNameForReminder = remember(scheduleDraft) {
+            scheduleDraft.title.trim().ifBlank {
+                when (scheduleDraft.mode) {
+                    ScheduleMode.TIME_RANGE -> "Schedule ${scheduleDraft.start} - ${scheduleDraft.end}"
+                    ScheduleMode.AMOUNT_OF_TIME -> "Schedule ${scheduleDraft.durationMinutes} min"
+                }
+            }
+        }
+
+        AddEditeReminderDialog(
+            addReminder = addReminder,
+            scheduleName = scheduleNameForReminder,
+            draft = reminderDraft,
+
+            onDismiss = {
+                showReminderDialog = false
+                viewModel.finishEditReminder() // ✅ اگر داری؛ اگر نداری پایین میگم چی باید باشه
+            },
+
+            onModeChange = viewModel::setReminderMode,
+
+            onOffsetDaysChange = viewModel::setReminderOffsetDays,
+            onOffsetHoursChange = viewModel::setReminderOffsetHours,
+            onOffsetMinutesChange = viewModel::setReminderOffsetMinutes,
+            onBeforeAfterChange = viewModel::setReminderBeforeAfter,
+            onAnchorChange = viewModel::setReminderAnchor,
+
+            onFixedTimeChange = viewModel::setReminderFixedTime,
+
+            onIntervalStartChange = viewModel::setReminderIntervalStart,
+            onIntervalEndChange = viewModel::setReminderIntervalEnd,
+            onEveryHoursChange = viewModel::setReminderEveryHours,
+            onEveryMinutesChange = viewModel::setReminderEveryMinutes,
+
+            onStrengthChange = viewModel::setReminderStrength,
+            onVibrateChange = viewModel::setReminderVibrate,
+            onAlarmSoundUriChange = viewModel::setReminderAlarmSoundUri,
+
+            onCaptchaEnabledChange = viewModel::setReminderCaptchaEnabled,
+
+            onConfirm = {
+                viewModel.confirmReminderFromDialog()
+                showReminderDialog = false
+            }
+        )
+    }
+
 
 
 }
@@ -1616,7 +1693,7 @@ private fun CategorySheetTasksMode(
 
 @Composable
 fun AddCategoryDialog(
-    draft: CategoryDraft2,
+    draft: CategoryDraft,
     parentName: String,
     parentIconName: String,
     parentColorHex: String,
@@ -2015,7 +2092,10 @@ fun AddEditeScheduleDialog(
     onRepeatIntervalChange: (Int) -> Unit,
     onRepeatUnitChange: (RepeatUnit) -> Unit,
     onWeekdaysMaskChange: (Int) -> Unit,
-    onNoteChange: (String) -> Unit,
+    reminders : List<TaskReminderUi> ,
+    onOpenAddReminder:()->Unit ,
+    onClickReminder :(Int) -> Unit,
+    onDeleteReminder:(Int) -> Unit ,
 ) {
     var showAddNote by rememberSaveable { mutableStateOf(false) }
 
@@ -2059,7 +2139,7 @@ fun AddEditeScheduleDialog(
             AddEditeDialogRow(
                 onClick = null,
                 content = {
-                    ModeDropdownRow(
+                    ModeScheduleDropdownRow(
                         mode = draft.mode,
                         onPick = onModeChange
                     )
@@ -2148,38 +2228,222 @@ fun AddEditeScheduleDialog(
                 }
             }
 
-            // Note
-            AddEditeDialogRow(
-                onClick = { showAddNote = true },
-                content = {
-                    Icon(Icons.AutoMirrored.Filled.Note, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Add note", modifier = Modifier.weight(1f))
-                },
-            )
-
 
             //add Reminder
             AddEditeDialogRow(
-                onClick = null,
+                onClick = onOpenAddReminder,
                 content = {
                     Icon(Icons.Filled.History, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
-                    Text("Add reminder",  modifier = Modifier.weight(1f))
+                    Text("Add reminder", modifier = Modifier.weight(1f))
                 },
             )
 
 
-            if (showAddNote) {
-                AddEditDescriptionDialog(
-                    title = "Add Note",
-                    value = draft.note,
-                    onValueChange = onNoteChange,
-                    onDismiss = { showAddNote = false },
-                    onConfirm = { showAddNote = false }
+
+        }
+    }
+}
+
+@Composable
+fun AddEditeReminderDialog(
+    addReminder: Boolean,
+    scheduleName: String,
+    draft: ReminderDraft,
+    onDismiss: () -> Unit,
+    onModeChange: (ReminderMode) -> Unit,
+    onOffsetDaysChange: (Int) -> Unit,
+    onOffsetHoursChange: (Int) -> Unit,
+    onOffsetMinutesChange: (Int) -> Unit,
+    onBeforeAfterChange: (BeforeAfter) -> Unit,
+    onAnchorChange: (StartEnd) -> Unit,
+    onFixedTimeChange: (LocalTime) -> Unit,
+    onIntervalStartChange: (LocalTime) -> Unit,
+    onIntervalEndChange: (LocalTime) -> Unit,
+    onEveryHoursChange: (Int) -> Unit,
+    onEveryMinutesChange: (Int) -> Unit,
+    onStrengthChange: (ReminderStrengthMode) -> Unit,
+    onVibrateChange: (Boolean) -> Unit,
+    onAlarmSoundUriChange: (String?) -> Unit = {},
+    onCaptchaEnabledChange: (Boolean) -> Unit,
+    onConfirm: () -> Unit,
+) {
+    val context = LocalContext.current
+
+    DimmedDialog(
+        onDismiss = onDismiss,
+        modifier = Modifier
+            .fillMaxWidth(0.92f)
+            .fillMaxHeight(0.85f)
+            .background(MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.extraLarge),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+        ) {
+
+            //top bar
+            AddEditeDialogTopBar(
+                title = if (addReminder) "New reminder" else "Edit reminder",
+                onNavigationClick = onDismiss,
+                actions = {
+                    IconButton(onClick = onConfirm, enabled = true) {
+                        Icon(Icons.Filled.Check, contentDescription = null)
+                    }
+                }
+            )
+
+
+
+
+
+            // ====== Header small info ======
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Filled.History, contentDescription = null)
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    text = scheduleName,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
+            HorizontalDivider()
 
+
+
+
+
+
+
+
+            // ====== Mode ======
+            AddEditeDialogRow(
+                onClick = null,
+                content = {
+                    ModeReminderDropdownRow(
+                        mode = draft.mode,
+                        onPick = onModeChange
+                    )
+                },
+                startPadding = 0
+            )
+
+            // ====== Mode-specific UI ======
+            when (draft.mode) {
+                ReminderMode.ALLOCATED -> {
+                    AllocatedRows(
+                        draft = draft,
+                        onOffsetDaysChange = onOffsetDaysChange,
+                        onOffsetHoursChange = onOffsetHoursChange,
+                        onOffsetMinutesChange = onOffsetMinutesChange,
+                        onBeforeAfterChange = onBeforeAfterChange,
+                        onAnchorChange = onAnchorChange
+                    )
+                }
+
+                ReminderMode.FIXED_TIME -> {
+                    FixedTimeRow(
+                        time = draft.fixedTime,
+                        onTimeChange = onFixedTimeChange
+                    )
+                }
+
+                ReminderMode.INTERVALLIC -> {
+                    IntervallicRows(
+                        draft = draft,
+                        onStartChange = onIntervalStartChange,
+                        onEndChange = onIntervalEndChange,
+                        onEveryHoursChange = onEveryHoursChange,
+                        onEveryMinutesChange = onEveryMinutesChange
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(6.dp))
+            HorizontalDivider()
+
+            // ====== Strength (step bar) ======
+            StrengthRow(
+                strength = draft.strength,
+                onStrengthChange = onStrengthChange
+            )
+
+            // ====== Vibrate ======
+            AddEditeDialogRow(
+                onClick = null,
+                content = {
+                    Icon(Icons.Filled.Vibration, contentDescription = null)
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Vibrate", modifier = Modifier.weight(1f))
+                        Switch(checked = draft.vibrate, onCheckedChange = onVibrateChange)
+                    }
+                },
+                startPadding = 0
+            )
+
+            // ====== Sound / Settings hook ======
+            SoundSettingsRow(
+                strength = draft.strength,
+                alarmSoundUri = draft.alarmSoundUri,
+                onClickOpenSettings = {
+                    when (draft.strength) {
+                        ReminderStrengthMode.NOTIFICATION -> openAppNotificationSettings(context)
+                        ReminderStrengthMode.ALARM,
+                        ReminderStrengthMode.ALARM_AND_CAPTCHA -> openAppDetailsSettings(context) // امن‌ترین / عمومی‌ترین
+                    }
+                }
+            )
+
+            // ====== Captcha ======
+            if (draft.strength == ReminderStrengthMode.ALARM_AND_CAPTCHA) {
+                AddEditeDialogRow(
+                    onClick = null,
+                    content = {
+                        Icon(Icons.Filled.Pattern, contentDescription = null)
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Captcha required", modifier = Modifier.weight(1f))
+                            Switch(
+                                checked = draft.captchaEnabled,
+                                onCheckedChange = onCaptchaEnabledChange
+                            )
+                        }
+                    },
+                    startPadding = 0
+                )
+
+                // Placeholder برای صفحه پترن
+                AddEditeDialogRow(
+                    onClick = { /* بعداً: باز کردن صفحه طراحی/ویرایش پترن */ },
+                    content = {
+                        Spacer(Modifier.width(8.dp))
+                        Text("Configure captcha pattern", modifier = Modifier.weight(1f))
+                        Icon(Icons.Filled.ArrowForwardIos, contentDescription = null)
+                    },
+                    startPadding = 14,
+                    showDivider = false
+                )
+            } else {
+                Spacer(Modifier.height(8.dp))
+            }
+
+            Spacer(Modifier.height(18.dp))
         }
     }
 }
@@ -2255,6 +2519,462 @@ fun AddEditDescriptionDialog(
 
 
 //>>>>>>>>>>>>>>>> Component <<<<<<<<<<<<<<<<<<
+
+@Composable
+private fun AllocatedRows(
+    draft: ReminderDraft,
+    onOffsetDaysChange: (Int) -> Unit,
+    onOffsetHoursChange: (Int) -> Unit,
+    onOffsetMinutesChange: (Int) -> Unit,
+    onBeforeAfterChange: (BeforeAfter) -> Unit,
+    onAnchorChange: (StartEnd) -> Unit
+) {
+    // row 1: 0d : 0h : 0m
+    AddEditeDialogRow(
+        onClick = null,
+        content = {
+            Icon(Icons.Filled.Timeline, contentDescription = null)
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                SmallNumberField(
+                    value = draft.offsetDays,
+                    suffix = "d",
+                    maxDigits = 3,
+                    onChange = { onOffsetDaysChange(it.coerceIn(0, 999)) }
+                )
+                Spacer(Modifier.width(10.dp))
+                Text(":", style = MaterialTheme.typography.titleLarge)
+                Spacer(Modifier.width(10.dp))
+
+                SmallNumberField(
+                    value = draft.offsetHours,
+                    suffix = "h",
+                    maxDigits = 2,
+                    onChange = { onOffsetHoursChange(it.coerceIn(0, 23)) }
+                )
+                Spacer(Modifier.width(10.dp))
+                Text(":", style = MaterialTheme.typography.titleLarge)
+                Spacer(Modifier.width(10.dp))
+
+                SmallNumberField(
+                    value = draft.offsetMinutes,
+                    suffix = "m",
+                    maxDigits = 2,
+                    onChange = { onOffsetMinutesChange(it.coerceIn(0, 59)) }
+                )
+            }
+        },
+        startPadding = 0
+    )
+
+    // row 2: before/after + start/end
+    AddEditeDialogRow(
+        onClick = null,
+        content = {
+            Spacer(Modifier.width(44.dp))
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                BeforeAfterDropdown(
+                    value = draft.beforeAfter,
+                    onPick = onBeforeAfterChange,
+                    modifier = Modifier.weight(1f)
+                )
+
+                Spacer(Modifier.width(12.dp))
+
+                StartEndDropdown(
+                    value = draft.anchor,
+                    onPick = onAnchorChange,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        },
+        startPadding = 0,
+        showDivider = true
+    )
+}
+
+@Composable
+private fun FixedTimeRow(
+    time: LocalTime,
+    onTimeChange: (LocalTime) -> Unit
+) {
+    AddEditeDialogRow(
+        onClick = null,
+        content = {
+            Icon(Icons.Filled.Anchor, contentDescription = null)
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                var showPicker by remember { mutableStateOf(false) }
+                TimeChip(time = time) { showPicker = true }
+
+                if (showPicker) {
+                    TimePickerDialog(
+                        title = "Select reminder time",
+                        initial = time,
+                        onDismiss = { showPicker = false },
+                        onConfirm = { t -> onTimeChange(t); showPicker = false }
+                    )
+                }
+            }
+        },
+        startPadding = 0
+    )
+}
+
+@Composable
+private fun IntervallicRows(
+    draft: ReminderDraft,
+    onStartChange: (LocalTime) -> Unit,
+    onEndChange: (LocalTime) -> Unit,
+    onEveryHoursChange: (Int) -> Unit,
+    onEveryMinutesChange: (Int) -> Unit
+) {
+    // row 1: start - end
+    AddEditeDialogRow(
+        onClick = null,
+        content = {
+            Icon(Icons.Filled.Timer, contentDescription = null)
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 44.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                var showStart by remember { mutableStateOf(false) }
+                var showEnd by remember { mutableStateOf(false) }
+
+                TimeChip(time = draft.intervalStart) { showStart = true }
+                Text("-", style = MaterialTheme.typography.titleLarge)
+                TimeChip(time = draft.intervalEnd) { showEnd = true }
+
+                if (showStart) {
+                    TimePickerDialog(
+                        title = "Select start",
+                        initial = draft.intervalStart,
+                        onDismiss = { showStart = false },
+                        onConfirm = { t -> onStartChange(t); showStart = false }
+                    )
+                }
+                if (showEnd) {
+                    TimePickerDialog(
+                        title = "Select end",
+                        initial = draft.intervalEnd,
+                        onDismiss = { showEnd = false },
+                        onConfirm = { t -> onEndChange(t); showEnd = false }
+                    )
+                }
+            }
+        },
+        startPadding = 0
+    )
+
+    // row 2: repeat over the range ... 0h : 1m
+    AddEditeDialogRow(
+        onClick = null,
+        content = {
+            Spacer(Modifier.width(44.dp))
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Repeat over the range", modifier = Modifier.weight(1f))
+
+                SmallNumberField(
+                    value = draft.everyHours,
+                    suffix = "h",
+                    maxDigits = 2,
+                    onChange = { onEveryHoursChange(it.coerceIn(0, 99)) }
+                )
+
+                Spacer(Modifier.width(10.dp))
+                Text(":", style = MaterialTheme.typography.titleLarge)
+                Spacer(Modifier.width(10.dp))
+
+                SmallNumberField(
+                    value = draft.everyMinutes,
+                    suffix = "m",
+                    maxDigits = 2,
+                    onChange = { onEveryMinutesChange(it.coerceIn(0, 59)) }
+                )
+            }
+        },
+        startPadding = 0
+    )
+}
+
+@Composable
+private fun StrengthRow(
+    strength: ReminderStrengthMode,
+    onStrengthChange: (ReminderStrengthMode) -> Unit
+) {
+    // 3-state stepbar (0..2)
+    val idx = when (strength) {
+        ReminderStrengthMode.NOTIFICATION -> 0
+        ReminderStrengthMode.ALARM -> 1
+        ReminderStrengthMode.ALARM_AND_CAPTCHA -> 2
+    }
+
+    AddEditeDialogRow(
+        onClick = null,
+        content = {
+            Icon(Icons.Filled.Warning, contentDescription = null)
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+            ) {
+                Text("Strength", style = MaterialTheme.typography.titleMedium)
+
+                Spacer(Modifier.height(10.dp))
+
+                // slider with steps = 1? نه، برای 3 حالت steps=1 نیست. در compose: steps = numberOfDiscreteValues-2 => 1
+                // اما چون ما 3 مقدار داریم: steps = 1 (0,1,2)
+                var sliderPos by remember(idx) { mutableStateOf(idx.toFloat()) }
+
+                androidx.compose.material3.Slider(
+                    value = sliderPos,
+                    onValueChange = { sliderPos = it },
+                    onValueChangeFinished = {
+                        val rounded = sliderPos.roundToInt().coerceIn(0, 2)
+                        val newStrength = when (rounded) {
+                            0 -> ReminderStrengthMode.NOTIFICATION
+                            1 -> ReminderStrengthMode.ALARM
+                            else -> ReminderStrengthMode.ALARM_AND_CAPTCHA
+                        }
+                        onStrengthChange(newStrength)
+                    },
+                    valueRange = 0f..2f,
+                    steps = 1
+                )
+
+                Row(Modifier.fillMaxWidth()) {
+                    Text("Notification", modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelSmall)
+                    Text("Alarm", modifier = Modifier.weight(1f), textAlign = TextAlign.Center, style = MaterialTheme.typography.labelSmall)
+                    Text("Captcha", modifier = Modifier.weight(1f), textAlign = TextAlign.End, style = MaterialTheme.typography.labelSmall)
+                }
+            }
+        },
+        startPadding = 0
+    )
+}
+
+
+@Composable
+private fun SoundSettingsRow(
+    strength: ReminderStrengthMode,
+    alarmSoundUri: String?,
+    onClickOpenSettings: () -> Unit
+) {
+    val title = when (strength) {
+        ReminderStrengthMode.NOTIFICATION -> "Notification settings"
+        ReminderStrengthMode.ALARM,
+        ReminderStrengthMode.ALARM_AND_CAPTCHA -> "Sound & notification settings"
+    }
+
+    val subtitle = when (strength) {
+        ReminderStrengthMode.NOTIFICATION -> "Manage sound/vibration in system settings"
+        ReminderStrengthMode.ALARM -> "Pick alarm sound in system/app settings"
+        ReminderStrengthMode.ALARM_AND_CAPTCHA -> "Pick alarm sound in settings (captcha enabled)"
+    }
+
+    AddEditeDialogRow(
+        onClick = onClickOpenSettings,
+        content = {
+            Icon(Icons.Filled.Notifications, contentDescription = null)
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+            ) {
+                Text(title, style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                if (alarmSoundUri != null && strength != ReminderStrengthMode.NOTIFICATION) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = "Current: $alarmSoundUri",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+            Icon(Icons.Filled.ArrowForwardIos, contentDescription = null)
+        },
+        startPadding = 0
+    )
+}
+
+/* -------------------- Small fields & dropdowns -------------------- */
+
+@Composable
+private fun SmallNumberField(
+    value: Int,
+    suffix: String,
+    maxDigits: Int,
+    onChange: (Int) -> Unit,
+) {
+    var tf by remember(value) {
+        mutableStateOf(
+            TextFieldValue(
+                text = value.toString(),
+                selection = TextRange(value.toString().length)
+            )
+        )
+    }
+
+    TextField(
+        value = tf,
+        onValueChange = { v ->
+            val digits = v.text.filter(Char::isDigit).take(maxDigits)
+            val n = digits.toIntOrNull() ?: 0
+            onChange(n)
+            val text = n.toString()
+            tf = v.copy(text = text, selection = TextRange(text.length))
+        },
+        singleLine = true,
+        modifier = Modifier.width(72.dp),
+        placeholder = { Text("0$suffix") },
+        trailingIcon = { Text(suffix) },
+        colors = TextFieldDefaults.colors(
+            focusedContainerColor = Color.Transparent,
+            unfocusedContainerColor = Color.Transparent,
+            disabledContainerColor = Color.Transparent,
+            errorContainerColor = Color.Transparent,
+            focusedIndicatorColor = Color.Transparent,
+            unfocusedIndicatorColor = Color.Transparent,
+            disabledIndicatorColor = Color.Transparent,
+            errorIndicatorColor = Color.Transparent
+        ),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+        keyboardActions = KeyboardActions(onDone = {})
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun BeforeAfterDropdown(
+    value: BeforeAfter,
+    onPick: (BeforeAfter) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val label = when (value) {
+        BeforeAfter.BEFORE -> "before"
+        BeforeAfter.AFTER -> "after"
+    }
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = !expanded },
+        modifier = modifier
+    ) {
+        TextField(
+            value = label,
+            onValueChange = {},
+            readOnly = true,
+            singleLine = true,
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+            modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable),
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = Color.Transparent,
+                unfocusedContainerColor = Color.Transparent,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent
+            ),
+        )
+        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(text = { Text("before") }, onClick = { onPick(BeforeAfter.BEFORE); expanded = false })
+            DropdownMenuItem(text = { Text("after") }, onClick = { onPick(BeforeAfter.AFTER); expanded = false })
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun StartEndDropdown(
+    value: StartEnd,
+    onPick: (StartEnd) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val label = when (value) {
+        StartEnd.START -> "start"
+        StartEnd.END -> "end"
+    }
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = !expanded },
+        modifier = modifier
+    ) {
+        TextField(
+            value = label,
+            onValueChange = {},
+            readOnly = true,
+            singleLine = true,
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+            modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable),
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = Color.Transparent,
+                unfocusedContainerColor = Color.Transparent,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent
+            ),
+        )
+        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(text = { Text("start") }, onClick = { onPick(StartEnd.START); expanded = false })
+            DropdownMenuItem(text = { Text("end") }, onClick = { onPick(StartEnd.END); expanded = false })
+        }
+    }
+}
+
+/* -------------------- Settings intents -------------------- */
+
+private fun openAppNotificationSettings(context: Context) {
+    val intent = Intent().apply {
+        // Android 8+
+        action = Settings.ACTION_APP_NOTIFICATION_SETTINGS
+        putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    runCatching { context.startActivity(intent) }
+        .recoverCatching { openAppDetailsSettings(context) }
+}
+
+private fun openAppDetailsSettings(context: Context) {
+    val intent = Intent(
+        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+        Uri.fromParts("package", context.packageName, null)
+    ).apply {
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    runCatching { context.startActivity(intent) }
+}
 
 @Composable
 fun AddEditeDialogTopBar(
@@ -2465,6 +3185,24 @@ private fun RepeatEveryRow(
         RepeatUnit.YEAR -> "years"
     }
 
+    // ✅ کنترل selection با TextFieldValue
+    var intervalTf by remember(interval) {
+        mutableStateOf(
+            TextFieldValue(
+                text = interval.toString(),
+                selection = TextRange(interval.toString().length) // کرسر آخر
+            )
+        )
+    }
+
+    // ✅ اگر interval از بیرون تغییر کرد، متن فیلد هم sync شود
+    LaunchedEffect(interval) {
+        val t = interval.coerceIn(1, 99).toString()
+        if (intervalTf.text != t) {
+            intervalTf = intervalTf.copy(text = t, selection = TextRange(0, t.length))
+        }
+    }
+
     Row(
         Modifier
             .fillMaxWidth()
@@ -2473,19 +3211,36 @@ private fun RepeatEveryRow(
         horizontalArrangement = Arrangement.Center
     ) {
         Text("Repeat every")
-
         Spacer(Modifier.width(10.dp))
 
-        // عدد 0..99 (ولی بهتره ذخیره رو 1..99 کنی)
         TextField(
-            value = interval.toString(),
+            value = intervalTf,
             onValueChange = { v ->
-                val n = v.filter(Char::isDigit).take(2).toIntOrNull() ?: 0
-                onIntervalChange(n.coerceIn(0, 99))
+                val digits = v.text.filter(Char::isDigit).take(2)
+                val n = digits.toIntOrNull() ?: 0
+                val clamped = n.coerceIn(0, 99)
+
+                // هم interval بیرونی رو آپدیت کن
+                onIntervalChange(clamped)
+
+                // متن داخلی رو هم sync کن (و selection رو آخر بذار)
+                val newText = clamped.toString()
+                intervalTf = v.copy(
+                    text = newText,
+                    selection = TextRange(newText.length)
+                )
             },
             singleLine = true,
             modifier = Modifier
-                .width(54.dp),
+                .width(54.dp)
+                .onFocusChanged { state ->
+                    if (state.isFocused) {
+                        // ✅ وقتی فوکوس گرفت، کل متن انتخاب شود
+                        intervalTf = intervalTf.copy(
+                            selection = TextRange(0, intervalTf.text.length)
+                        )
+                    }
+                },
             colors = TextFieldDefaults.colors(
                 focusedContainerColor = Color.Transparent,
                 unfocusedContainerColor = Color.Transparent,
@@ -2497,20 +3252,19 @@ private fun RepeatEveryRow(
                 errorIndicatorColor = Color.Transparent
             ),
             keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Number,   // ✅ فقط عدد
+                keyboardType = KeyboardType.Number,
                 imeAction = ImeAction.Done
             ),
             keyboardActions = KeyboardActions(
                 onDone = {
-                    keyboardController?.hide()   // کیبورد بسته شود
-                    focusManager.clearFocus()    // فوکوس برداشته شود
+                    keyboardController?.hide()
+                    focusManager.clearFocus()
                 }
             )
         )
 
         Spacer(Modifier.width(4.dp))
 
-        // واحد (مثل مود، کشویی)
         ExposedDropdownMenuBox(
             expanded = expanded,
             onExpandedChange = { expanded = !expanded },
@@ -2522,9 +3276,7 @@ private fun RepeatEveryRow(
                 readOnly = true,
                 singleLine = true,
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
-                modifier = Modifier
-//                    .width(132.dp)
-                    .menuAnchor(MenuAnchorType.PrimaryNotEditable),
+                modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable),
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.Transparent,
                     unfocusedContainerColor = Color.Transparent,
@@ -2559,6 +3311,7 @@ private fun RepeatEveryRow(
         }
     }
 }
+
 
 @Composable
 private fun WeekdayPickerRow(
@@ -3574,7 +4327,7 @@ private fun ChildLevelChip(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ModeDropdownRow(
+private fun ModeScheduleDropdownRow(
     mode: ScheduleMode,
     onPick: (ScheduleMode) -> Unit
 ) {
@@ -3655,6 +4408,92 @@ private fun ModeDropdownRow(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ModeReminderDropdownRow(
+    mode: ReminderMode,
+    onPick: (ReminderMode) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    val selectedLabel = when (mode) {
+        ReminderMode.ALLOCATED -> "Allocated"
+        ReminderMode.FIXED_TIME -> "Fixed time"
+        ReminderMode.INTERVALLIC -> "Intervallic"
+    }
+
+    val items = listOf(
+        ReminderMode.ALLOCATED to "Allocated",
+        ReminderMode.FIXED_TIME to "Fixed time",
+        ReminderMode.INTERVALLIC to "Intervallic"
+    )
+    val icon = when (mode) {
+        ReminderMode.ALLOCATED -> Icons.Filled.Timeline
+        ReminderMode.FIXED_TIME -> Icons.Filled.Anchor
+        ReminderMode.INTERVALLIC -> Icons.Filled.Timer
+    }
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = !expanded },
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        // ✅ anchor = کل عرض دیالوگ
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .menuAnchor(MenuAnchorType.PrimaryEditable), // یا Primary
+            contentAlignment = Alignment.Center
+        ) {
+            TextField(
+                value = selectedLabel,
+                onValueChange = {},
+                readOnly = true,
+                singleLine = true,
+                leadingIcon = { Icon(icon, contentDescription = null) },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                modifier = Modifier.fillMaxWidth(), // ✅ کوچیک‌تر و وسط
+                textStyle = MaterialTheme.typography.bodyLarge.copy(
+                    textAlign = TextAlign.Start // ✅ متن وسط
+                ),
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    disabledContainerColor = Color.Transparent,
+                    errorContainerColor = Color.Transparent,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                    disabledIndicatorColor = Color.Transparent,
+                    errorIndicatorColor = Color.Transparent
+                ),
+            )
+        }
+
+        // ✅ منو هم‌عرض anchor (یعنی هم‌عرض دیالوگ) و زیر ردیف
+        ExposedDropdownMenu(
+            expanded = expanded,
+            containerColor = MaterialTheme.colorScheme.surface,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.fillMaxWidth(0.8f)
+        ) {
+            items.forEach { (value, label) ->
+                val iconForDropdownMenuItem = when (value) {
+                    ReminderMode.ALLOCATED -> Icons.Filled.Timeline
+                    ReminderMode.FIXED_TIME -> Icons.Filled.Anchor
+                    ReminderMode.INTERVALLIC -> Icons.Filled.Timer
+                }
+                DropdownMenuItem(
+                    leadingIcon = { Icon(iconForDropdownMenuItem, contentDescription = null) },
+                    text = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    onClick = {
+                        onPick(value)
+                        expanded = false
+                    },
+                )
+            }
+        }
+    }
+}
 
 @Composable
 private fun TimeRangeRow(

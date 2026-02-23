@@ -61,3 +61,6 @@ data class TaskSchedule(
 
 enum class ScheduleMode { TIME_RANGE, AMOUNT_OF_TIME }
 enum class RepeatUnit { DAY, WEEK, MONTH, YEAR }
+
+
+

@@ -5,6 +5,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.category.CategoryEntity
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.category.CategoryRepository
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.BeforeAfter
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.ReminderMode
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.ReminderStrengthMode
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.StartEnd
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.TaskReminderEntity
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.TaskReminderRepository
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.Task
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskRepository
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskWithSchedule
@@ -28,6 +34,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
 import javax.inject.Inject
@@ -39,10 +46,15 @@ class CategoryViewModel @Inject constructor(
     private val categoryRepository: CategoryRepository,
     private val taskRepo: TaskRepository,
     private val scheduleRepo: TaskScheduleRepository,
+    private val reminderRepo: TaskReminderRepository,
 ) : ViewModel() {
 
     private var nextTempScheduleId = -1
     private fun newTempId(): Int = nextTempScheduleId--
+
+    private var pendingReminderKeyCounter = -1
+    private fun newPendingReminderKey(): Int = pendingReminderKeyCounter--
+
 
     // این دو تا برای سناریوی “درگ شروع شد/تمام شد”
     private val _dragCollapsedRestoreCategory = MutableStateFlow<Int?>(null)
@@ -139,7 +151,7 @@ class CategoryViewModel @Inject constructor(
 
 
 
-    private val _draft = MutableStateFlow(CategoryDraft2())
+    private val _draft = MutableStateFlow(CategoryDraft())
     val draft = _draft.asStateFlow()
 
 
@@ -254,6 +266,72 @@ class CategoryViewModel @Inject constructor(
             }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    private val _reminderDraft = MutableStateFlow(ReminderDraft())
+    val reminderDraft = _reminderDraft.asStateFlow()
+
+    private val _editingReminderKey = MutableStateFlow<Int?>(null)
+    val editingReminderKey = _editingReminderKey.asStateFlow()
+
+    /**
+     * کدوم schedule داریم reminderهاش رو توی دیالوگ schedule مدیریت می‌کنیم؟
+     * - اگر schedule در DB باشد => scheduleId (مثبت)
+     * - اگر schedule pending برای task جدید باشد => scheduleKey (منفی)
+     * - اگر schedule هنوز confirm نشده باشد => null (یعنی “draft schedule”)
+     */
+    private val _activeScheduleKeyForReminder = MutableStateFlow<Int?>(null)
+
+    /**
+     * reminderهای مربوط به “schedule draft” (قبل confirm schedule)
+     * فقط در زمانی استفاده میشه که editingScheduleKey == null داخل دیالوگ schedule.
+     */
+    private val _pendingRemindersForScheduleDraft =
+        MutableStateFlow<List<TaskReminderUi>>(emptyList())
+
+    /**
+     * reminderهای مربوط به scheduleهای pending که برای task جدید ساخته شده‌اند.
+     * کلید: scheduleKey (همون key منفی TaskScheduleUi)
+     */
+    private val _pendingRemindersByScheduleKey =
+        MutableStateFlow<Map<Int, List<TaskReminderUi>>>(emptyMap())
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val remindersUiForScheduleDialog: StateFlow<List<TaskReminderUi>> =
+        combine(
+            editingTaskId,
+            editingScheduleKey,
+            _pendingRemindersForScheduleDraft,
+            _pendingRemindersByScheduleKey
+        ) { tid, schKey, draftList, pendingMap ->
+            RemindersInputs(tid, schKey, draftList, pendingMap)
+        }.flatMapLatest { input ->
+
+            val tid = input.tid
+            val schKey = input.schKey
+            val draftList = input.draftList
+            val pendingMap = input.pendingMap
+
+            // 1) schedule draft (هنوز confirm نشده)
+            if (schKey == null) return@flatMapLatest flowOf(draftList)
+
+            // 2) task جدید و schedule pending
+            if (tid == null) return@flatMapLatest flowOf(pendingMap[schKey].orEmpty())
+
+            // 3) DB (schKey اینجا scheduleId است)
+            reminderRepo.observeByScheduleId(schKey).map { list ->
+                list.map { e ->
+                    TaskReminderUi(
+                        key = e.id,          // Int
+                        entity = e,
+                        isPending = false
+                    )
+                }
+            }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+
+
+
+
 
 
 
@@ -300,7 +378,7 @@ class CategoryViewModel @Inject constructor(
         }
     }
     fun resetDraft() {
-        _draft.value = CategoryDraft2()
+        _draft.value = CategoryDraft()
         _createResult.value = null
     }
     fun renameCategory(categoryId: Int, newName: String) {
@@ -542,10 +620,6 @@ class CategoryViewModel @Inject constructor(
                 insertionIndex = insertionIndex
             ) ?: ROOT
 
-
-
-
-
             // ✅ siblingIndex مثل category
             val siblings = all
                 .filter { it.parentTaskId == parentId }
@@ -582,14 +656,28 @@ class CategoryViewModel @Inject constructor(
             val newId = withContext(Dispatchers.IO) {
                 taskRepo.insertTaskAndReturnId(newTask) // Long
             }
-            val pending = _pendingSchedulesForNewTask.value
-            if (pending.isNotEmpty()) {
+
+
+
+            val pendingSchedules = _pendingSchedulesForNewTask.value
+            val pendingRemindersMap = _pendingRemindersByScheduleKey.value
+
+
+            if (pendingSchedules.isNotEmpty()) {
                 withContext(Dispatchers.IO) {
-                    pending.forEach { ui ->
-                        scheduleRepo.insert(ui.schedule.copy(taskId = newId))
+                    pendingSchedules.forEach { schUi ->
+                        val newScheduleId = scheduleRepo.insert(
+                            schUi.schedule.copy(taskId = newId)
+                        )
+
+                        val reminders = pendingRemindersMap[schUi.key].orEmpty()
+                        reminders.forEach { rUi ->
+                            reminderRepo.upsert(rUi.entity.copy(id = 0, scheduleId = newScheduleId))
+                        }
                     }
                 }
                 _pendingSchedulesForNewTask.value = emptyList()
+                _pendingRemindersByScheduleKey.value = emptyMap()
             }
 
 
@@ -938,6 +1026,13 @@ class CategoryViewModel @Inject constructor(
                 _pendingSchedulesForNewTask.update {
                     it + TaskScheduleUi(newKey, newSchedule, isPending = true)
                 }
+                // ✅ attach reminders of schedule-draft to that pending schedule key
+                val reminders = _pendingRemindersForScheduleDraft.value
+                if (reminders.isNotEmpty()) {
+                    _pendingRemindersByScheduleKey.update { it + (newKey to reminders) }
+                }
+                // ✅ draft list پاک شود برای دفعه بعد
+                _pendingRemindersForScheduleDraft.value = emptyList()
             } else {
                 // edit pending
                 _pendingSchedulesForNewTask.update { list ->
@@ -950,7 +1045,20 @@ class CategoryViewModel @Inject constructor(
         } else {
             // ===== DB mode =====
             viewModelScope.launch(Dispatchers.IO) {
-                scheduleRepo.upsert(newSchedule.copy(taskId = tid))
+                val scheduleId: Int = withContext(Dispatchers.IO) {
+                    scheduleRepo.upsertAndReturnId(newSchedule.copy(taskId = tid))
+                }
+
+                val reminders = _pendingRemindersForScheduleDraft.value
+                if (reminders.isNotEmpty()) {
+                    withContext(Dispatchers.IO) {
+                        reminders.forEach { ui ->
+                            reminderRepo.upsert(ui.entity.copy(id = 0, scheduleId = scheduleId))
+                        }
+                    }
+                    _pendingRemindersForScheduleDraft.value = emptyList()
+                }
+
             }
             finishEditSchedule()
         }
@@ -977,11 +1085,11 @@ class CategoryViewModel @Inject constructor(
             )
         )
     }
-
-
     fun startEditScheduleByKey(key: Int) {
         viewModelScope.launch {
             _editingScheduleKey.value = key
+            _activeScheduleKeyForReminder.value = key // ✅ این scheduleKey (DB یا pending)
+
 
             val tid = _editingTaskId.value
             val schedule: TaskSchedule? =
@@ -996,6 +1104,11 @@ class CategoryViewModel @Inject constructor(
 
             schedule ?: return@launch
             _scheduleDraft.value = schedule.toDraft()
+
+
+            // ✅ اگر DB هست، reminderها از Flow میاد، نیازی به preload نیست
+            // ✅ اگر pending schedule هست، reminderها از pendingMap میاد
+            // ✅ اگر task pending و این schedule هیچ reminder نداشت، چیزی لازم نیست
         }
     }
     fun finishEditSchedule() {
@@ -1018,18 +1131,20 @@ class CategoryViewModel @Inject constructor(
     fun startAddSchedule() {
         _editingScheduleKey.value = null      // یعنی Add schedule (نه edit)
         _scheduleDraft.value = defaultScheduleDraftNow()
+
+        // ✅ داریم schedule جدید می‌سازیم => reminderها میرن تو draftList
+        _activeScheduleKeyForReminder.value = null
+        _pendingRemindersForScheduleDraft.value = emptyList()
     }
     fun setScheduleDate(d: LocalDate) = _scheduleDraft.update { it.copy(date = d) }
     fun setRepeatEnabled(v: Boolean) {
         _scheduleDraft.update { it.copy(repeat = it.repeat.copy(enabled = v)) }
     }
-
     fun setRepeatInterval(n: Int) {
         _scheduleDraft.update {
             it.copy(repeat = it.repeat.copy(interval = n.coerceIn(1, 99)))
         }
     }
-
     fun setRepeatUnit(u: RepeatUnit) {
         _scheduleDraft.update { d ->
             val r = d.repeat
@@ -1042,27 +1157,322 @@ class CategoryViewModel @Inject constructor(
             d.copy(repeat = r.copy(unit = u, weekdaysMask = newMask))
         }
     }
-
     fun setRepeatWeekdaysMask(mask: Int) {
         _scheduleDraft.update { it.copy(repeat = it.repeat.copy(weekdaysMask = mask.coerceIn(0, 127))) }
     }
-
-    // Sa..Fr => 0..6
     private fun todayBitIndex(): Int {
         // اگر خواستی دقیق با تقویم خودت تنظیم می‌کنیم؛
         // فعلاً یک نگاشت ساده:
-        val dow = java.time.LocalDate.now().dayOfWeek // MON..SUN
+        val dow = LocalDate.now().dayOfWeek // MON..SUN
         return when (dow) {
-            java.time.DayOfWeek.SATURDAY -> 0
-            java.time.DayOfWeek.SUNDAY -> 1
-            java.time.DayOfWeek.MONDAY -> 2
-            java.time.DayOfWeek.TUESDAY -> 3
-            java.time.DayOfWeek.WEDNESDAY -> 4
-            java.time.DayOfWeek.THURSDAY -> 5
-            java.time.DayOfWeek.FRIDAY -> 6
+            DayOfWeek.SATURDAY -> 0
+            DayOfWeek.SUNDAY -> 1
+            DayOfWeek.MONDAY -> 2
+            DayOfWeek.TUESDAY -> 3
+            DayOfWeek.WEDNESDAY -> 4
+            DayOfWeek.THURSDAY -> 5
+            DayOfWeek.FRIDAY -> 6
         }
     }
 
+
+
+    //reminder
+
+    fun setReminderMode(m: ReminderMode) = _reminderDraft.update { it.copy(mode = m) }
+    fun setReminderOffsetDays(v: Int)= _reminderDraft.update { it.copy(offsetDays = v) }
+    fun setReminderOffsetHours(v: Int)= _reminderDraft.update { it.copy(offsetHours = v) }
+    fun setReminderOffsetMinutes(v: Int)= _reminderDraft.update { it.copy(offsetMinutes = v) }
+    fun setReminderBeforeAfter(v: BeforeAfter)= _reminderDraft.update { it.copy(beforeAfter = v) }
+    fun setReminderAnchor(v: StartEnd)= _reminderDraft.update { it.copy(anchor = v) }
+    fun setReminderFixedTime(t: LocalTime)= _reminderDraft.update { it.copy(fixedTime = t) }
+    fun setReminderIntervalStart(t: LocalTime)= _reminderDraft.update { it.copy(intervalStart = t) }
+    fun setReminderIntervalEnd(t: LocalTime)= _reminderDraft.update { it.copy(intervalEnd = t) }
+    fun setReminderEveryHours(v: Int)= _reminderDraft.update { it.copy(everyHours = v) }
+    fun setReminderEveryMinutes(v: Int)= _reminderDraft.update { it.copy(everyMinutes = v) }
+    fun setReminderStrength(v: ReminderStrengthMode)= _reminderDraft.update { it.copy(strength = v) }
+    fun setReminderVibrate(v: Boolean)= _reminderDraft.update { it.copy(vibrate = v) }
+    fun setReminderAlarmSoundUri(v: String?)= _reminderDraft.update { it.copy(alarmSoundUri = v) }
+    fun setReminderCaptchaEnabled(v: Boolean)= _reminderDraft.update { it.copy(captchaEnabled = v) }
+    fun startAddReminder() {
+        _editingReminderKey.value = null
+        _reminderDraft.value = ReminderDraft() // یا defaultReminderDraft()
+    }
+    fun startEditReminderByKey(key: Int) {
+        viewModelScope.launch {
+            _editingReminderKey.value = key
+
+            val tid = _editingTaskId.value
+            val schKey = _editingScheduleKey.value // همون scheduleKey که schedule dialog روشه
+
+            val entity: TaskReminderEntity? =
+                when {
+                    // schedule draft (قبل confirm) => از draftList
+                    schKey == null -> _pendingRemindersForScheduleDraft.value.firstOrNull { it.key == key }?.entity
+
+                    // task جدید و schedule pending => از map
+                    tid == null -> _pendingRemindersByScheduleKey.value[schKey]?.firstOrNull { it.key == key }?.entity
+
+                    // DB
+                    else -> reminderRepo.getById(key)
+                }
+
+            entity ?: return@launch
+            _reminderDraft.value = entity.toDraft() // پایین helper می‌دیم
+        }
+    }
+    fun confirmReminderFromDialog() {
+        val tid = _editingTaskId.value
+        val schKey = _editingScheduleKey.value
+        val editingKey = _editingReminderKey.value
+
+        val draft = _reminderDraft.value
+
+        // تبدیل Draft به Entity (scheduleId را بعداً تعیین می‌کنیم)
+        fun buildEntity(scheduleId: Int): TaskReminderEntity =
+            draft.toEntity(
+                id = editingKey ?: 0,
+                scheduleId = scheduleId
+            )
+
+        // 1) schedule draft (هنوز confirm نشده)
+        if (schKey == null) {
+            val key = editingKey ?: newPendingReminderKey()
+            val ui = TaskReminderUi(
+                key = key,
+                entity = buildEntity(scheduleId = 0),
+                isPending = true
+            )
+
+            _pendingRemindersForScheduleDraft.update { list ->
+                if (editingKey == null) list + ui
+                else list.map { if (it.key == key) ui else it }
+            }
+
+            finishEditReminder()
+            return
+        }
+
+        // 2) task جدید و schedule pending
+        if (tid == null) {
+            val key = editingKey ?: newPendingReminderKey()
+            val ui = TaskReminderUi(
+                key = key,
+                entity = buildEntity(scheduleId = 0),
+                isPending = true
+            )
+
+            _pendingRemindersByScheduleKey.update { map ->
+                val cur = map[schKey].orEmpty()
+                val next =
+                    if (editingKey == null) cur + ui
+                    else cur.map { if (it.key == key) ui else it }
+                map + (schKey to next)
+            }
+
+            finishEditReminder()
+            return
+        }
+
+        // 3) DB
+        viewModelScope.launch(Dispatchers.IO) {
+            // schKey اینجا scheduleId واقعی است
+            reminderRepo.upsert(buildEntity(scheduleId = schKey))
+        }
+
+        finishEditReminder()
+    }
+    fun deleteReminderByKey(key: Int) {
+        val tid = _editingTaskId.value
+        val schKey = _editingScheduleKey.value
+
+        // schedule draft
+        if (schKey == null) {
+            _pendingRemindersForScheduleDraft.update { it.filterNot { ui -> ui.key == key } }
+            return
+        }
+
+        // task جدید و schedule pending
+        if (tid == null) {
+            _pendingRemindersByScheduleKey.update { map ->
+                val cur = map[schKey].orEmpty()
+                map + (schKey to cur.filterNot { it.key == key })
+            }
+            return
+        }
+
+        // DB
+        viewModelScope.launch(Dispatchers.IO) {
+            reminderRepo.deleteById(key)
+        }
+    }
+    fun finishEditReminder() {
+        _editingReminderKey.value = null
+        _reminderDraft.value = ReminderDraft()
+    }
+    private fun TaskReminderEntity.toDraft(): ReminderDraft {
+        val fixed = fixedMinuteOfDay?.let(::minuteOfDayToLocalTime) ?: LocalTime.of(11, 0)
+
+        val iStart = intervalStartMinuteOfDay?.let(::minuteOfDayToLocalTime) ?: LocalTime.of(9, 0)
+        val iEnd = intervalEndMinuteOfDay?.let(::minuteOfDayToLocalTime) ?: LocalTime.of(10, 0)
+
+        val everyTotal = everyMinutesTotal ?: 1
+        val eh = (everyTotal / 60).coerceIn(0, 99)
+        val em = (everyTotal % 60).coerceIn(0, 59).let { if (eh == 0 && it == 0) 1 else it } // حداقل 1 دقیقه
+
+        return ReminderDraft(
+            mode = mode,
+
+            // Allocated
+            offsetDays = offsetDays.coerceIn(0, 999),
+            offsetHours = offsetHours.coerceIn(0, 23),
+            offsetMinutes = offsetMinutes.coerceIn(0, 59),
+            beforeAfter = beforeAfter,
+            anchor = anchor,
+
+            // Fixed time
+            fixedTime = fixed,
+
+            // Intervallic
+            intervalStart = iStart,
+            intervalEnd = iEnd,
+            everyHours = eh,
+            everyMinutes = em,
+
+            // Strength
+            strength = strength,
+            vibrate = vibrate,
+
+            // Sound
+            alarmSoundUri = alarmSoundUri,
+
+            // Captcha
+            captchaEnabled = captchaEnabled
+        )
+    }
+    private fun ReminderDraft.toEntity(
+        id: Int,
+        scheduleId: Int
+    ): TaskReminderEntity {
+
+        val safeStrength = strength
+        val safeCaptcha = (safeStrength == ReminderStrengthMode.ALARM_AND_CAPTCHA)
+
+
+        val safeOffsetDays = offsetDays.coerceIn(0, 999)
+        val safeOffsetHours = offsetHours.coerceIn(0, 23)
+        val safeOffsetMinutes = offsetMinutes.coerceIn(0, 59)
+
+        val safeEveryHours = everyHours.coerceIn(0, 99)
+        val safeEveryMinutes = everyMinutes.coerceIn(0, 59)
+        val safeEveryTotal =
+            (safeEveryHours * 60 + safeEveryMinutes).let { if (it <= 0) 1 else it } // حداقل 1
+
+        val fixedMinute = fixedTime.toMinuteOfDay()
+        val intervalStartMin = intervalStart.toMinuteOfDay()
+        val intervalEndMin = intervalEnd.toMinuteOfDay()
+
+        return when (mode) {
+            ReminderMode.ALLOCATED -> {
+                TaskReminderEntity(
+                    id = id,
+                    scheduleId = scheduleId,
+                    mode = mode,
+
+                    // allocated
+                    offsetDays = safeOffsetDays,
+                    offsetHours = safeOffsetHours,
+                    offsetMinutes = safeOffsetMinutes,
+                    beforeAfter = beforeAfter,
+                    anchor = anchor,
+
+                    // fixed
+                    fixedMinuteOfDay = null,
+
+                    // intervallic
+                    intervalStartMinuteOfDay = null,
+                    intervalEndMinuteOfDay = null,
+                    everyMinutesTotal = null,
+
+                    // strength
+                    strength = safeStrength,
+                    vibrate = vibrate,
+
+                    // sound
+                    alarmSoundUri = alarmSoundUri,
+
+                    // captcha
+                    captchaEnabled = safeCaptcha
+                )
+            }
+
+            ReminderMode.FIXED_TIME -> {
+                TaskReminderEntity(
+                    id = id,
+                    scheduleId = scheduleId,
+                    mode = mode,
+
+                    // allocated (می‌تونیم صفر نگه داریم تا نال نباشه)
+                    offsetDays = 0,
+                    offsetHours = 0,
+                    offsetMinutes = 0,
+                    beforeAfter = BeforeAfter.BEFORE,
+                    anchor = StartEnd.START,
+
+                    // fixed
+                    fixedMinuteOfDay = fixedMinute,
+
+                    // intervallic
+                    intervalStartMinuteOfDay = null,
+                    intervalEndMinuteOfDay = null,
+                    everyMinutesTotal = null,
+
+                    // strength
+                    strength = safeStrength,
+                    vibrate = vibrate,
+
+                    // sound
+                    alarmSoundUri = alarmSoundUri,
+
+                    // captcha
+                    captchaEnabled = safeCaptcha
+                )
+            }
+
+            ReminderMode.INTERVALLIC -> {
+                TaskReminderEntity(
+                    id = id,
+                    scheduleId = scheduleId,
+                    mode = mode,
+
+                    // allocated
+                    offsetDays = 0,
+                    offsetHours = 0,
+                    offsetMinutes = 0,
+                    beforeAfter = BeforeAfter.BEFORE,
+                    anchor = StartEnd.START,
+
+                    // fixed
+                    fixedMinuteOfDay = null,
+
+                    // intervallic
+                    intervalStartMinuteOfDay = intervalStartMin,
+                    intervalEndMinuteOfDay = intervalEndMin,
+                    everyMinutesTotal = safeEveryTotal,
+
+                    // strength
+                    strength = safeStrength,
+                    vibrate = vibrate,
+
+                    // sound
+                    alarmSoundUri = alarmSoundUri,
+
+                    // captcha
+                    captchaEnabled = safeCaptcha
+                )
+            }
+        }
+    }
 
 
 
@@ -1378,6 +1788,12 @@ class CategoryViewModel @Inject constructor(
         )
     }
 
+    private fun LocalTime.toMinuteOfDay(): Int = hour * 60 + minute
+
+    private fun minuteOfDayToLocalTime(min: Int): LocalTime {
+        val safe = min.coerceIn(0, 23 * 60 + 59)
+        return LocalTime.of(safe / 60, safe % 60)
+    }
 
 
 
@@ -1426,12 +1842,11 @@ data class FlattenResult(
     val levelById: Map<Int, Int>
 )
 
-data class CategoryDraft2(
-    val name: String = "",
-    val parentId: Int = -1,
-    val iconName: String = "QuestionMark",
-    val color: String =  "#2196F3",  // آبی متریال
-    val description: String = ""
+private data class RemindersInputs(
+    val tid: Int?,
+    val schKey: Int?,
+    val draftList: List<TaskReminderUi>,
+    val pendingMap: Map<Int, List<TaskReminderUi>>,
 )
 
 data class TaskMiniUi(
@@ -1443,6 +1858,40 @@ data class TaskMiniUi(
     val parentTaskId: Int? = null,
     val siblingIndex: Int = 0,
     val priority: Int = 0
+)
+
+data class TaskRenderItem(
+    val task: TaskMiniUi,
+    val level: Int,        // 1..4 (نمایشی)
+    val hasChildren: Boolean,
+    val isExpanded: Boolean,
+    val isVisible: Boolean
+)
+
+data class ChildLevelUi(
+    val allowed: Set<Int> = setOf(0),
+    val maxAllowed: Int = 0
+)
+
+data class TaskScheduleUi(
+    val key: Int,              // برای pending منفی، برای DB همون id
+    val schedule: TaskSchedule,
+    val isPending: Boolean
+)
+
+data class TaskReminderUi(
+    val key: Int,              // برای pending منفی، برای DB همون id
+    val entity: TaskReminderEntity,
+    val isPending: Boolean
+)
+
+
+data class CategoryDraft(
+    val name: String = "",
+    val parentId: Int = -1,
+    val iconName: String = "QuestionMark",
+    val color: String =  "#2196F3",  // آبی متریال
+    val description: String = ""
 )
 
 data class TaskDraft(
@@ -1468,26 +1917,8 @@ data class ScheduleDraft(
 
     val note: String = "",
 
-    val repeat: RepeatDraft = RepeatDraft()
-)
-
-data class TaskRenderItem(
-    val task: TaskMiniUi,
-    val level: Int,        // 1..4 (نمایشی)
-    val hasChildren: Boolean,
-    val isExpanded: Boolean,
-    val isVisible: Boolean
-)
-
-data class ChildLevelUi(
-    val allowed: Set<Int> = setOf(0),
-    val maxAllowed: Int = 0
-)
-
-data class TaskScheduleUi(
-    val key: Int,              // برای pending منفی، برای DB همون id
-    val schedule: TaskSchedule,
-    val isPending: Boolean
+    val repeat: RepeatDraft = RepeatDraft(),
+    val reminder: ReminderDraft? = null
 )
 
 data class RepeatDraft(
@@ -1495,4 +1926,34 @@ data class RepeatDraft(
     val interval: Int = 1,
     val unit: RepeatUnit = RepeatUnit.DAY,
     val weekdaysMask: Int = 0
+)
+
+data class ReminderDraft(
+    val mode: ReminderMode = ReminderMode.ALLOCATED,
+
+    // Allocated
+    val offsetDays: Int = 0,
+    val offsetHours: Int = 0,
+    val offsetMinutes: Int = 0,
+    val beforeAfter: BeforeAfter = BeforeAfter.BEFORE,
+    val anchor: StartEnd = StartEnd.START,
+
+    // Fixed time
+    val fixedTime: LocalTime = LocalTime.of(11, 0),
+
+    // Intervallic
+    val intervalStart: LocalTime = LocalTime.of(9, 0),
+    val intervalEnd: LocalTime = LocalTime.of(10, 0),
+    val everyHours: Int = 0,
+    val everyMinutes: Int = 1,
+
+    // Strength
+    val strength: ReminderStrengthMode = ReminderStrengthMode.NOTIFICATION,
+    val vibrate: Boolean = true,
+
+    // Sound (برای Alarm ها)
+    val alarmSoundUri: String? = null, // Uri.toString()
+
+    // Captcha
+    val captchaEnabled: Boolean = false, // فقط وقتی strength = ALARM_AND_CAPTCHA
 )

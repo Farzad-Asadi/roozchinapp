@@ -12,6 +12,9 @@ class TaskScheduleRepositoryImpl @Inject constructor(
     override fun observeByTaskId(taskId: Int): Flow<List<TaskSchedule>> = dao.observeByTaskId(taskId)
     override suspend fun getByTaskId(taskId: Int): TaskSchedule? = dao.getByTaskId(taskId)
     override suspend fun upsert(schedule: TaskSchedule) = dao.upsert(schedule)
+    override suspend fun upsertAndReturnId(schedule: TaskSchedule): Int =
+        dao.upsertAndReturnId(schedule).toInt()
+
     override suspend fun delete(schedule: TaskSchedule) = dao.delete(schedule)
 
     override suspend fun deleteByTaskId(taskId: Int) = dao.deleteByTaskId(taskId)

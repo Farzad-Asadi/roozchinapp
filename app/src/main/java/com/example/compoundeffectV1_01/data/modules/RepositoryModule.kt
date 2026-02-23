@@ -4,6 +4,8 @@ import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.appSystemInfo.Ap
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.appSystemInfo.AppSystemInfoRepositoryImpl
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.category.CategoryRepository
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.category.CategoryRepositoryImpl
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.TaskReminderRepository
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.TaskReminderRepositoryImpl
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskRepository
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskRepositoryImpl
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.TaskScheduleRepository
@@ -39,6 +41,10 @@ abstract class RepositoryModule {
         impl: AppSystemInfoRepositoryImpl
     ): AppSystemInfoRepository
 
+    @Binds @Singleton
+    abstract fun bindTaskReminderRepository (
+        impl: TaskReminderRepositoryImpl
+    ): TaskReminderRepository
 
 
 }

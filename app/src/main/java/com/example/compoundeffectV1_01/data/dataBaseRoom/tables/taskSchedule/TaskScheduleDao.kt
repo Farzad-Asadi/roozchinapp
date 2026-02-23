@@ -15,6 +15,9 @@ interface TaskScheduleDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(schedule: TaskSchedule)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAndReturnId(schedule: TaskSchedule):Long
+
 
     @Query("DELETE FROM task_schedule WHERE taskId = :taskId")
     suspend fun deleteByTaskId(taskId: Int)

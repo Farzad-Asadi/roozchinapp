@@ -9,6 +9,8 @@ import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.appSystemInfo.Ap
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.appSystemInfo.SystemDao
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.category.CategoryEntity
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.category.CategoryDao
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.TaskReminderDao
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.TaskReminderEntity
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskDao
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.Task
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.TaskSchedule
@@ -24,6 +26,7 @@ import com.example.compoundeffectV1_01.data.dataBaseRoom.typeConvertor.TypeConve
         Task::class,
         AppSystemInfo::class,
         TaskSchedule::class,
+        TaskReminderEntity::class,
 
     ],
 
@@ -39,6 +42,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun categoryDao(): CategoryDao
     abstract fun taskDao(): TaskDao
     abstract fun taskScheduleDao(): TaskScheduleDao
+    abstract fun taskReminderDao(): TaskReminderDao
     abstract fun systemDao(): SystemDao
 
 

@@ -8,6 +8,7 @@ interface TaskScheduleRepository {
     fun observeByTaskId(taskId: Int): Flow<List<TaskSchedule>>
     suspend fun getByTaskId(taskId: Int): TaskSchedule?
     suspend fun upsert(schedule: TaskSchedule)
+    suspend fun upsertAndReturnId(schedule: TaskSchedule):Int
     suspend fun delete(schedule: TaskSchedule)
     suspend fun deleteByTaskId(taskId: Int)
     suspend fun deleteAllForTask(taskId: Int)
