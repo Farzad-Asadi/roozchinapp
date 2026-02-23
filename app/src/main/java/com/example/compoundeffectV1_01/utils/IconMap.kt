@@ -1,9 +1,11 @@
 package com.example.compoundeffectV1_01.utils
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.TrendingDown
 import androidx.compose.material.icons.filled.Abc
 import androidx.compose.material.icons.filled.AcUnit
 import androidx.compose.material.icons.filled.AccessAlarm
+import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Accessibility
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.AccountBalanceWallet
@@ -84,8 +86,10 @@ import androidx.compose.material.icons.filled.OutdoorGrill
 import androidx.compose.material.icons.filled.Outlet
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.QuestionMark
+import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Route
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material.icons.filled.ShoppingCart
@@ -97,13 +101,18 @@ import androidx.compose.material.icons.filled.SportsTennis
 import androidx.compose.material.icons.filled.SportsVolleyball
 import androidx.compose.material.icons.filled.TableBar
 import androidx.compose.material.icons.filled.Thermostat
+import androidx.compose.material.icons.filled.Timeline
+import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.TrendingDown
 import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material.icons.filled.Vaccines
 import androidx.compose.material.icons.filled.Villa
 import androidx.compose.material.icons.filled.Warehouse
 import androidx.compose.material.icons.filled.Window
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.ReminderMode
 
 
 data class IconOption(val key: String, val icon: ImageVector)
@@ -204,6 +213,15 @@ fun iconFromKey(key: String): ImageVector {
 }
 
 
+//ایکون مود های ریمایندر
+@Composable
+fun reminderModeIcon(mode: ReminderMode): ImageVector {
+    return when (mode) {
+        ReminderMode.ALLOCATED -> Icons.Filled.Timeline
+        ReminderMode.FIXED_TIME -> Icons.Filled.Anchor
+        ReminderMode.INTERVALLIC -> Icons.Filled.Repeat
+    }
+}
 
 
 

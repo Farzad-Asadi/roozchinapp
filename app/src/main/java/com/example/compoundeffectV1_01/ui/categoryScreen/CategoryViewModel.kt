@@ -1178,8 +1178,8 @@ class CategoryViewModel @Inject constructor(
 
 
     //reminder
-
     fun setReminderMode(m: ReminderMode) = _reminderDraft.update { it.copy(mode = m) }
+    fun setReminderTitle(s: String) = _reminderDraft.update { it.copy(title = s) }
     fun setReminderOffsetDays(v: Int)= _reminderDraft.update { it.copy(offsetDays = v) }
     fun setReminderOffsetHours(v: Int)= _reminderDraft.update { it.copy(offsetHours = v) }
     fun setReminderOffsetMinutes(v: Int)= _reminderDraft.update { it.copy(offsetMinutes = v) }
@@ -1322,6 +1322,7 @@ class CategoryViewModel @Inject constructor(
 
         return ReminderDraft(
             mode = mode,
+            title = title ?:"",
 
             // Allocated
             offsetDays = offsetDays.coerceIn(0, 999),
@@ -1377,6 +1378,7 @@ class CategoryViewModel @Inject constructor(
                 TaskReminderEntity(
                     id = id,
                     scheduleId = scheduleId,
+                    title = title,
                     mode = mode,
 
                     // allocated
@@ -1410,6 +1412,7 @@ class CategoryViewModel @Inject constructor(
                 TaskReminderEntity(
                     id = id,
                     scheduleId = scheduleId,
+                    title = title,
                     mode = mode,
 
                     // allocated (می‌تونیم صفر نگه داریم تا نال نباشه)
@@ -1443,6 +1446,7 @@ class CategoryViewModel @Inject constructor(
                 TaskReminderEntity(
                     id = id,
                     scheduleId = scheduleId,
+                    title = title,
                     mode = mode,
 
                     // allocated
@@ -1473,6 +1477,7 @@ class CategoryViewModel @Inject constructor(
             }
         }
     }
+
 
 
 
@@ -1930,6 +1935,7 @@ data class RepeatDraft(
 
 data class ReminderDraft(
     val mode: ReminderMode = ReminderMode.ALLOCATED,
+    val title: String = "",
 
     // Allocated
     val offsetDays: Int = 0,

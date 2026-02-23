@@ -21,6 +21,7 @@ import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.Tas
 data class TaskReminderEntity(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
     val scheduleId: Int,
+    val title: String? = null,
 
     val mode: ReminderMode,
 
