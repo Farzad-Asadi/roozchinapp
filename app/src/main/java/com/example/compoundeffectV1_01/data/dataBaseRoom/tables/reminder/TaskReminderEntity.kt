@@ -36,9 +36,9 @@ data class TaskReminderEntity(
     val fixedMinuteOfDay: Int?,
 
     // intervallic
-    val intervalStartMinuteOfDay: Int?,
-    val intervalEndMinuteOfDay: Int?,
-    val everyMinutesTotal: Int?, // everyHours*60 + everyMinutes
+//    val intervalStartMinuteOfDay: Int?,
+//    val intervalEndMinuteOfDay: Int?,
+//    val everyMinutesTotal: Int?, // everyHours*60 + everyMinutes
 
     // strength
     val strength: ReminderStrengthMode,
@@ -53,7 +53,7 @@ data class TaskReminderEntity(
 
 
 
-enum class ReminderMode { ALLOCATED, FIXED_TIME, INTERVALLIC }
+enum class ReminderMode { ALLOCATED, FIXED_TIME }
 enum class ReminderStrengthMode { NOTIFICATION, ALARM, ALARM_AND_CAPTCHA }
 enum class BeforeAfter { BEFORE, AFTER }
 enum class StartEnd { START, END }

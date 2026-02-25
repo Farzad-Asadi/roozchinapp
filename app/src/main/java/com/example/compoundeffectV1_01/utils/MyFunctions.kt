@@ -1,16 +1,23 @@
 package com.example.compoundeffectV1_01.utils
 
 import android.annotation.SuppressLint
+import androidx.compose.foundation.interaction.Interaction
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ParentDataModifier
 import androidx.compose.ui.unit.Density
 import ir.huri.jcal.JalaliCalendar
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.yield
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -227,5 +234,31 @@ fun JalaliCalendar.toFaText(): String {
 
 
 
+fun Modifier.selectAllOnEveryTap(
+    interactionSource: MutableInteractionSource,
+    focusRequester: FocusRequester,
+    selectAll: () -> Unit
+): Modifier = this.then(
+    Modifier
+).also {
+    // no-op: the work is done via LaunchedEffect below (call site)
+}
 
+@Composable
+fun SelectAllOnEveryTapEffect(
+    interactionSource: MutableInteractionSource,
+    focusRequester: FocusRequester,
+    selectAll: () -> Unit
+) {
+    LaunchedEffect(interactionSource) {
+        interactionSource.interactions.collectLatest { i: Interaction ->
+            if (i is PressInteraction.Release) {
+                focusRequester.requestFocus()
+                // مهم: یک لحظه defer تا TextField tap خودش رو override نکنه
+                yield()
+                selectAll()
+            }
+        }
+    }
+}
 

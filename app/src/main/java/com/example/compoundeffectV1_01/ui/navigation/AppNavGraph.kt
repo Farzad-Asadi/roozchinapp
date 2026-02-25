@@ -11,7 +11,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navigation
 import com.example.compoundeffectV1_01.ui.categoryScreen.CategoryScreen
-import com.example.compoundeffectV1_01.ui.scheduleScreen.ScheduleScreen2
+import com.example.compoundeffectV1_01.ui.scheduleScreen.ScheduleScreen
 
 
 @Composable
@@ -32,7 +32,7 @@ fun AppNavGraph(
             composable(AppRoutes.CATEGORY) {
                 CategoryScreen(navController = navController)
             }
-            composable(AppRoutes.SCHEDULE) { ScheduleScreen2() }
+            composable(AppRoutes.SCHEDULE) { ScheduleScreen() }
         }
     }
 }

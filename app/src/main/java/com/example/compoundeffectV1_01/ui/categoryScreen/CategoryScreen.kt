@@ -17,7 +17,11 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.Interaction
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -94,6 +98,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
@@ -122,10 +127,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -136,6 +144,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -177,6 +186,8 @@ import com.example.compoundeffectV1_01.utils.toJalali
 import com.example.compoundeffectV1_01.utils.toLocalDate
 import com.gmail.hamedvakhide.compose_jalali_datepicker.JalaliDatePickerDialog
 import ir.huri.jcal.JalaliCalendar
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.yield
 import org.burnoutcrew.reorderable.ReorderableItem
 import org.burnoutcrew.reorderable.detectReorderAfterLongPress
 import org.burnoutcrew.reorderable.rememberReorderableLazyListState
@@ -898,10 +909,6 @@ fun CategoryScreen(
             onBeforeAfterChange = viewModel::setReminderBeforeAfter,
             onAnchorChange = viewModel::setReminderAnchor,
             onFixedTimeChange = viewModel::setReminderFixedTime,
-            onIntervalStartChange = viewModel::setReminderIntervalStart,
-            onIntervalEndChange = viewModel::setReminderIntervalEnd,
-            onEveryHoursChange = viewModel::setReminderEveryHours,
-            onEveryMinutesChange = viewModel::setReminderEveryMinutes,
             onStrengthChange = viewModel::setReminderStrength,
             onVibrateChange = viewModel::setReminderVibrate,
             onAlarmSoundUriChange = viewModel::setReminderAlarmSoundUri,
@@ -2208,7 +2215,7 @@ fun AddEditeScheduleDialog(
                             onEndChange = onEndChange
                         )
                     } else {
-                        AmountOfTimeRow(   //TODO
+                        AmountOfTimeRow(
                             minutes = draft.durationMinutes,
                             onMinutesChange = onDurationChange
                         )
@@ -2343,10 +2350,6 @@ fun AddEditeReminderDialog(
     onBeforeAfterChange: (BeforeAfter) -> Unit,
     onAnchorChange: (StartEnd) -> Unit,
     onFixedTimeChange: (LocalTime) -> Unit,
-    onIntervalStartChange: (LocalTime) -> Unit,
-    onIntervalEndChange: (LocalTime) -> Unit,
-    onEveryHoursChange: (Int) -> Unit,
-    onEveryMinutesChange: (Int) -> Unit,
     onStrengthChange: (ReminderStrengthMode) -> Unit,
     onVibrateChange: (Boolean) -> Unit,
     onAlarmSoundUriChange: (String?) -> Unit = {},
@@ -2420,15 +2423,6 @@ fun AddEditeReminderDialog(
                     )
                 }
 
-                ReminderMode.INTERVALLIC -> {
-                    IntervallicRows(
-                        draft = draft,
-                        onStartChange = onIntervalStartChange,
-                        onEndChange = onIntervalEndChange,
-                        onEveryHoursChange = onEveryHoursChange,
-                        onEveryMinutesChange = onEveryMinutesChange
-                    )
-                }
             }
 
 
@@ -2700,94 +2694,6 @@ private fun FixedTimeRow(
     )
 }
 
-@Composable
-private fun IntervallicRows(
-    draft: ReminderDraft,
-    onStartChange: (LocalTime) -> Unit,
-    onEndChange: (LocalTime) -> Unit,
-    onEveryHoursChange: (Int) -> Unit,
-    onEveryMinutesChange: (Int) -> Unit
-) {
-    // row 1: start - end
-    AddEditeDialogRow(
-        onClick = null,
-        content = {
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 44.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                var showStart by remember { mutableStateOf(false) }
-                var showEnd by remember { mutableStateOf(false) }
-
-                TimeChip(time = draft.intervalStart) { showStart = true }
-                Text("-", style = MaterialTheme.typography.titleLarge)
-                TimeChip(time = draft.intervalEnd) { showEnd = true }
-
-                if (showStart) {
-                    TimePickerDialog(
-                        title = "Select start",
-                        initial = draft.intervalStart,
-                        onDismiss = { showStart = false },
-                        onConfirm = { t -> onStartChange(t); showStart = false }
-                    )
-                }
-                if (showEnd) {
-                    TimePickerDialog(
-                        title = "Select end",
-                        initial = draft.intervalEnd,
-                        onDismiss = { showEnd = false },
-                        onConfirm = { t -> onEndChange(t); showEnd = false }
-                    )
-                }
-            }
-        },
-        startPadding = 0,
-        showDivider = false
-    )
-
-    // row 2: repeat over the range ... 0h : 1m
-    AddEditeDialogRow(
-        onClick = null,
-        content = {
-//            Spacer(Modifier.width(44.dp))
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Repeat over the range",
-                    fontSize = 13.sp,
-                    modifier = Modifier.weight(1f)
-                )
-
-                SmallNumberField(
-                    value = draft.everyHours,
-                    suffix = "h",
-                    maxDigits = 2,
-                    onChange = { onEveryHoursChange(it.coerceIn(0, 99)) }
-                )
-
-                Spacer(Modifier.width(10.dp))
-                Text(":", style = MaterialTheme.typography.titleLarge)
-                Spacer(Modifier.width(10.dp))
-
-                SmallNumberField(
-                    value = draft.everyMinutes,
-                    suffix = "m",
-                    maxDigits = 2,
-                    onChange = { onEveryMinutesChange(it.coerceIn(0, 59)) }
-                )
-            }
-        },
-        startPadding = 0,
-//        showDivider = false
-    )
-}
 
 @Composable
 private fun StrengthRow(
@@ -4537,18 +4443,15 @@ private fun ModeReminderDropdownRow(
     val selectedLabel = when (mode) {
         ReminderMode.ALLOCATED -> "Allocated"
         ReminderMode.FIXED_TIME -> "Fixed time"
-        ReminderMode.INTERVALLIC -> "Intervallic"
     }
 
     val items = listOf(
         ReminderMode.ALLOCATED to "Allocated",
         ReminderMode.FIXED_TIME to "Fixed time",
-        ReminderMode.INTERVALLIC to "Intervallic"
     )
     val icon = when (mode) {
         ReminderMode.ALLOCATED -> Icons.Filled.Timeline
         ReminderMode.FIXED_TIME -> Icons.Filled.Anchor
-        ReminderMode.INTERVALLIC -> Icons.Filled.Timer
     }
 
     ExposedDropdownMenuBox(
@@ -4743,21 +4646,186 @@ private fun TimePickerDialog(
 }
 
 
+
 @Composable
 private fun AmountOfTimeRow(
     minutes: Int,
     onMinutesChange: (Int) -> Unit
 ) {
-    OutlinedTextField(
-        value = minutes.toString(),
-        onValueChange = { v -> onMinutesChange(v.filter(Char::isDigit).toIntOrNull() ?: minutes) },
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    fun clampHour(h: Int) = h.coerceIn(0, 99)
+    fun clampMin(m: Int) = m.coerceIn(0, 59)
+    fun two(n: Int) = n.coerceIn(0, 99).toString().padStart(2, '0')
+
+    fun hhFromTotal(total: Int) = clampHour(total / 60)
+    fun mmFromTotal(total: Int) = clampMin(total % 60)
+
+    fun emit(hh: Int, mm: Int) {
+        onMinutesChange(clampHour(hh) * 60 + clampMin(mm))
+    }
+
+    fun digits2(s: String) = s.filter(Char::isDigit).take(2)
+    fun parseOrZero(s: String) = s.toIntOrNull() ?: 0
+
+    val hFocusRequester = remember { FocusRequester() }
+    val mFocusRequester = remember { FocusRequester() }
+
+    val hInteraction = remember { MutableInteractionSource() }
+    val mInteraction = remember { MutableInteractionSource() }
+
+    var hFocused by remember { mutableStateOf(false) }
+    var mFocused by remember { mutableStateOf(false) }
+
+    var hTf by remember {
+        val t = two(hhFromTotal(minutes))
+        mutableStateOf(TextFieldValue(t, selection = TextRange(t.length)))
+    }
+    var mTf by remember {
+        val t = two(mmFromTotal(minutes))
+        mutableStateOf(TextFieldValue(t, selection = TextRange(t.length)))
+    }
+
+    // ✅ هر بار لمس (Release) => فوکوس + select-all
+    LaunchedEffect(hInteraction) {
+        hInteraction.interactions.collectLatest { i: Interaction ->
+            if (i is PressInteraction.Release) {
+                hFocusRequester.requestFocus()
+                yield()
+                hTf = hTf.copy(selection = TextRange(0, hTf.text.length))
+            }
+        }
+    }
+    LaunchedEffect(mInteraction) {
+        mInteraction.interactions.collectLatest { i: Interaction ->
+            if (i is PressInteraction.Release) {
+                mFocusRequester.requestFocus()
+                yield()
+                mTf = mTf.copy(selection = TextRange(0, mTf.text.length))
+            }
+        }
+    }
+
+    // ✅ sync از بیرون فقط وقتی فوکوس ندارند
+    LaunchedEffect(minutes) {
+        val hh = two(hhFromTotal(minutes))
+        val mm = two(mmFromTotal(minutes))
+
+        if (!hFocused && hTf.text != hh) hTf = hTf.copy(text = hh, selection = TextRange(hh.length))
+        if (!mFocused && mTf.text != mm) mTf = mTf.copy(text = mm, selection = TextRange(mm.length))
+    }
+
+    val tfColors = TextFieldDefaults.colors(
+        focusedContainerColor = Color.Transparent,
+        unfocusedContainerColor = Color.Transparent,
+        disabledContainerColor = Color.Transparent,
+        errorContainerColor = Color.Transparent,
+        focusedIndicatorColor = Color.Transparent,
+        unfocusedIndicatorColor = Color.Transparent,
+        disabledIndicatorColor = Color.Transparent,
+        errorIndicatorColor = Color.Transparent
+    )
+    val centerStyle: TextStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Center)
+
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(12.dp),
-        label = { Text("Minutes") },
-        singleLine = true
-    )
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center
+    ) {
+
+        // --- Hours ---
+        TextField(
+            value = hTf,
+            onValueChange = { v ->
+                // وقتی فوکوس دارد: raw (۱ یا ۲ رقم) بدون pad
+                val raw = digits2(v.text)
+                val hh = clampHour(parseOrZero(raw))
+                hTf = v.copy(
+                    text = raw,
+                    selection = TextRange(raw.length)
+                )
+
+                val mm = clampMin(parseOrZero(digits2(mTf.text)))
+                emit(hh, mm)
+            },
+            singleLine = true,
+            interactionSource = hInteraction,
+            modifier = Modifier
+                .width(64.dp)
+                .focusRequester(hFocusRequester)
+                .onFocusChanged { st ->
+                    hFocused = st.isFocused
+                    if (!st.isFocused) {
+                        // روی blur: نرمال‌سازی به ۲ رقمی
+                        val hh = clampHour(parseOrZero(digits2(hTf.text)))
+                        val mm = clampMin(parseOrZero(digits2(mTf.text)))
+                        val t = two(hh)
+                        hTf = hTf.copy(text = t, selection = TextRange(t.length))
+                        emit(hh, mm)
+                    }
+                },
+            textStyle = centerStyle,
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Number,
+                imeAction = ImeAction.Next
+            ),
+            colors = tfColors
+        )
+
+        Text(" : ", style = MaterialTheme.typography.titleMedium)
+
+        // --- Minutes ---
+        TextField(
+            value = mTf,
+            onValueChange = { v ->
+                val raw = digits2(v.text)
+                val mm = clampMin(parseOrZero(raw))
+                mTf = v.copy(
+                    text = raw,
+                    selection = TextRange(raw.length)
+                )
+
+                val hh = clampHour(parseOrZero(digits2(hTf.text)))
+                emit(hh, mm)
+            },
+            singleLine = true,
+            interactionSource = mInteraction,
+            modifier = Modifier
+                .width(64.dp)
+                .focusRequester(mFocusRequester)
+                .onFocusChanged { st ->
+                    mFocused = st.isFocused
+                    if (!st.isFocused) {
+                        val hh = clampHour(parseOrZero(digits2(hTf.text)))
+                        val mm = clampMin(parseOrZero(digits2(mTf.text)))
+                        val t = two(mm)
+                        mTf = mTf.copy(text = t, selection = TextRange(t.length))
+                        emit(hh, mm)
+                    }
+                },
+            textStyle = centerStyle,
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Number,
+                imeAction = ImeAction.Done
+            ),
+            keyboardActions = KeyboardActions(
+                onDone = {
+                    keyboardController?.hide()
+                    focusManager.clearFocus()
+                }
+            ),
+            colors = tfColors
+        )
+    }
 }
+
+
+
+
+
 
 
 //>>>>>>>>>>>>>>>> Utils <<<<<<<<<<<<<<<<<<
@@ -4799,26 +4867,10 @@ fun TaskReminderEntity.buildSummary(): String {
             "%02d:%02d".format(h, m)
         }
 
-        ReminderMode.INTERVALLIC -> {
-            val start = intervalStartMinuteOfDay ?: 0
-            val end = intervalEndMinuteOfDay ?: 0
-            val every = everyMinutesTotal ?: 0
-
-            val sh = start / 60
-            val sm = start % 60
-            val eh = end / 60
-            val em = end % 60
-
-            val everyH = every / 60
-            val everyM = every % 60
-
-            val everyText = buildString {
-                if (everyH > 0) append("${everyH}h ")
-                if (everyM > 0) append("${everyM}m")
-            }.trim().ifBlank { "0m" }
-
-            "%02d:%02d - %02d:%02d • every $everyText"
-                .format(sh, sm, eh, em)
-        }
     }
+}
+private fun formatMinutes(total: Int): String {
+    val h = total / 60
+    val m = total % 60
+    return "%02d:%02d".format(h, m)
 }

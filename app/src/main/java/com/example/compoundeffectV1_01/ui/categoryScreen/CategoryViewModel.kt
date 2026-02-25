@@ -699,11 +699,19 @@ class CategoryViewModel @Inject constructor(
                     taskId = newId,
                     title = sd.title.trim().ifBlank { null },
                     mode = sd.mode,
-                    dateEpochDay = if (sd.mode == ScheduleMode.TIME_RANGE) sd.date.toEpochDay() else null,
-                    startMinuteOfDay = if (sd.mode == ScheduleMode.TIME_RANGE) sd.start.toMinuteOfDay() else null,
-                    endMinuteOfDay = if (sd.mode == ScheduleMode.TIME_RANGE) sd.end.toMinuteOfDay() else null,
+                    dateEpochDay = sd.date.toEpochDay(),
+                    startMinuteOfDay = if (sd.mode == ScheduleMode.TIME_RANGE) {
+                        sd.start.toMinuteOfDay()
+                    } else {
+                        480    //ساعت 8 صبح
+                    },
+                    endMinuteOfDay = if (sd.mode == ScheduleMode.TIME_RANGE) {
+                        sd.end.toMinuteOfDay()
+                    } else {
+                        480 + sd.durationMinutes
+                    },
                     durationMinutes = if (sd.mode == ScheduleMode.AMOUNT_OF_TIME) sd.durationMinutes else null,
-                    inPallet = false,
+                    inPallet = sd.mode == ScheduleMode.AMOUNT_OF_TIME,
                     repeating = sd.repeat.enabled,
                     repeatInterval = if (sd.repeat.enabled) safeInterval else null,
                     repeatUnit = if (sd.repeat.enabled) sd.repeat.unit else null,
@@ -994,7 +1002,7 @@ class CategoryViewModel @Inject constructor(
     fun setScheduleMode(m: ScheduleMode) = _scheduleDraft.update { it.copy(mode = m) }
     fun setScheduleStart(t: LocalTime) = _scheduleDraft.update { it.copy(start = t) }
     fun setScheduleEnd(t: LocalTime) = _scheduleDraft.update { it.copy(end = t) }
-    fun setScheduleDuration(min: Int) = _scheduleDraft.update { it.copy(durationMinutes = min.coerceAtLeast(1)) }
+    fun setScheduleDuration(min: Int) = _scheduleDraft.update { it.copy(durationMinutes = min.coerceAtLeast(0)) }
     fun confirmScheduleFromDialog() {
         val sd = _scheduleDraft.value
         fun LocalTime.toMinuteOfDay() = hour * 60 + minute
@@ -1010,12 +1018,20 @@ class CategoryViewModel @Inject constructor(
             taskId = tid ?: 0,
             title = sd.title.trim().ifBlank { null },
             mode = sd.mode,
-            dateEpochDay = if (sd.mode == ScheduleMode.TIME_RANGE) sd.date.toEpochDay() else null,
-            startMinuteOfDay = if (sd.mode == ScheduleMode.TIME_RANGE) sd.start.toMinuteOfDay() else null,
-            endMinuteOfDay = if (sd.mode == ScheduleMode.TIME_RANGE) sd.end.toMinuteOfDay() else null,
+            dateEpochDay = sd.date.toEpochDay(),
+            startMinuteOfDay = if (sd.mode == ScheduleMode.TIME_RANGE) {
+                sd.start.toMinuteOfDay()
+            } else {
+                480    //ساعت 8 صبح
+            },
+            endMinuteOfDay = if (sd.mode == ScheduleMode.TIME_RANGE) {
+                sd.end.toMinuteOfDay()
+            } else {
+                480 + sd.durationMinutes
+            },
             durationMinutes = if (sd.mode == ScheduleMode.AMOUNT_OF_TIME) sd.durationMinutes else null,
 
-            inPallet = false,
+            inPallet = sd.mode == ScheduleMode.AMOUNT_OF_TIME,
 
             repeating = sd.repeat.enabled,
             repeatInterval = if (sd.repeat.enabled) safeInterval else null,
@@ -1094,7 +1110,7 @@ class CategoryViewModel @Inject constructor(
             date = dateEpochDay?.let(LocalDate::ofEpochDay) ?: LocalDate.now(),
             start = startMinuteOfDay?.let(::minuteToLocalTime) ?: LocalTime.of(20, 0),
             end = endMinuteOfDay?.let(::minuteToLocalTime) ?: LocalTime.of(21, 0),
-            durationMinutes = durationMinutes ?: 60,
+            durationMinutes = durationMinutes ?: 0,
 
             repeat = RepeatDraft(
                 enabled = enabled,
@@ -1205,10 +1221,6 @@ class CategoryViewModel @Inject constructor(
     fun setReminderBeforeAfter(v: BeforeAfter)= _reminderDraft.update { it.copy(beforeAfter = v) }
     fun setReminderAnchor(v: StartEnd)= _reminderDraft.update { it.copy(anchor = v) }
     fun setReminderFixedTime(t: LocalTime)= _reminderDraft.update { it.copy(fixedTime = t) }
-    fun setReminderIntervalStart(t: LocalTime)= _reminderDraft.update { it.copy(intervalStart = t) }
-    fun setReminderIntervalEnd(t: LocalTime)= _reminderDraft.update { it.copy(intervalEnd = t) }
-    fun setReminderEveryHours(v: Int)= _reminderDraft.update { it.copy(everyHours = v) }
-    fun setReminderEveryMinutes(v: Int)= _reminderDraft.update { it.copy(everyMinutes = v) }
     fun setReminderStrength(v: ReminderStrengthMode)= _reminderDraft.update { it.copy(strength = v) }
     fun setReminderVibrate(v: Boolean)= _reminderDraft.update { it.copy(vibrate = v) }
     fun setReminderAlarmSoundUri(v: String?)= _reminderDraft.update { it.copy(alarmSoundUri = v) }
@@ -1337,12 +1349,6 @@ class CategoryViewModel @Inject constructor(
     private fun TaskReminderEntity.toDraft(): ReminderDraft {
         val fixed = fixedMinuteOfDay?.let(::minuteOfDayToLocalTime) ?: LocalTime.of(11, 0)
 
-        val iStart = intervalStartMinuteOfDay?.let(::minuteOfDayToLocalTime) ?: LocalTime.of(9, 0)
-        val iEnd = intervalEndMinuteOfDay?.let(::minuteOfDayToLocalTime) ?: LocalTime.of(10, 0)
-
-        val everyTotal = everyMinutesTotal ?: 1
-        val eh = (everyTotal / 60).coerceIn(0, 99)
-        val em = (everyTotal % 60).coerceIn(0, 59).let { if (eh == 0 && it == 0) 1 else it } // حداقل 1 دقیقه
 
         return ReminderDraft(
             mode = mode,
@@ -1357,12 +1363,6 @@ class CategoryViewModel @Inject constructor(
 
             // Fixed time
             fixedTime = fixed,
-
-            // Intervallic
-            intervalStart = iStart,
-            intervalEnd = iEnd,
-            everyHours = eh,
-            everyMinutes = em,
 
             // Strength
             strength = strength,
@@ -1388,14 +1388,7 @@ class CategoryViewModel @Inject constructor(
         val safeOffsetHours = offsetHours.coerceIn(0, 23)
         val safeOffsetMinutes = offsetMinutes.coerceIn(0, 59)
 
-        val safeEveryHours = everyHours.coerceIn(0, 99)
-        val safeEveryMinutes = everyMinutes.coerceIn(0, 59)
-        val safeEveryTotal =
-            (safeEveryHours * 60 + safeEveryMinutes).let { if (it <= 0) 1 else it } // حداقل 1
-
         val fixedMinute = fixedTime.toMinuteOfDay()
-        val intervalStartMin = intervalStart.toMinuteOfDay()
-        val intervalEndMin = intervalEnd.toMinuteOfDay()
 
         return when (mode) {
             ReminderMode.ALLOCATED -> {
@@ -1414,11 +1407,6 @@ class CategoryViewModel @Inject constructor(
 
                     // fixed
                     fixedMinuteOfDay = null,
-
-                    // intervallic
-                    intervalStartMinuteOfDay = null,
-                    intervalEndMinuteOfDay = null,
-                    everyMinutesTotal = null,
 
                     // strength
                     strength = safeStrength,
@@ -1449,11 +1437,6 @@ class CategoryViewModel @Inject constructor(
                     // fixed
                     fixedMinuteOfDay = fixedMinute,
 
-                    // intervallic
-                    intervalStartMinuteOfDay = null,
-                    intervalEndMinuteOfDay = null,
-                    everyMinutesTotal = null,
-
                     // strength
                     strength = safeStrength,
                     vibrate = vibrate,
@@ -1466,39 +1449,6 @@ class CategoryViewModel @Inject constructor(
                 )
             }
 
-            ReminderMode.INTERVALLIC -> {
-                TaskReminderEntity(
-                    id = id,
-                    scheduleId = scheduleId,
-                    title = title,
-                    mode = mode,
-
-                    // allocated
-                    offsetDays = 0,
-                    offsetHours = 0,
-                    offsetMinutes = 0,
-                    beforeAfter = BeforeAfter.BEFORE,
-                    anchor = StartEnd.START,
-
-                    // fixed
-                    fixedMinuteOfDay = null,
-
-                    // intervallic
-                    intervalStartMinuteOfDay = intervalStartMin,
-                    intervalEndMinuteOfDay = intervalEndMin,
-                    everyMinutesTotal = safeEveryTotal,
-
-                    // strength
-                    strength = safeStrength,
-                    vibrate = vibrate,
-
-                    // sound
-                    alarmSoundUri = alarmSoundUri,
-
-                    // captcha
-                    captchaEnabled = safeCaptcha
-                )
-            }
         }
     }
 
@@ -1805,7 +1755,7 @@ class CategoryViewModel @Inject constructor(
             date = LocalDate.now(),
             start = start,
             end = end,
-            durationMinutes = 60,
+            durationMinutes = 0,
 
             // ✅ تکرار پیش‌فرض خاموش
             repeat = RepeatDraft(
@@ -1942,7 +1892,7 @@ data class ScheduleDraft(
     val date: LocalDate = LocalDate.now(),
     val start: LocalTime = LocalTime.of(20, 0),
     val end: LocalTime = LocalTime.of(21, 0),
-    val durationMinutes: Int = 60,
+    val durationMinutes: Int = 0,
 
     val note: String = "",
 
@@ -1970,12 +1920,6 @@ data class ReminderDraft(
 
     // Fixed time
     val fixedTime: LocalTime = LocalTime.of(11, 0),
-
-    // Intervallic
-    val intervalStart: LocalTime = LocalTime.of(9, 0),
-    val intervalEnd: LocalTime = LocalTime.of(10, 0),
-    val everyHours: Int = 0,
-    val everyMinutes: Int = 1,
 
     // Strength
     val strength: ReminderStrengthMode = ReminderStrengthMode.NOTIFICATION,
