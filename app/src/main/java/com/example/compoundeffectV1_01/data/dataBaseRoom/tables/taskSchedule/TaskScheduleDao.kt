@@ -197,5 +197,20 @@ LEFT JOIN category c ON c.categoryId = t.categoryId
     @Insert
     suspend fun insertAll(schedules: List<TaskSchedule>): List<Long>
 
+    @Query("""
+UPDATE task_schedule
+SET dateEpochDay = :dateEpochDay,
+    startMinuteOfDay = :startMin,
+    endMinuteOfDay = :endMin
+WHERE id = :scheduleId
+""")
+    suspend fun updateJustTimeRange(
+        scheduleId: Int,
+        dateEpochDay: Long,
+        startMin: Int,
+        endMin: Int
+    )
+
+
 
 }

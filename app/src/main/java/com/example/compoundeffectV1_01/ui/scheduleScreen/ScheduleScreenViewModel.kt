@@ -1,6 +1,7 @@
 package com.example.compoundeffectV1_01.ui.scheduleScreen
 
 
+import androidx.compose.ui.geometry.Offset
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskMode
@@ -78,11 +79,7 @@ class ScheduleScreenViewModel @Inject constructor(
 
 
 
-    init {
-        viewModelScope.launch(Dispatchers.IO) {
-            taskScheduleRepo.ensureTodayPomodorosInPallet(LocalDate.now())
-        }
-    }
+
 
 
 
@@ -157,6 +154,42 @@ class ScheduleScreenViewModel @Inject constructor(
                 taskScheduleRepo.insert(schedule)
                 curStart = end
             }
+        }
+    }
+
+    suspend fun insertOnePomodoroTimelineItem(
+        taskId: Int,
+        date: LocalDate,
+        startMin: Int,
+        focus: Int,
+        shortBreak: Int,
+    ): Int {
+        val end = (startMin + focus + shortBreak).coerceAtMost(24 * 60)
+
+        val schedule = TaskSchedule(
+            id = null,
+            taskId = taskId,
+            mode = ScheduleMode.POMODORO,
+            inPallet = false,
+            repeating = false,
+            dateEpochDay = date.toEpochDay(),
+            startMinuteOfDay = startMin,
+            endMinuteOfDay = end,
+            focusMinutes = focus,
+            shortBreakMinutes = shortBreak
+        )
+        return taskScheduleRepo.insert(schedule)
+    }
+
+    fun deleteScheduleById(scheduleId: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            taskScheduleRepo.deleteById(scheduleId)
+        }
+    }
+
+    fun movePomodoroSchedule(scheduleId: Int, newDate: LocalDate, newStart: Int, newEnd: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            taskScheduleRepo.updatePomodoroTimeRange(scheduleId, newDate, newStart, newEnd)
         }
     }
 
@@ -273,4 +306,14 @@ data class PomodoroPalletCardItem(
     val longBreakEvery: Int,
 
     val remainingToday: Int
+)
+data class PomodoroAdjustState(
+    val taskId: Int,
+    val date: LocalDate,
+    val startMin: Int,
+    val focus: Int,
+    val shortBreak: Int,
+    val ids: List<Int>,
+    val anchorInRoot: Offset, // محل نمایش stepper
+    val maxAllowed: Int // remainingToday از پالت
 )
