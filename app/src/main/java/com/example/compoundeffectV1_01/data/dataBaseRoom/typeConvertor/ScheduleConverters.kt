@@ -5,6 +5,7 @@ import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.BeforeA
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.ReminderMode
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.ReminderStrengthMode
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.StartEnd
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskMode
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.RepeatUnit
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.ScheduleMode
 import java.time.LocalDate
@@ -36,4 +37,7 @@ class ScheduleConverters {
 
     @TypeConverter fun startEndToDb(v: StartEnd?): String? = v?.name
     @TypeConverter fun startEndFromDb(v: String?): StartEnd? = v?.let(StartEnd::valueOf)
+
+    @TypeConverter fun taskModeToDb(v: TaskMode?): String? = v?.name
+    @TypeConverter fun taskModeFromDb(v: String?): TaskMode? = v?.let(TaskMode::valueOf)
 }

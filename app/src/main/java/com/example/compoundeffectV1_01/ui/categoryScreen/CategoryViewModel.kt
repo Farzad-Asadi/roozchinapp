@@ -12,6 +12,7 @@ import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.StartEn
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.TaskReminderEntity
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.TaskReminderRepository
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.Task
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskMode
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskRepository
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskWithSchedule
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.RepeatUnit
@@ -553,7 +554,6 @@ class CategoryViewModel @Inject constructor(
         _scheduleConfirmedForNewTask.value = false
         _pendingSchedulesForNewTask.value = emptyList()
     }
-
     fun startEditTask(taskId: Int) {
         viewModelScope.launch {
             val t = taskRepo.getTaskById(taskId) ?: return@launch
@@ -571,7 +571,10 @@ class CategoryViewModel @Inject constructor(
                 isCompleted = t.isCompleted,
                 note = t.description,
                 insertAtTop = false,
-                childLevel = depth
+                childLevel = depth,
+                taskMode = t.taskMode,
+                pomodoroTargetUnits = t.pomodoroTargetUnits,
+                pomodoroDoneUnits = t.pomodoroDoneUnits
             )
 
             val sch = scheduleRepo.getByTaskId(taskId)
@@ -586,6 +589,34 @@ class CategoryViewModel @Inject constructor(
     fun setTaskNote(v: String) = _taskDraft.update { it.copy(note = v) }
     fun setTaskInsertAtTop(v: Boolean) = _taskDraft.update { it.copy(insertAtTop = v) }
     fun setTaskChildLevel(v: Int) = _taskDraft.update { it.copy(childLevel = v.coerceIn(0, 3)) }
+    fun setTaskPomodoroEnabled(enabled: Boolean) = _taskDraft.update { cur ->
+        if (enabled) {
+            cur.copy(
+                taskMode = TaskMode.POMODORO,
+                pomodoroTargetUnits = cur.pomodoroTargetUnits ?: 0,
+                pomodoroDoneUnits = cur.pomodoroDoneUnits
+            )
+        } else {
+            cur.copy(
+                taskMode = TaskMode.NORMAL,
+                pomodoroTargetUnits = null,
+                pomodoroDoneUnits = 0
+            )
+        }
+    }
+    fun setTaskPomodoroTargetUnits(v: Int?) = _taskDraft.update { cur ->
+        val target = v?.coerceAtLeast(0)
+        val done = cur.pomodoroDoneUnits.coerceAtLeast(0)
+        cur.copy(
+            pomodoroTargetUnits = target,
+            pomodoroDoneUnits = if (target != null) done.coerceAtMost(target) else done
+        )
+    }
+    fun setTaskPomodoroDoneUnits(v: Int) = _taskDraft.update { cur ->
+        val done = v.coerceAtLeast(0)
+        val target = cur.pomodoroTargetUnits
+        cur.copy(pomodoroDoneUnits = if (target != null) done.coerceAtMost(target) else done)
+    }
     fun resetTaskDraftKeepSomeDefaults() {
         val cur = _taskDraft.value
         _taskDraft.value = TaskDraft(
@@ -595,7 +626,10 @@ class CategoryViewModel @Inject constructor(
             isCompleted = false,
             note = "",
             insertAtTop = cur.insertAtTop,
-            childLevel = cur.childLevel
+            childLevel = cur.childLevel,
+            taskMode = cur.taskMode,
+            pomodoroTargetUnits = cur.pomodoroTargetUnits,
+            pomodoroDoneUnits = 0
         )
         _scheduleDraft.value = ScheduleDraft()
         _scheduleConfirmedForNewTask.value = false
@@ -652,7 +686,10 @@ class CategoryViewModel @Inject constructor(
                 isCompleted = d.isCompleted,
                 priority = d.priority,
                 parentTaskId = parentId,
-                siblingIndex = newSiblingIndex
+                siblingIndex = newSiblingIndex,
+                taskMode = d.taskMode,
+                pomodoroTargetUnits = d.pomodoroTargetUnits,
+                pomodoroDoneUnits = d.pomodoroDoneUnits,
             )
 
             val newId = withContext(Dispatchers.IO) {
@@ -693,6 +730,7 @@ class CategoryViewModel @Inject constructor(
                 val sd = _scheduleDraft.value
                 fun LocalTime.toMinuteOfDay(): Int = hour * 60 + minute
                 val safeInterval = sd.repeat.interval.coerceIn(1, 99)
+                val isPomo = (sd.mode == ScheduleMode.POMODORO)
 
                 val schedule = TaskSchedule(
                     id = null,
@@ -710,8 +748,14 @@ class CategoryViewModel @Inject constructor(
                     } else {
                         480 + sd.durationMinutes
                     },
+                    // ✅ Pomodoro fields
+                    focusMinutes = if (isPomo) sd.focusMinutes else null,
+                    shortBreakMinutes = if (isPomo) sd.shortBreakMinutes else null,
+                    longBreakMinutes = if (isPomo) sd.longBreakMinutes else null,
+                    longBreakEvery = if (isPomo) sd.longBreakEvery else null,
+                    pomodoroUnitsPerDay = if (isPomo) sd.pomodoroUnitsPerDay else null,
                     durationMinutes = if (sd.mode == ScheduleMode.AMOUNT_OF_TIME) sd.durationMinutes else null,
-                    inPallet = sd.mode == ScheduleMode.AMOUNT_OF_TIME,
+                    inPallet = (sd.mode == ScheduleMode.AMOUNT_OF_TIME || isPomo),
                     repeating = sd.repeat.enabled,
                     repeatInterval = if (sd.repeat.enabled) safeInterval else null,
                     repeatUnit = if (sd.repeat.enabled) sd.repeat.unit else null,
@@ -797,8 +841,13 @@ class CategoryViewModel @Inject constructor(
 
                 categoryId = newCategoryId,
                 parentTaskId = safeFinalParentId,
-                siblingIndex = finalSiblingIndex
-            )
+                siblingIndex = finalSiblingIndex,
+
+                taskMode = d.taskMode,
+                pomodoroTargetUnits = d.pomodoroTargetUnits,
+                pomodoroDoneUnits = d.pomodoroDoneUnits,
+
+                )
 
             withContext(Dispatchers.IO) { taskRepo.updateTask(updated) }
 
@@ -999,7 +1048,17 @@ class CategoryViewModel @Inject constructor(
 
     //اسچدول ها
     fun setScheduleTitle(v: String) = _scheduleDraft.update { it.copy(title = v) }
-    fun setScheduleMode(m: ScheduleMode) = _scheduleDraft.update { it.copy(mode = m) }
+    fun setScheduleMode(m: ScheduleMode) = _scheduleDraft.update { cur ->
+        when (m) {
+            ScheduleMode.TIME_RANGE -> cur.copy(mode = m)
+            ScheduleMode.AMOUNT_OF_TIME -> cur.copy(mode = m)
+            ScheduleMode.POMODORO -> cur.copy(
+                mode = m,
+                repeat = cur.repeat.copy(enabled = true, interval = 1, unit = RepeatUnit.WEEK),
+                durationMinutes = cur.focusMinutes + cur.shortBreakMinutes
+            )
+        }
+    }
     fun setScheduleStart(t: LocalTime) = _scheduleDraft.update { it.copy(start = t) }
     fun setScheduleEnd(t: LocalTime) = _scheduleDraft.update { it.copy(end = t) }
     fun setScheduleDuration(min: Int) = _scheduleDraft.update { it.copy(durationMinutes = min.coerceAtLeast(0)) }
@@ -1013,33 +1072,36 @@ class CategoryViewModel @Inject constructor(
         val safeInterval = sd.repeat.interval.coerceIn(1, 99)
         val safeMask = sd.repeat.weekdaysMask.coerceIn(0, 127)
 
+        val isPomo = (sd.mode == ScheduleMode.POMODORO)
+
         val newSchedule = TaskSchedule(
             id = if (tid != null) key else null,
             taskId = tid ?: 0,
             title = sd.title.trim().ifBlank { null },
             mode = sd.mode,
             dateEpochDay = sd.date.toEpochDay(),
-            startMinuteOfDay = if (sd.mode == ScheduleMode.TIME_RANGE) {
-                sd.start.toMinuteOfDay()
-            } else {
-                480    //ساعت 8 صبح
-            },
-            endMinuteOfDay = if (sd.mode == ScheduleMode.TIME_RANGE) {
-                sd.end.toMinuteOfDay()
-            } else {
-                480 + sd.durationMinutes
-            },
+
+            startMinuteOfDay = if (sd.mode == ScheduleMode.TIME_RANGE) sd.start.toMinuteOfDay() else 480,
+            endMinuteOfDay = if (sd.mode == ScheduleMode.TIME_RANGE) sd.end.toMinuteOfDay() else 480 + sd.durationMinutes,
+
             durationMinutes = if (sd.mode == ScheduleMode.AMOUNT_OF_TIME) sd.durationMinutes else null,
 
-            inPallet = sd.mode == ScheduleMode.AMOUNT_OF_TIME,
+            // ✅ پالتی بودن: AMOUNT و POMODORO هر دو پالتی‌اند
+            inPallet = (sd.mode == ScheduleMode.AMOUNT_OF_TIME || sd.mode == ScheduleMode.POMODORO),
+
+            // ✅ Pomodoro fields
+            focusMinutes = if (isPomo) sd.focusMinutes else null,
+            shortBreakMinutes = if (isPomo) sd.shortBreakMinutes else null,
+            longBreakMinutes = if (isPomo) sd.longBreakMinutes else null,
+            longBreakEvery = if (isPomo) sd.longBreakEvery else null,
+            pomodoroUnitsPerDay = if (isPomo) sd.pomodoroUnitsPerDay else null,
 
             repeating = sd.repeat.enabled,
             repeatInterval = if (sd.repeat.enabled) safeInterval else null,
             repeatUnit = if (sd.repeat.enabled) sd.repeat.unit else null,
-
-            // ✅ NEW
             weekdaysMask = if (sd.repeat.enabled && sd.repeat.unit == RepeatUnit.WEEK) safeMask else null
         )
+
 
         if (tid == null) {
             // ===== pending mode =====
@@ -1165,7 +1227,30 @@ class CategoryViewModel @Inject constructor(
     }
     fun startAddSchedule() {
         _editingScheduleKey.value = null      // یعنی Add schedule (نه edit)
-        _scheduleDraft.value = defaultScheduleDraftNow()
+        val base = defaultScheduleDraftNow()
+
+        val isPomodoroTask = (_taskDraft.value.taskMode == TaskMode.POMODORO)
+        _scheduleDraft.value =
+            if (isPomodoroTask) {
+                base.copy(
+                    mode = ScheduleMode.POMODORO,
+                    // پومودورو یعنی «قانون تولید پالت»، پس تکرار هفته‌ای روشن
+                    repeat = RepeatDraft(
+                        enabled = true,
+                        interval = 1,
+                        unit = RepeatUnit.WEEK,
+                        weekdaysMask = base.repeat.weekdaysMask
+                    ),
+                    focusMinutes = 25,
+                    shortBreakMinutes = 5,
+                    longBreakMinutes = 15,
+                    longBreakEvery = 4,
+                    pomodoroUnitsPerDay = 1,
+                    durationMinutes = 30 // صرفاً برای سازگاری/نمایش؛ بعداً می‌تونه حذف شه
+                )
+            } else {
+                base
+            }
 
         // ✅ داریم schedule جدید می‌سازیم => reminderها میرن تو draftList
         _activeScheduleKeyForReminder.value = null
@@ -1195,6 +1280,16 @@ class CategoryViewModel @Inject constructor(
     fun setRepeatWeekdaysMask(mask: Int) {
         _scheduleDraft.update { it.copy(repeat = it.repeat.copy(weekdaysMask = mask.coerceIn(0, 127))) }
     }
+    fun setScheduleFocusMinutes(v: Int) =
+        _scheduleDraft.update { it.copy(focusMinutes = v.coerceIn(1, 240)) }
+    fun setScheduleShortBreakMinutes(v: Int) =
+        _scheduleDraft.update { it.copy(shortBreakMinutes = v.coerceIn(0, 60)) }
+    fun setScheduleLongBreakMinutes(v: Int) =
+        _scheduleDraft.update { it.copy(longBreakMinutes = v.coerceIn(0, 120)) }
+    fun setScheduleLongBreakEvery(v: Int) =
+        _scheduleDraft.update { it.copy(longBreakEvery = v.coerceIn(2, 12)) }
+    fun setSchedulePomodoroUnitsPerDay(v: Int) =
+        _scheduleDraft.update { it.copy(pomodoroUnitsPerDay = v.coerceIn(1, 20)) }
     private fun todayBitIndex(): Int {
         // اگر خواستی دقیق با تقویم خودت تنظیم می‌کنیم؛
         // فعلاً یک نگاشت ساده:
@@ -1882,7 +1977,12 @@ data class TaskDraft(
 
     // ✅ جدیدها برای دیالوگ
     val insertAtTop: Boolean = false, // false=آخر لیست، true=اول لیست
-    val childLevel: Int = 0           // 0..3 (0 یعنی هیچ)
+    val childLevel: Int = 0,           // 0..3 (0 یعنی هیچ)
+
+    // ✅ Pomodoro
+    val taskMode: TaskMode = TaskMode.NORMAL,
+    val pomodoroTargetUnits: Int? = null,
+    val pomodoroDoneUnits: Int = 0,
 )
 
 data class ScheduleDraft(
@@ -1893,6 +1993,13 @@ data class ScheduleDraft(
     val start: LocalTime = LocalTime.of(20, 0),
     val end: LocalTime = LocalTime.of(21, 0),
     val durationMinutes: Int = 0,
+
+    // ✅ Pomodoro
+    val focusMinutes: Int = 25,
+    val shortBreakMinutes: Int = 5,
+    val longBreakMinutes: Int = 15,
+    val longBreakEvery: Int = 4,
+    val pomodoroUnitsPerDay: Int = 1,
 
     val note: String = "",
 

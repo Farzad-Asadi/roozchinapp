@@ -27,29 +27,34 @@ import java.time.LocalTime
 data class TaskSchedule(
     @PrimaryKey(autoGenerate = true)
     val id: Int? = null,
-
     val taskId: Int,
-
     val title: String? = null,
-
     val mode: ScheduleMode = ScheduleMode.TIME_RANGE,
 
-    // برای TIME_RANGE
-    val dateEpochDay: Long? = null,       // LocalDate.toEpochDay()
-    val startMinuteOfDay: Int? = null,    // LocalTime.toSecondOfDay()/60
+    // TIME_RANGE
+    val dateEpochDay: Long? = null,
+    val startMinuteOfDay: Int? = null,
     val endMinuteOfDay: Int? = null,
 
-    // برای AMOUNT_OF_TIME
+    // AMOUNT_OF_TIME
     val durationMinutes: Int? = null,
 
+    // POMODORO
+    val focusMinutes: Int? = null,
+    val shortBreakMinutes: Int? = null,
+    val longBreakMinutes: Int? = null,
+    val longBreakEvery: Int? = null,
+    val isLongBreak: Boolean = false,
+    val pomodoroUnitsPerDay: Int? = null,
+
+
+    // common
     val reminderMinutesBefore: Int? = null,
-
     val inPallet: Boolean = false,
-
     val repeating: Boolean = false,
     val repeatInterval: Int? = null,
     val repeatUnit: RepeatUnit? = null,
-    val weekdaysMask: Int? = null,  // ✅ NEW: فقط وقتی repeatUnit=WEEK معنی دارد (0..127)
+    val weekdaysMask: Int? = null,
 
 )
 
@@ -59,7 +64,7 @@ data class TaskSchedule(
 
 
 
-enum class ScheduleMode { TIME_RANGE, AMOUNT_OF_TIME }
+enum class ScheduleMode { TIME_RANGE, AMOUNT_OF_TIME, POMODORO  }
 enum class RepeatUnit { DAY, WEEK, MONTH, YEAR }
 
 

@@ -61,6 +61,7 @@ import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Coffee
 import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.ContentCut
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Deck
 import androidx.compose.material.icons.filled.Desk
 import androidx.compose.material.icons.filled.Dining
@@ -85,6 +86,7 @@ import androidx.compose.material.icons.filled.ModeNight
 import androidx.compose.material.icons.filled.OutdoorGrill
 import androidx.compose.material.icons.filled.Outlet
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.QuestionMark
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Restaurant
@@ -113,6 +115,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.ReminderMode
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.ScheduleMode
 
 
 data class IconOption(val key: String, val icon: ImageVector)
@@ -223,6 +226,16 @@ fun reminderModeIcon(mode: ReminderMode): ImageVector {
 }
 
 
+
+//ایکون مود های اسکچول
+@Composable
+fun scheduleModeIcon(mode: ScheduleMode): ImageVector {
+    return when (mode) {
+        ScheduleMode.TIME_RANGE -> Icons.Filled.DateRange
+        ScheduleMode.AMOUNT_OF_TIME -> Icons.Filled.Timer
+        ScheduleMode.POMODORO -> Icons.Filled.PushPin
+    }
+}
 
 
 

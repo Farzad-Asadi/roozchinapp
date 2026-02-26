@@ -102,6 +102,19 @@ SELECT
   s.endMinuteOfDay AS s_endMinuteOfDay,
   s.durationMinutes AS s_durationMinutes,
   s.repeating      AS s_repeating,
+  s.repeatInterval    AS s_repeatInterval,
+  s.repeatUnit        AS s_repeatUnit,
+  s.weekdaysMask      AS s_weekdaysMask,
+
+  s.focusMinutes      AS s_focusMinutes,
+  s.shortBreakMinutes AS s_shortBreakMinutes,
+  s.longBreakMinutes  AS s_longBreakMinutes,
+  s.longBreakEvery    AS s_longBreakEvery,
+  s.pomodoroUnitsPerDay AS s_pomodoroUnitsPerDay,
+
+  t.taskMode            AS t_taskMode,
+  t.pomodoroTargetUnits AS t_pomodoroTargetUnits,
+  t.pomodoroDoneUnits   AS t_pomodoroDoneUnits,
 
   t.id             AS t_id,
   t.name           AS t_name,
@@ -156,6 +169,33 @@ LEFT JOIN category c ON c.categoryId = t.categoryId
         endMin: Int,
         mode: ScheduleMode = ScheduleMode.TIME_RANGE
     )
+
+    @Query("""
+    SELECT * FROM task_schedule
+    WHERE mode = :mode
+      AND repeating = 1
+      AND inPallet = 1
+""")
+    suspend fun getPomodoroRules(mode: ScheduleMode = ScheduleMode.POMODORO): List<TaskSchedule>
+
+
+    @Query("""
+    SELECT COUNT(*) FROM task_schedule
+    WHERE taskId = :taskId
+      AND mode = :mode
+      AND repeating = 0
+      AND inPallet = 1
+      AND dateEpochDay = :dateEpochDay
+""")
+    suspend fun countPomodoroUnitsForDate(
+        taskId: Int,
+        dateEpochDay: Long,
+        mode: ScheduleMode = ScheduleMode.POMODORO
+    ): Int
+
+
+    @Insert
+    suspend fun insertAll(schedules: List<TaskSchedule>): List<Long>
 
 
 }

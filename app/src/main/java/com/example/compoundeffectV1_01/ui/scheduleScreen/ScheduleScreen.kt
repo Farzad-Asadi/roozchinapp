@@ -35,6 +35,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBackIos
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
+import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -62,6 +63,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInRoot
@@ -71,13 +73,17 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.RepeatUnit
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.ScheduleMode
 import com.example.compoundeffectV1_01.utils.convertToPersianDatePretty
 import com.example.compoundeffectV1_01.utils.iconFromKey
 import kotlinx.coroutines.delay
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.LocalTime
 import java.time.temporal.ChronoUnit
+import kotlin.math.round
 import kotlin.math.roundToInt
 
 @Composable
@@ -88,6 +94,55 @@ fun ScheduleScreen(
 
     val timelineItems = remember(allItems) { allItems.filter { !it.inPallet } }
     val palletItems = remember(allItems) { allItems.filter { it.inPallet } }
+
+    val today = remember { LocalDate.now() }
+
+    // ✅ rule های پومودورو (برای expectedToday و config)
+    val pomodoroRulesToday = remember(allItems) {
+        allItems.filter { it.mode == ScheduleMode.POMODORO && it.repeating }
+            .filter { ruleIsActiveToday(it, today) } // تابع پایین رو اضافه می‌کنیم
+    }
+
+    // ✅ پومودوهای تایم‌لاینِ امروز (برای scheduledToday)
+    val todayTimelinePomodoros = remember(allItems) {
+        allItems.filter { !it.inPallet && it.mode == ScheduleMode.POMODORO }
+            .filter { it.start.toLocalDate() == today }
+    }
+
+    // ✅ کارت‌های تجمیعی پالت
+    val pomodoroPalletCards = remember(pomodoroRulesToday, todayTimelinePomodoros) {
+        pomodoroRulesToday
+            .groupBy { it.taskId }
+            .mapNotNull { (taskId, rules) ->
+                val any = rules.first()
+
+                val expected = rules.sumOf { (it.pomodoroUnitsPerDay ?: 1).coerceAtLeast(1) }
+                val scheduled = todayTimelinePomodoros.count { it.taskId == taskId }
+
+                val remaining = (expected - scheduled).coerceAtLeast(0)
+                if (remaining == 0) return@mapNotNull null
+
+                PomodoroPalletCardItem(
+                    taskId = taskId,
+                    taskName = any.title,
+
+                    totalTarget = any.pomodoroTargetUnits ?: 0,
+                    totalDone = any.pomodoroDoneUnits,
+
+                    expectedToday = expected,
+                    scheduledToday = scheduled,
+
+                    focus = any.focusMinutes ?: 25,
+                    shortBreak = any.shortBreakMinutes ?: 5,
+                    longBreak = any.longBreakMinutes ?: 15,
+                    longBreakEvery = any.longBreakEvery ?: 4,
+
+                    remainingToday = remaining
+                )
+            }
+            .sortedBy { it.taskName }
+    }
+
 
     // ✅ تنظیمات تایم‌لاین
     val numDays = 5
@@ -117,7 +172,7 @@ fun ScheduleScreen(
     val edgeThresholdPx = with(density) { 72.dp.toPx() }  // ناحیه حساس
     val baseScrollStepPx = with(density) { 22.dp.toPx() } // سرعت پایه
 
-    var draggingFromPallet by remember { mutableStateOf<ScheduleScreenItem?>(null) }
+
 
     var dragX by remember { mutableFloatStateOf(0f) }
     var dragY by remember { mutableFloatStateOf(0f) }
@@ -140,6 +195,8 @@ fun ScheduleScreen(
 
     var grabOffsetX by remember { mutableFloatStateOf(0f) }
     var grabOffsetY by remember { mutableFloatStateOf(0f) }
+
+    var draggingFromPallet by remember { mutableStateOf<ScheduleScreenItem?>(null) }
 
     val overlayItem = draggingFromPallet
     val overlayWidth = dayWidthDp - 12.dp
@@ -218,7 +275,13 @@ fun ScheduleScreen(
     var pendingBringDayIntoView by remember { mutableStateOf<Int?>(null) }
 
 
+    var draggingPomodoro by remember { mutableStateOf<PomodoroPalletCardItem?>(null) }
 
+
+    val isDraggingAnything = (draggingFromPallet != null || draggingPomodoro != null)
+
+    val overlayScheduleItem = draggingFromPallet
+    val overlayPomodoroItem = draggingPomodoro
 
 
 
@@ -566,9 +629,9 @@ fun ScheduleScreen(
 
                                 val pm = pendingMove[displayItem.scheduleId]
                                 val item = if (pm == null) displayItem else displayItem.copy(
-                                    start = LocalDateTime.of(pm.date, java.time.LocalTime.MIN)
+                                    start = LocalDateTime.of(pm.date, LocalTime.MIN)
                                         .plusMinutes(pm.startMin.toLong()),
-                                    end = LocalDateTime.of(pm.date, java.time.LocalTime.MIN)
+                                    end = LocalDateTime.of(pm.date, LocalTime.MIN)
                                         .plusMinutes(pm.endMin.toLong())
                                 )
 
@@ -628,74 +691,119 @@ fun ScheduleScreen(
 
             RightPallet(
                 palletItems = palletItems,
+                pomodoroCards = pomodoroPalletCards,
                 expanded = palletExpanded,
-                isDraggingFromPallet = (draggingFromPallet != null),
+                isDraggingFromPallet = isDraggingAnything,
                 onToggle = { palletExpanded = !palletExpanded },
 
                 onDragStart = { item, sx, sy, downX, downY ->
                     palletExpanded = false
+                    draggingPomodoro = null
                     draggingFromPallet = item
 
-                    // مختصات انگشت در window
                     dragX = sx
                     dragY = sy
-
-                    // فاصله‌ی انگشت تا گوشه‌ی باکس (می‌خوای باکس زیر انگشت بیاد)
                     grabOffsetX = downX
                     grabOffsetY = downY
                 },
+
+                onPomodoroDragStart = { card, sx, sy, downX, downY ->
+                    palletExpanded = false
+                    draggingFromPallet = null
+                    draggingPomodoro = card
+
+                    dragX = sx
+                    dragY = sy
+                    grabOffsetX = downX
+                    grabOffsetY = downY
+                },
+
                 onDrag = { dx, dy ->
                     dragX += dx
                     dragY += dy
                 },
+
                 onDragEnd = {
-                    // همون منطق drop که داشتی
-                    val t = draggingFromPallet ?: return@RightPallet
-
-                    // مدت واقعی آیتم (اگر TIME_RANGE دارد)
-                    val oldStartMin = t.start.toLocalTime().hour * 60 + t.start.toLocalTime().minute
-                    val oldEndMin = t.end.toLocalTime().hour * 60 + t.end.toLocalTime().minute
-                    val oldDurMin =
-                        (oldEndMin - oldStartMin).coerceAtLeast(15) // حداقل مثل تایم‌لاین
-
                     val localX = dragX - gridOriginInWindow.x
                     val localY = dragY - gridOriginInWindow.y
 
-                    // ✅ تبدیل به مختصات "محتوا" با در نظر گرفتن اسکرول
                     val contentX = localX + hScroll.value
                     val contentY = localY + vScroll.value
 
                     val dayIndex = (contentX / dayWidthPx).toInt()
                     val minuteOfDay = ((contentY / hourHeightPx) * 60f).toInt()
 
-
-                    if (dayIndex in 0 until numDays && minuteOfDay in 0 until 24 * 60) {
-                        val date = startDate.plusDays(dayIndex.toLong())
-                        val minDur = 5
-                        val startMin = snap(minuteOfDay.coerceIn(0, 24 * 60 - minDur), 5)
-                        val endMin = (startMin + oldDurMin).coerceAtMost(24 * 60)
-
-
-                        viewModel.dropScheduleFromPalletToTimeLine(
-                            scheduleId = t.scheduleId,
-                            date = date,
-                            startMin = startMin,
-                            endMin = endMin
-                        )
+                    if (dayIndex !in 0 until numDays || minuteOfDay !in 0 until 24 * 60) {
+                        draggingFromPallet = null
+                        draggingPomodoro = null
+                        return@RightPallet
                     }
 
+                    val date = startDate.plusDays(dayIndex.toLong())
+                    val minDur = 5
+                    val startMin = snap(minuteOfDay.coerceIn(0, 24 * 60 - minDur), 5)
+
+                    // ✅ اگر پومودورو کارت درگ می‌شد
+                    val pomo = draggingPomodoro
+                    if (pomo != null) {
+                        val dur = (pomo.focus + pomo.shortBreak).coerceAtLeast(5)
+                        val endMin = (startMin + dur).coerceAtMost(24 * 60)
+
+                        // فعلاً 1 عدد می‌سازیم (Stepper مرحله بعدی)
+                        viewModel.createPomodoroTimelineItems(
+                            taskId = pomo.taskId,
+                            date = date,
+                            startMin = startMin,
+                            count = 1,
+                            focus = pomo.focus,
+                            shortBreak = pomo.shortBreak
+                        )
+
+                        draggingPomodoro = null
+                        draggingFromPallet = null
+                        return@RightPallet
+                    }
+
+                    // ✅ در غیر این صورت schedule معمولی
+                    val t = draggingFromPallet ?: run {
+                        draggingFromPallet = null
+                        draggingPomodoro = null
+                        return@RightPallet
+                    }
+
+                    val oldStartMin = t.start.toLocalTime().hour * 60 + t.start.toLocalTime().minute
+                    val oldEndMin = t.end.toLocalTime().hour * 60 + t.end.toLocalTime().minute
+                    val oldDurMin = (oldEndMin - oldStartMin).coerceAtLeast(15)
+
+                    val endMin = (startMin + oldDurMin).coerceAtMost(24 * 60)
+
+                    viewModel.dropScheduleFromPalletToTimeLine(
+                        scheduleId = t.scheduleId,
+                        date = date,
+                        startMin = startMin,
+                        endMin = endMin
+                    )
 
                     draggingFromPallet = null
+                    draggingPomodoro = null
                 },
-                onDragCancel = { draggingFromPallet = null },
 
-                modifier = Modifier.align(Alignment.CenterEnd)
+                onDragCancel = {
+                    draggingFromPallet = null
+                    draggingPomodoro = null
+                },
+
+                modifier = Modifier.align(Alignment.CenterEnd),
             )
 
 
+
             // ✅ Drag overlay
-            if (draggingFromPallet != null) {
+            if (draggingFromPallet != null || draggingPomodoro != null) {
                 Box(Modifier.fillMaxSize()) {
+
+                    val title = draggingFromPallet?.title ?: draggingPomodoro?.taskName.orEmpty()
+                    val iconName = draggingFromPallet?.categoryIconName // پومودورو فعلاً icon نداره
 
                     Box(
                         modifier = Modifier
@@ -706,30 +814,47 @@ fun ScheduleScreen(
                                 )
                             }
                             .width(overlayWidth)
-                            .height(overlayHeight.coerceAtLeast(44.dp))
+                            .height(
+                                if (draggingPomodoro != null) 64.dp
+                                else overlayHeight.coerceAtLeast(44.dp)
+                            )
                             .background(
                                 MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
                                 shape = MaterialTheme.shapes.medium
                             )
                     ) {
-                        // مشابه تایم‌لاین: عنوان و آیکون
                         Row(
                             modifier = Modifier
                                 .align(Alignment.TopStart)
                                 .padding(start = 8.dp, top = 8.dp, end = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            CategoryIconWithPlate(iconName = draggingFromPallet!!.categoryIconName)
+                            if (iconName != null) {
+                                CategoryIconWithPlate(iconName = iconName)
+                            } else {
+                                Icon(Icons.Filled.Timeline, contentDescription = null)
+                            }
                             Spacer(Modifier.width(8.dp))
                             Text(
-                                draggingFromPallet!!.title,
+                                title,
                                 maxLines = 1,
                                 style = MaterialTheme.typography.labelLarge
+                            )
+                        }
+
+                        if (draggingPomodoro != null) {
+                            Text(
+                                "Pomodoro",
+                                modifier = Modifier
+                                    .align(Alignment.BottomStart)
+                                    .padding(start = 16.dp, bottom = 10.dp),
+                                style = MaterialTheme.typography.labelSmall
                             )
                         }
                     }
                 }
             }
+
 
 
         }
@@ -1339,10 +1464,12 @@ private fun TimelineItemBox(
 @Composable
 private fun RightPallet(
     palletItems: List<ScheduleScreenItem>,
+    pomodoroCards: List<PomodoroPalletCardItem>,
     expanded: Boolean,
     isDraggingFromPallet: Boolean,
     onToggle: () -> Unit,
     onDragStart: (ScheduleScreenItem, Float, Float, Float, Float) -> Unit,
+    onPomodoroDragStart: (PomodoroPalletCardItem, Float, Float, Float, Float) -> Unit,
     onDrag: (dx: Float, dy: Float) -> Unit,
     onDragEnd: () -> Unit,
     onDragCancel: () -> Unit,
@@ -1391,6 +1518,16 @@ private fun RightPallet(
                     Spacer(Modifier.height(8.dp))
 
                     LazyColumn {
+                        items(pomodoroCards, key = { "pomo_${it.taskId}" }) { c ->
+                            PomodoroPalletCard(
+                                item = c,
+                                onDragStart = onPomodoroDragStart,
+                                onDrag = onDrag,
+                                onDragEnd = onDragEnd,
+                                onDragCancel = onDragCancel
+                            )
+                            HorizontalDivider(thickness = 0.5.dp)
+                        }
                         items(palletItems, key = { it.scheduleId }) { t ->
                             PalletTaskItem(
                                 item = t,
@@ -1408,6 +1545,68 @@ private fun RightPallet(
     }
 }
 
+@Composable
+private fun PomodoroPalletCard(
+    item: PomodoroPalletCardItem,
+    onDragStart: (PomodoroPalletCardItem, Float, Float, Float, Float) -> Unit,
+    onDrag: (dx: Float, dy: Float) -> Unit,
+    onDragEnd: () -> Unit,
+    onDragCancel: () -> Unit
+) {
+    var coords by remember { mutableStateOf<LayoutCoordinates?>(null) }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(72.dp) // ✅ بلندتر از کارت‌های معمولی
+            .padding(vertical = 6.dp)
+            .background(
+                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
+                MaterialTheme.shapes.medium
+            )
+            .onGloballyPositioned { coords = it }
+            .pointerInput(item.taskId) {
+                detectDragGesturesAfterLongPress(
+                    onDragStart = { downPos ->
+                        val c = coords ?: return@detectDragGesturesAfterLongPress
+                        val r = c.localToRoot(downPos)
+                        onDragStart(item, r.x, r.y, downPos.x, downPos.y)
+                    },
+                    onDrag = { change, dragAmount ->
+                        change.consume()
+                        onDrag(dragAmount.x, dragAmount.y)
+                    },
+                    onDragEnd = onDragEnd,
+                    onDragCancel = onDragCancel
+                )
+            }
+            .padding(10.dp)
+    ) {
+        Column(Modifier.fillMaxSize()) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(item.taskName, maxLines = 1, style = MaterialTheme.typography.labelLarge)
+                    Text("Pomodoro", maxLines = 1, style = MaterialTheme.typography.labelSmall)
+                }
+
+                Text(
+                    "T/D : ${item.totalTarget}/${item.totalDone.toString().padStart(2,'0')}",
+                    style = MaterialTheme.typography.labelMedium
+                )
+            }
+
+            Spacer(Modifier.height(6.dp))
+
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "E/D : ${item.expectedToday}/${item.scheduledToday.toString().padStart(2,'0')}",
+                    style = MaterialTheme.typography.labelMedium
+                )
+            }
+        }
+    }
+}
+
 
 @Composable
 private fun PalletTaskItem(
@@ -1417,7 +1616,7 @@ private fun PalletTaskItem(
     onDragEnd: () -> Unit,
     onDragCancel: () -> Unit
 ) {
-    var coords by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
+    var coords by remember { mutableStateOf<LayoutCoordinates?>(null) }
 
     Box(
         modifier = Modifier
@@ -1501,7 +1700,7 @@ private const val ZOOM_MAX = 6.0f
 private const val ZOOM_STEP = 0.2f
 
 private const val TIME_RANGE_COLOR_ALPHA = 0.45f
-private val TIME_RANGE_COLOR = androidx.compose.ui.graphics.Color(0xFF5E81F4)
+private val TIME_RANGE_COLOR = Color(0xFF5E81F4)
 
 private const val OVERLAP_MAX_LEVEL = 3            // 0..3  => 4 لایه
 private const val OVERLAP_STEP_FRAC = 0.25f        // هر لایه 1/4 عرض جابه‌جا + کوچک می‌شود
@@ -1546,7 +1745,7 @@ private fun minuteToHHmm(minute: Int): String {
 }
 
 private fun snapZoom(z: Float): Float =
-    (kotlin.math.round(z / ZOOM_STEP) * ZOOM_STEP).coerceIn(ZOOM_MIN, ZOOM_MAX)
+    (round(z / ZOOM_STEP) * ZOOM_STEP).coerceIn(ZOOM_MIN, ZOOM_MAX)
 
 private fun snapStepForZoom(zoom: Float): Int {
     return if (zoom >= 2.0f) 5 else 15
@@ -1634,4 +1833,42 @@ private fun computeOverlapLayouts(
     }
 
     return result
+}
+
+private fun ruleIsActiveToday(rule: ScheduleScreenItem, today: LocalDate): Boolean {
+    val base = rule.dateEpochDay?.let(LocalDate::ofEpochDay) ?: return false
+    if (today.isBefore(base)) return false
+
+    val unit = rule.repeatUnit ?: return false
+    val interval = (rule.repeatInterval ?: 1).coerceAtLeast(1)
+
+    return when (unit) {
+        RepeatUnit.WEEK -> {
+            val mask = (rule.weekdaysMask ?: 0)
+            if (mask == 0) return false
+
+            fun bitIndex(dow: DayOfWeek): Int = when (dow) {
+                DayOfWeek.SATURDAY -> 0
+                DayOfWeek.SUNDAY -> 1
+                DayOfWeek.MONDAY -> 2
+                DayOfWeek.TUESDAY -> 3
+                DayOfWeek.WEDNESDAY -> 4
+                DayOfWeek.THURSDAY -> 5
+                DayOfWeek.FRIDAY -> 6
+            }
+
+            val allowed = (mask and (1 shl bitIndex(today.dayOfWeek))) != 0
+            if (!allowed) return false
+
+            val weeks = ChronoUnit.WEEKS.between(base, today)
+            weeks >= 0 && (weeks % interval == 0L)
+        }
+
+        RepeatUnit.DAY -> {
+            val days = ChronoUnit.DAYS.between(base, today)
+            days >= 0 && (days % interval == 0L)
+        }
+
+        else -> true
+    }
 }

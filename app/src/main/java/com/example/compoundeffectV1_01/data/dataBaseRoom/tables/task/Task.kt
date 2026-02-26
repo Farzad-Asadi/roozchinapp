@@ -25,7 +25,7 @@ import java.time.LocalDateTime
 data class Task(
     @PrimaryKey(autoGenerate = true)
     val id: Int? = null,
-
+    val taskMode: TaskMode = TaskMode.NORMAL,
     val name: String,
     val color: String,
     val description: String,
@@ -40,7 +40,13 @@ data class Task(
     val isExtended: Boolean = true,
 
     val parentTaskId: Int? = null,
-    val siblingIndex: Int = 0
+    val siblingIndex: Int = 0,
+
+    /** هدف کل به واحد پومودورو (مثلاً 1200) */
+    val pomodoroTargetUnits: Int? = null,
+
+    /** تعداد پومودوهای انجام‌شده */
+    val pomodoroDoneUnits: Int = 0,
 )
 
 
@@ -56,3 +62,7 @@ data class TaskWithSchedule(
     val schedule: TaskSchedule?
 )
 
+
+
+
+enum class TaskMode { NORMAL, POMODORO }

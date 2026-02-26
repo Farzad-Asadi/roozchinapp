@@ -212,6 +212,12 @@ private fun computeNextTriggerAtMillis(
                 val end = start.plusMinutes(dur.toLong()) // ممکن است وارد فردا شود
                 Occurrence(start, end)
             }
+
+            ScheduleMode.POMODORO -> { //فعلاً مثل AmountOfTime محاسبه کن
+                val dur = schedule.durationMinutes ?: return null
+                val end = start.plusMinutes(dur.toLong()) // ممکن است وارد فردا شود
+                Occurrence(start, end)
+            }
         }
     }
 

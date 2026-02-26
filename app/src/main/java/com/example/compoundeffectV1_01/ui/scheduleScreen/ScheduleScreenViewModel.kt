@@ -3,8 +3,11 @@ package com.example.compoundeffectV1_01.ui.scheduleScreen
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskMode
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskRepository
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.RepeatUnit
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.ScheduleMode
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.TaskSchedule
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.TaskScheduleRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -42,8 +45,8 @@ class ScheduleScreenViewModel @Inject constructor(
                     ScheduleScreenItem(
                         scheduleId = r.s_id,
                         taskId = r.t_id,
-                        title =r.t_name,
-                        mode =r.s_mode,
+                        title = r.t_name,
+                        mode = r.s_mode,
 
                         dateEpochDay = r.s_dateEpochDay,
                         start = start,
@@ -56,7 +59,18 @@ class ScheduleScreenViewModel @Inject constructor(
 
                         categoryName = r.c_name,
                         categoryIconName = r.c_iconName,
-                        categoryColor = r.c_color
+                        categoryColor = r.c_color,
+                        taskMode = r.t_taskMode,
+                        pomodoroTargetUnits = r.t_pomodoroTargetUnits      ,
+                        pomodoroDoneUnits =r.t_pomodoroDoneUnits,
+                        repeatInterval = r.s_repeatInterval,
+                        repeatUnit = r.s_repeatUnit,
+                        weekdaysMask = r.s_weekdaysMask,
+                        focusMinutes = r.s_focusMinutes,
+                        shortBreakMinutes = r.s_shortBreakMinutes,
+                        longBreakMinutes = r.s_longBreakMinutes,
+                        longBreakEvery = r.s_longBreakEvery,
+                        pomodoroUnitsPerDay = r.s_pomodoroUnitsPerDay
                     )
                 }
             }
@@ -64,7 +78,11 @@ class ScheduleScreenViewModel @Inject constructor(
 
 
 
-
+    init {
+        viewModelScope.launch(Dispatchers.IO) {
+            taskScheduleRepo.ensureTodayPomodorosInPallet(LocalDate.now())
+        }
+    }
 
 
 
@@ -109,6 +127,39 @@ class ScheduleScreenViewModel @Inject constructor(
         }
     }
 
+    fun createPomodoroTimelineItems(
+        taskId: Int,
+        date: LocalDate,
+        startMin: Int,
+        count: Int,
+        focus: Int,
+        shortBreak: Int
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            var curStart = startMin
+            repeat(count.coerceAtLeast(1)) {
+                val end = (curStart + focus + shortBreak).coerceAtMost(24 * 60)
+
+                val schedule = TaskSchedule(
+                    id = null,
+                    taskId = taskId,
+                    mode = ScheduleMode.POMODORO,
+                    inPallet = false,
+                    repeating = false,
+
+                    dateEpochDay = date.toEpochDay(),
+                    startMinuteOfDay = curStart,
+                    endMinuteOfDay = end,
+
+                    focusMinutes = focus,
+                    shortBreakMinutes = shortBreak
+                )
+                taskScheduleRepo.insert(schedule)
+                curStart = end
+            }
+        }
+    }
+
 
 }
 
@@ -135,8 +186,22 @@ data class ScheduleScreenItem(
 
     val categoryName: String?,
     val categoryIconName: String?,
-    val categoryColor: String?
-)
+    val categoryColor: String?,
+    val taskMode: TaskMode,
+    val pomodoroTargetUnits: Int?,
+    val pomodoroDoneUnits: Int,
+
+    val repeatInterval: Int?,
+    val repeatUnit: RepeatUnit?,
+    val weekdaysMask: Int?,
+
+    val focusMinutes: Int?,
+    val shortBreakMinutes: Int?,
+    val longBreakMinutes: Int?,
+    val longBreakEvery: Int?,
+    val pomodoroUnitsPerDay: Int?,
+
+    )
 
 data class PendingMove(
     val date: LocalDate,
@@ -155,6 +220,19 @@ data class ScheduleItemsRow(
     val s_endMinuteOfDay: Int?,
     val s_durationMinutes: Int?,
     val s_repeating: Boolean,
+    val s_repeatInterval: Int?,
+    val s_repeatUnit: RepeatUnit?,
+    val s_weekdaysMask: Int?,
+
+    val s_focusMinutes: Int?,
+    val s_shortBreakMinutes: Int?,
+    val s_longBreakMinutes: Int?,
+    val s_longBreakEvery: Int?,
+    val s_pomodoroUnitsPerDay: Int?,
+
+    val t_taskMode: TaskMode,
+    val t_pomodoroTargetUnits: Int?,
+    val t_pomodoroDoneUnits: Int,
 
     val t_id: Int,
     val t_name: String,
@@ -177,4 +255,22 @@ data class OverlapLayout(
     val widthFrac: Float,   // 1.0, 0.75, 0.5, 0.25
     val offsetFrac: Float,  // 0.0, 0.25, 0.5, 0.75
     val z: Float
+)
+
+data class PomodoroPalletCardItem(
+    val taskId: Int,
+    val taskName: String,
+
+    val totalTarget: Int,
+    val totalDone: Int,
+
+    val expectedToday: Int,   // E
+    val scheduledToday: Int,  // D (در پالت یعنی Scheduled)
+
+    val focus: Int,
+    val shortBreak: Int,
+    val longBreak: Int,
+    val longBreakEvery: Int,
+
+    val remainingToday: Int
 )

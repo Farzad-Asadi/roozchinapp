@@ -34,5 +34,6 @@ interface TaskScheduleRepository {
         mode: ScheduleMode = ScheduleMode.TIME_RANGE
     )
 
+    suspend fun ensureTodayPomodorosInPallet(today: LocalDate = LocalDate.now())
 
 }

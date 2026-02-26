@@ -1,6 +1,16 @@
 package com.example.compoundeffectV1_01.utils
 
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Anchor
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.Timeline
+import androidx.compose.material.icons.filled.Timer
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.ReminderMode
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.ScheduleMode
 
 
 data class ColorOption(val name: String, val hex: String, val color: androidx.compose.ui.graphics.Color)
@@ -39,5 +49,17 @@ fun colorFromHex(hex: String): Color {
         }
     } catch (_: Throwable) {
         Color(0xFF000000)
+    }
+}
+
+
+
+//ایکون مود های ریمایندر
+
+fun scheduleModeColor(mode: ScheduleMode) : Color {
+    return when (mode) {
+        ScheduleMode.TIME_RANGE -> Color(0xFF2196F3)
+        ScheduleMode.AMOUNT_OF_TIME -> Color(0xFF009688)
+        ScheduleMode.POMODORO -> Color(0xFFFF9800)
     }
 }

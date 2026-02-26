@@ -67,6 +67,7 @@ import androidx.compose.material.icons.filled.EventRepeat
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.filled.GolfCourse
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.MoreVert
@@ -165,6 +166,7 @@ import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.Reminde
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.StartEnd
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.TaskReminderEntity
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.Task
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskMode
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.RepeatUnit
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.ScheduleMode
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.TaskSchedule
@@ -181,6 +183,7 @@ import com.example.compoundeffectV1_01.utils.ensureAfter
 import com.example.compoundeffectV1_01.utils.iconFromKey
 import com.example.compoundeffectV1_01.utils.plusMinutesClamped
 import com.example.compoundeffectV1_01.utils.reminderModeIcon
+import com.example.compoundeffectV1_01.utils.scheduleModeIcon
 import com.example.compoundeffectV1_01.utils.toFaText
 import com.example.compoundeffectV1_01.utils.toJalali
 import com.example.compoundeffectV1_01.utils.toLocalDate
@@ -834,7 +837,11 @@ fun CategoryScreen(
             onDeleteSchedule = { key ->
                 viewModel.deleteScheduleByKey(key)
             },
-        )
+            onPomodoroToggle = viewModel::setTaskPomodoroEnabled,
+            onPomodoroTargetUnitsChange = viewModel::setTaskPomodoroTargetUnits,
+            onPomodoroDoneUnitsChange = viewModel::setTaskPomodoroDoneUnits,
+
+            )
 
 
     }
@@ -876,7 +883,14 @@ fun CategoryScreen(
             onDeleteReminder = { key ->
                 viewModel.deleteReminderByKey(key)
             },
-        )
+            isPomodoroTask = (taskDraft.taskMode == TaskMode.POMODORO),
+            onFocusChange = viewModel::setScheduleFocusMinutes,
+            onShortBreakChange = viewModel::setScheduleShortBreakMinutes,
+            onLongBreakChange = viewModel::setScheduleLongBreakMinutes,
+            onLongBreakEveryChange = viewModel::setScheduleLongBreakEvery,
+            onPomodoroUnitsPerDayChange = viewModel::setSchedulePomodoroUnitsPerDay,
+
+            )
     }
 
     if (showTaskDialog && showPickTaskCategory) {
@@ -1886,7 +1900,11 @@ fun AddEditeTaskDialog(
     schedules: List<TaskScheduleUi>,
     onClickSchedule: (Int) -> Unit,
     onDeleteSchedule: (Int) -> Unit,
-) {
+    onPomodoroToggle: (Boolean) -> Unit,
+    onPomodoroTargetUnitsChange: (Int?) -> Unit,
+    onPomodoroDoneUnitsChange: (Int) -> Unit,
+
+    ) {
 
     var pendingDeleteScheduleId by rememberSaveable { mutableStateOf<Int?>(null) }
     var pendingDeleteScheduleTitle by rememberSaveable { mutableStateOf("") }
@@ -2020,29 +2038,71 @@ fun AddEditeTaskDialog(
             )
 
 
-            //Completed
+            // Completed & Pomodoro
             AddEditeDialogRow(
-                onClick = { onCompletedToggle(!draft.isCompleted) },
+                onClick = null,
                 content = {
-                    Icon(
-                        imageVector = if (draft.isCompleted)
-                            Icons.Filled.CheckCircle
-                        else
-                            Icons.Filled.RadioButtonUnchecked,
-                        contentDescription = null,
-                        tint = if (draft.isCompleted)
-                            Color(0xFF2E7D32)
-                        else
-                            Color.Gray
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        if (draft.isCompleted) "Completed" else "Uncompleted",
-                        modifier = Modifier.weight(1f)
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
 
+                        // ---- Completed (left) ----
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { onCompletedToggle(!draft.isCompleted) }
+                                .padding(vertical = 6.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (draft.isCompleted) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
+                                contentDescription = null,
+                                tint = if (draft.isCompleted) Color(0xFF2E7D32) else Color.Gray
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(if (draft.isCompleted) "Completed" else "Uncompleted")
+                        }
+
+                        VerticalDivider(Modifier.height(34.dp))
+                        Spacer(Modifier.width(10.dp))
+
+                        // ---- Pomodoro (right) ----
+                        val isPomodoro = draft.taskMode == TaskMode.POMODORO
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { onPomodoroToggle(!isPomodoro) }
+                                .padding(vertical = 6.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isPomodoro) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
+                                contentDescription = null,
+                                tint = if (isPomodoro) Color(0xFF2E7D32) else Color.Gray
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text("Pomodoro")
+                        }
+                    }
                 },
             )
+
+            //Pomodoro Row
+            if (draft.taskMode == TaskMode.POMODORO) {
+
+                AddEditeDialogRow(
+                    onClick = null,
+                    content = {
+                        TaskDialogForPomodoroRow(
+                            draft = draft,
+                            onPomodoroTargetUnitsChange = onPomodoroTargetUnitsChange,
+                            onPomodoroDoneUnitsChange = onPomodoroDoneUnitsChange,
+                        )
+                    }
+                )
+            }
+
 
             // Note
             AddEditeDialogRow(
@@ -2150,7 +2210,14 @@ fun AddEditeScheduleDialog(
     onOpenAddReminder: () -> Unit,
     onClickReminder: (Int) -> Unit,
     onDeleteReminder: (Int) -> Unit,
-) {
+    isPomodoroTask: Boolean,
+    onFocusChange: (Int) -> Unit,
+    onShortBreakChange: (Int) -> Unit,
+    onLongBreakChange: (Int) -> Unit,
+    onLongBreakEveryChange: (Int) -> Unit,
+    onPomodoroUnitsPerDayChange: (Int) -> Unit,
+
+    ) {
     var pendingDeleteReminderId by rememberSaveable { mutableStateOf<Int?>(null) }
     var pendingDeleteReminderTitle by rememberSaveable { mutableStateOf("") }
 
@@ -2194,8 +2261,13 @@ fun AddEditeScheduleDialog(
             AddEditeDialogRow(
                 onClick = null,
                 content = {
+                    val allowedModes =
+                        if (isPomodoroTask) listOf(ScheduleMode.POMODORO)
+                        else listOf(ScheduleMode.TIME_RANGE, ScheduleMode.AMOUNT_OF_TIME)
+
                     ModeScheduleDropdownRow(
                         mode = draft.mode,
+                        allowedModes = allowedModes,
                         onPick = onModeChange
                     )
                 },
@@ -2203,25 +2275,49 @@ fun AddEditeScheduleDialog(
             )
 
             //  TimePicker
-            AddEditeDialogRow(
-                onClick = null,
-                content = {
-                    if (draft.mode == ScheduleMode.TIME_RANGE) {
-                        // فعلاً ساده: نمایش متن + بعداً TimePicker
-                        TimeRangeRow(
-                            start = draft.start,
-                            end = draft.end,
-                            onStartChange = onStartChange,
-                            onEndChange = onEndChange
-                        )
-                    } else {
-                        AmountOfTimeRow(
-                            minutes = draft.durationMinutes,
-                            onMinutesChange = onDurationChange
-                        )
-                    }
-                },
-            )
+            when (draft.mode) {
+                ScheduleMode.TIME_RANGE -> {
+                    AddEditeDialogRow(
+                        onClick = null,
+                        content = {
+                            TimeRangeRow(
+                                start = draft.start,
+                                end = draft.end,
+                                onStartChange = onStartChange,
+                                onEndChange = onEndChange
+                            )
+                        }
+                    )
+                }
+
+                ScheduleMode.AMOUNT_OF_TIME -> {
+                    AddEditeDialogRow(
+                        onClick = null,
+                        content = {
+                            AmountOfTimeRow(
+                                minutes = draft.durationMinutes,
+                                onMinutesChange = onDurationChange
+                            )
+                        }
+                    )
+                }
+
+                ScheduleMode.POMODORO -> {
+                    PomodoroConfigRow(
+                        focus = draft.focusMinutes,
+                        shortBreak = draft.shortBreakMinutes,
+                        longBreak = draft.longBreakMinutes,
+                        longBreakEvery = draft.longBreakEvery,
+                        unitsPerDay = draft.pomodoroUnitsPerDay,
+                        onFocusChange = onFocusChange,
+                        onShortBreakChange = onShortBreakChange,
+                        onLongBreakChange = onLongBreakChange,
+                        onLongBreakEveryChange = onLongBreakEveryChange,
+                        onUnitsPerDayChange = onPomodoroUnitsPerDayChange
+                    )
+                }
+            }
+
 
             //DateRow
             if (draft.mode == ScheduleMode.TIME_RANGE || draft.mode == ScheduleMode.AMOUNT_OF_TIME) {
@@ -2244,43 +2340,59 @@ fun AddEditeScheduleDialog(
             }
 
             // Repeating
-            AddEditeDialogRow(
-                onClick = null,
-                content = {
-                    Icon(Icons.Filled.Repeat, contentDescription = "Repeat")
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Repeating", modifier = Modifier.weight(1f))
-                        Switch(checked = draft.repeat.enabled, onCheckedChange = onRepeatingChange)
-                    }
-                },
-            )
-
-            //RepeatOptions
-            if (draft.repeat.enabled) {
+            if (draft.mode == ScheduleMode.TIME_RANGE || draft.mode == ScheduleMode.AMOUNT_OF_TIME) {
                 AddEditeDialogRow(
                     onClick = null,
                     content = {
-                        Icon(Icons.Filled.EventRepeat, contentDescription = "Repeat")
-                        RepeatEveryRow(
-                            interval = draft.repeat.interval,
-                            unit = draft.repeat.unit,
-                            onIntervalChange = { onRepeatIntervalChange(it) },
-                            onUnitChange = { onRepeatUnitChange(it) }
-                        )
-                    }, showDivider = if (draft.repeat.unit == RepeatUnit.WEEK) false else true
+                        Icon(Icons.Filled.Repeat, contentDescription = "Repeat")
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Repeating", modifier = Modifier.weight(1f))
+                            Switch(
+                                checked = draft.repeat.enabled,
+                                onCheckedChange = onRepeatingChange
+                            )
+                        }
+                    },
                 )
-                if (draft.repeat.unit == RepeatUnit.WEEK) {
-                    WeekdayPickerRow(
-                        selectedMask = draft.repeat.weekdaysMask,
-                        onChangeMask = onWeekdaysMaskChange
+
+                //RepeatOptions
+                if (draft.repeat.enabled) {
+                    AddEditeDialogRow(
+                        onClick = null,
+                        content = {
+                            Icon(Icons.Filled.EventRepeat, contentDescription = "Repeat")
+                            RepeatEveryRow(
+                                interval = draft.repeat.interval,
+                                unit = draft.repeat.unit,
+                                onIntervalChange = { onRepeatIntervalChange(it) },
+                                onUnitChange = { onRepeatUnitChange(it) }
+                            )
+                        }, showDivider = if (draft.repeat.unit == RepeatUnit.WEEK) false else true
                     )
-                    HorizontalDivider(modifier = Modifier.padding(start = 66.dp))
+                    if (draft.repeat.unit == RepeatUnit.WEEK) {
+                        WeekdayPickerRow(
+                            selectedMask = draft.repeat.weekdaysMask,
+                            onChangeMask = onWeekdaysMaskChange
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(start = 66.dp))
+                    }
                 }
+            }
+
+
+            //WeeklyPicker for Mode.POMODORO
+            if (draft.mode == ScheduleMode.POMODORO) {
+                // فقط WeekdayPickerRow
+                WeekdayPickerRow(
+                    selectedMask = draft.repeat.weekdaysMask,
+                    onChangeMask = onWeekdaysMaskChange
+                )
+                HorizontalDivider(modifier = Modifier.padding(start = 66.dp))
             }
 
 
@@ -2574,6 +2686,183 @@ fun AddEditDescriptionDialog(
 
 
 //>>>>>>>>>>>>>>>> Component <<<<<<<<<<<<<<<<<<
+
+@Composable
+private fun PomodoroConfigRow(
+    focus: Int,
+    shortBreak: Int,
+    longBreak: Int,
+    longBreakEvery: Int,
+    unitsPerDay: Int,
+    onFocusChange: (Int) -> Unit,
+    onShortBreakChange: (Int) -> Unit,
+    onLongBreakChange: (Int) -> Unit,
+    onLongBreakEveryChange: (Int) -> Unit,
+    onUnitsPerDayChange: (Int) -> Unit,
+) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(start = 56.dp, end = 16.dp)
+    ) {
+
+        PomodoroIntFieldRow(
+            label = "Focus (min)",
+            value = focus,
+            min = 1,
+            max = 240,
+            imeAction = ImeAction.Next,
+            onValueChange = onFocusChange
+        )
+
+        PomodoroIntFieldRow(
+            label = "Short break (min)",
+            value = shortBreak,
+            min = 0,
+            max = 60,
+            imeAction = ImeAction.Next,
+            onValueChange = onShortBreakChange
+        )
+
+        PomodoroIntFieldRow(
+            label = "Long break (min)",
+            value = longBreak,
+            min = 0,
+            max = 120,
+            imeAction = ImeAction.Next,
+            onValueChange = onLongBreakChange
+        )
+
+        PomodoroIntFieldRow(
+            label = "Long break every",
+            value = longBreakEvery,
+            min = 2,
+            max = 12,
+            imeAction = ImeAction.Next,
+            onValueChange = onLongBreakEveryChange
+        )
+
+        PomodoroIntFieldRow(
+            label = "Pomodoros per day",
+            value = unitsPerDay,
+            min = 1,
+            max = 20,
+            imeAction = ImeAction.Done,
+            onValueChange = onUnitsPerDayChange
+        )
+    }
+}
+
+
+@Composable
+private fun PomodoroIntFieldRow(
+    label: String,
+    value: Int,
+    min: Int,
+    max: Int,
+    imeAction: ImeAction,
+    onValueChange: (Int) -> Unit,
+) {
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    fun digitsOnly(s: String, maxLen: Int = 4): String =
+        s.filter(Char::isDigit).take(maxLen)
+
+    fun parseOrZero(s: String) = s.toIntOrNull() ?: 0
+    fun clamp(n: Int) = n.coerceIn(min, max)
+
+    val fr = remember { FocusRequester() }
+    val interaction = remember { MutableInteractionSource() }
+    var focused by remember { mutableStateOf(false) }
+
+    var tf by remember {
+        val t = value.coerceIn(min, max).toString()
+        mutableStateOf(TextFieldValue(t, selection = TextRange(t.length)))
+    }
+
+    // ✅ هر بار لمس (Release) => فوکوس + select-all
+    LaunchedEffect(interaction) {
+        interaction.interactions.collectLatest { i ->
+            if (i is PressInteraction.Release) {
+                fr.requestFocus()
+                yield()
+                tf = tf.copy(selection = TextRange(0, tf.text.length))
+            }
+        }
+    }
+
+    // ✅ sync از بیرون فقط وقتی فوکوس ندارد
+    LaunchedEffect(value) {
+        val t = value.coerceIn(min, max).toString()
+        if (!focused && tf.text != t) {
+            tf = tf.copy(text = t, selection = TextRange(t.length))
+        }
+    }
+
+    val tfColors = TextFieldDefaults.colors(
+        focusedContainerColor = Color.Transparent,
+        unfocusedContainerColor = Color.Transparent,
+        disabledContainerColor = Color.Transparent,
+        errorContainerColor = Color.Transparent,
+        focusedIndicatorColor = Color.Transparent,
+        unfocusedIndicatorColor = Color.Transparent,
+        disabledIndicatorColor = Color.Transparent,
+        errorIndicatorColor = Color.Transparent
+    )
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.weight(1f)
+        )
+
+        TextField(
+            value = tf,
+            onValueChange = { v ->
+                val raw = digitsOnly(v.text)
+                tf = v.copy(text = raw, selection = TextRange(raw.length))
+
+                // حین تایپ: اگر خالی شد، فعلاً 0 می‌گیریم، ولی clamp می‌کنیم
+                val n = clamp(parseOrZero(raw))
+                onValueChange(n)
+            },
+            singleLine = true,
+            interactionSource = interaction,
+            modifier = Modifier
+                .width(110.dp)
+                .focusRequester(fr)
+                .onFocusChanged { st ->
+                    focused = st.isFocused
+                    if (!st.isFocused) {
+                        // روی blur: نرمال‌سازی نهایی
+                        val raw = digitsOnly(tf.text)
+                        val n = clamp(parseOrZero(raw))
+                        val t = n.toString()
+                        tf = tf.copy(text = t, selection = TextRange(t.length))
+                        onValueChange(n)
+                    }
+                },
+            textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Center),
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Number,
+                imeAction = imeAction
+            ),
+            keyboardActions = KeyboardActions(
+                onDone = {
+                    keyboardController?.hide()
+                    focusManager.clearFocus()
+                }
+            ),
+            colors = tfColors
+        )
+    }
+}
+
 
 @Composable
 private fun AllocatedRows(
@@ -4181,10 +4470,6 @@ private fun ScheduleRow(
         return "%02d:%02d".format(h, m)
     }
 
-    val icon = when (schedule.mode) {
-        ScheduleMode.TIME_RANGE -> Icons.Filled.DateRange
-        ScheduleMode.AMOUNT_OF_TIME -> Icons.Filled.Timer
-    }
 
     val timeText = when (schedule.mode) {
         ScheduleMode.TIME_RANGE -> {
@@ -4196,6 +4481,10 @@ private fun ScheduleRow(
         ScheduleMode.AMOUNT_OF_TIME -> {
             val d = schedule.durationMinutes ?: 0
             "$d min"
+        }
+
+        ScheduleMode.POMODORO -> {
+            "Pomodoro"
         }
     }
 
@@ -4215,7 +4504,7 @@ private fun ScheduleRow(
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icon, contentDescription = null)
+        Icon(scheduleModeIcon(schedule.mode), contentDescription = null)
 
         Spacer(Modifier.width(12.dp))
 
@@ -4353,6 +4642,7 @@ private fun ChildLevelChip(
 @Composable
 private fun ModeScheduleDropdownRow(
     mode: ScheduleMode,
+    allowedModes: List<ScheduleMode>,
     onPick: (ScheduleMode) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -4360,16 +4650,17 @@ private fun ModeScheduleDropdownRow(
     val selectedLabel = when (mode) {
         ScheduleMode.TIME_RANGE -> "Time range"
         ScheduleMode.AMOUNT_OF_TIME -> "Amount of time"
+        ScheduleMode.POMODORO -> "Pomodoro"
     }
 
-    val items = listOf(
-        ScheduleMode.TIME_RANGE to "Time range",
-        ScheduleMode.AMOUNT_OF_TIME to "Amount of time"
-    )
-    val icon = when (mode) {
-        ScheduleMode.TIME_RANGE -> Icons.Filled.DateRange
-        ScheduleMode.AMOUNT_OF_TIME -> Icons.Filled.Timer
+    val items = allowedModes.map { m ->
+        m to when (m) {
+            ScheduleMode.TIME_RANGE -> "Time range"
+            ScheduleMode.AMOUNT_OF_TIME -> "Amount of time"
+            ScheduleMode.POMODORO -> "Pomodoro"
+        }
     }
+
 
     ExposedDropdownMenuBox(
         expanded = expanded,
@@ -4388,7 +4679,7 @@ private fun ModeScheduleDropdownRow(
                 onValueChange = {},
                 readOnly = true,
                 singleLine = true,
-                leadingIcon = { Icon(icon, contentDescription = null) },
+                leadingIcon = { Icon(scheduleModeIcon(mode), contentDescription = null) },
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
                 modifier = Modifier.fillMaxWidth(), // ✅ کوچیک‌تر و وسط
                 textStyle = MaterialTheme.typography.bodyLarge.copy(
@@ -4415,12 +4706,9 @@ private fun ModeScheduleDropdownRow(
             modifier = Modifier.fillMaxWidth(0.8f)
         ) {
             items.forEach { (value, label) ->
-                val iconForDropdownMenuItem = when (value) {
-                    ScheduleMode.TIME_RANGE -> Icons.Filled.DateRange
-                    ScheduleMode.AMOUNT_OF_TIME -> Icons.Filled.Timer
-                }
+
                 DropdownMenuItem(
-                    leadingIcon = { Icon(iconForDropdownMenuItem, contentDescription = null) },
+                    leadingIcon = { Icon(scheduleModeIcon(value), contentDescription = null) },
                     text = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     onClick = {
                         onPick(value)
@@ -4646,7 +4934,6 @@ private fun TimePickerDialog(
 }
 
 
-
 @Composable
 private fun AmountOfTimeRow(
     minutes: Int,
@@ -4822,10 +5109,177 @@ private fun AmountOfTimeRow(
     }
 }
 
+@Composable
+private fun TaskDialogForPomodoroRow(
+    draft: TaskDraft,
+    onPomodoroTargetUnitsChange: (Int?) -> Unit,
+    onPomodoroDoneUnitsChange: (Int) -> Unit,
+) {
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
 
+    fun digitsOnly(s: String, maxLen: Int = 6): String =
+        s.filter(Char::isDigit).take(maxLen)
 
+    fun parseOrNull(s: String): Int? = s.toIntOrNull()
+    fun parseOrZero(s: String): Int = s.toIntOrNull() ?: 0
+    fun clampNonNeg(n: Int) = n.coerceAtLeast(0)
 
+    val totalFR = remember { FocusRequester() }
+    val doneFR = remember { FocusRequester() }
 
+    val totalInteraction = remember { MutableInteractionSource() }
+    val doneInteraction = remember { MutableInteractionSource() }
+
+    var totalFocused by remember { mutableStateOf(false) }
+    var doneFocused by remember { mutableStateOf(false) }
+
+    // TextFieldValue تا selection رو کنترل کنیم
+    var totalTf by remember {
+        val t = (draft.pomodoroTargetUnits ?: 0).toString()
+        mutableStateOf(TextFieldValue(t, selection = TextRange(t.length)))
+    }
+    var doneTf by remember {
+        val t = draft.pomodoroDoneUnits.toString()
+        mutableStateOf(TextFieldValue(t, selection = TextRange(t.length)))
+    }
+
+    // ✅ هر بار لمس (Release) => فوکوس + select-all
+    LaunchedEffect(totalInteraction) {
+        totalInteraction.interactions.collectLatest { i ->
+            if (i is PressInteraction.Release) {
+                totalFR.requestFocus()
+                yield()
+                totalTf = totalTf.copy(selection = TextRange(0, totalTf.text.length))
+            }
+        }
+    }
+    LaunchedEffect(doneInteraction) {
+        doneInteraction.interactions.collectLatest { i ->
+            if (i is PressInteraction.Release) {
+                doneFR.requestFocus()
+                yield()
+                doneTf = doneTf.copy(selection = TextRange(0, doneTf.text.length))
+            }
+        }
+    }
+
+    // ✅ sync از بیرون فقط وقتی فوکوس ندارند
+    LaunchedEffect(draft.pomodoroTargetUnits) {
+        val t = (draft.pomodoroTargetUnits ?: 0).toString()
+        if (!totalFocused && totalTf.text != t) {
+            totalTf = totalTf.copy(text = t, selection = TextRange(t.length))
+        }
+    }
+    LaunchedEffect(draft.pomodoroDoneUnits) {
+        val t = draft.pomodoroDoneUnits.toString()
+        if (!doneFocused && doneTf.text != t) {
+            doneTf = doneTf.copy(text = t, selection = TextRange(t.length))
+        }
+    }
+
+    val tfColors = TextFieldDefaults.colors(
+        focusedContainerColor = Color.Transparent,
+        unfocusedContainerColor = Color.Transparent,
+        disabledContainerColor = Color.Transparent,
+        errorContainerColor = Color.Transparent,
+        focusedIndicatorColor = Color.Transparent,
+        unfocusedIndicatorColor = Color.Transparent,
+        disabledIndicatorColor = Color.Transparent,
+        errorIndicatorColor = Color.Transparent
+    )
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Icon(Icons.Filled.GolfCourse, contentDescription = null)
+        Spacer(Modifier.width(8.dp))
+        Text("Goal", modifier = Modifier.width(70.dp))
+
+        // ---- Total ----
+        TextField(
+            value = totalTf,
+            onValueChange = { v ->
+                val raw = digitsOnly(v.text, maxLen = 6)
+                totalTf = v.copy(text = raw, selection = TextRange(raw.length))
+
+                // حین تایپ: می‌تونه خالی هم باشه => null
+                val total = parseOrNull(raw)?.let(::clampNonNeg)
+                onPomodoroTargetUnitsChange(total)
+            },
+            singleLine = true,
+            interactionSource = totalInteraction,
+            modifier = Modifier
+                .width(90.dp)
+                .focusRequester(totalFR)
+                .onFocusChanged { st ->
+                    totalFocused = st.isFocused
+                    if (!st.isFocused) {
+                        // روی blur: خالی => 0، و sync به draft
+                        val raw = digitsOnly(totalTf.text, maxLen = 6)
+                        val total = clampNonNeg(parseOrZero(raw))
+                        totalTf = totalTf.copy(
+                            text = total.toString(),
+                            selection = TextRange(total.toString().length)
+                        )
+                        onPomodoroTargetUnitsChange(total)
+                    }
+                },
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Number,
+                imeAction = ImeAction.Next
+            ),
+            textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Center),
+            label = { Text("Total") },
+            colors = tfColors
+        )
+
+        Spacer(Modifier.width(10.dp))
+
+        // ---- Done ----
+        TextField(
+            value = doneTf,
+            onValueChange = { v ->
+                val raw = digitsOnly(v.text, maxLen = 6)
+                doneTf = v.copy(text = raw, selection = TextRange(raw.length))
+
+                val done = clampNonNeg(parseOrZero(raw))
+                onPomodoroDoneUnitsChange(done)
+            },
+            singleLine = true,
+            interactionSource = doneInteraction,
+            modifier = Modifier
+                .width(90.dp)
+                .focusRequester(doneFR)
+                .onFocusChanged { st ->
+                    doneFocused = st.isFocused
+                    if (!st.isFocused) {
+                        val raw = digitsOnly(doneTf.text, maxLen = 6)
+                        val done = clampNonNeg(parseOrZero(raw))
+                        doneTf = doneTf.copy(
+                            text = done.toString(),
+                            selection = TextRange(done.toString().length)
+                        )
+                        onPomodoroDoneUnitsChange(done)
+                    }
+                },
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Number,
+                imeAction = ImeAction.Done
+            ),
+            keyboardActions = KeyboardActions(
+                onDone = {
+                    keyboardController?.hide()
+                    focusManager.clearFocus()
+                }
+            ),
+            textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Center),
+            label = { Text("Done") },
+            colors = tfColors
+        )
+    }
+}
 
 
 //>>>>>>>>>>>>>>>> Utils <<<<<<<<<<<<<<<<<<
@@ -4869,6 +5323,7 @@ fun TaskReminderEntity.buildSummary(): String {
 
     }
 }
+
 private fun formatMinutes(total: Int): String {
     val h = total / 60
     val m = total % 60
