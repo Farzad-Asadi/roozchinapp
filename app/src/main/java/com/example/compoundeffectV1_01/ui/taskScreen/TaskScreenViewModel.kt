@@ -1,5 +1,4 @@
-package com.example.compoundeffectV1_01.ui.categoryScreen
-
+package com.example.compoundeffectV1_01.ui.taskScreen
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -20,6 +19,21 @@ import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.Sch
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.TaskSchedule
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.TaskScheduleRepository
 import com.example.compoundeffectV1_01.data.workManager.ReminderScheduler
+import com.example.compoundeffectV1_01.ui.categoryScreen.CategoryDraft
+import com.example.compoundeffectV1_01.ui.categoryScreen.CategoryRenderItem
+import com.example.compoundeffectV1_01.ui.categoryScreen.CategoryUiState2
+import com.example.compoundeffectV1_01.ui.categoryScreen.ChildLevelUi
+import com.example.compoundeffectV1_01.ui.categoryScreen.FlattenResult
+import com.example.compoundeffectV1_01.ui.categoryScreen.ROOT
+import com.example.compoundeffectV1_01.ui.categoryScreen.ReminderDraft
+import com.example.compoundeffectV1_01.ui.categoryScreen.RemindersInputs
+import com.example.compoundeffectV1_01.ui.categoryScreen.RepeatDraft
+import com.example.compoundeffectV1_01.ui.categoryScreen.ScheduleDraft
+import com.example.compoundeffectV1_01.ui.categoryScreen.TaskDraft
+import com.example.compoundeffectV1_01.ui.categoryScreen.TaskMiniUi
+import com.example.compoundeffectV1_01.ui.categoryScreen.TaskReminderUi
+import com.example.compoundeffectV1_01.ui.categoryScreen.TaskRenderItem
+import com.example.compoundeffectV1_01.ui.categoryScreen.TaskScheduleUi
 import com.example.compoundeffectV1_01.utils.ceilToNextQuarter
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -41,10 +55,8 @@ import java.time.LocalDate
 import java.time.LocalTime
 import javax.inject.Inject
 
-
-
 @HiltViewModel
-class CategoryViewModel @Inject constructor(
+class TaskScreenViewModel @Inject constructor(
     private val categoryRepository: CategoryRepository,
     private val taskRepo: TaskRepository,
     private val scheduleRepo: TaskScheduleRepository,
@@ -1833,10 +1845,10 @@ class CategoryViewModel @Inject constructor(
         }
     }
 
-    fun finishEditTask() {
-        _editingTaskId.value = null
-        _taskDraft.value = TaskDraft()
-    }
+//    fun finishEditTask() {
+//        _editingTaskId.value = null
+//        _taskDraft.value = TaskDraft()
+//    }
 
     //ساخت پیش‌فرض Start/End با زمان فعلی
     private fun defaultScheduleDraftNow(): ScheduleDraft {
@@ -1882,159 +1894,3 @@ class CategoryViewModel @Inject constructor(
         data class Error(val message: String) : CreateResult()
     }
 }
-
-
-
-
-
-
-
-
-
-
-data class CategoryUiState2(
-    val isLoading: Boolean = true,
-    val categories: List<CategoryEntity> = emptyList(),
-    val renderItems: List<CategoryRenderItem> = emptyList(),
-
-    val tasks: List<Task> = emptyList(),
-    val taskRenderItems: List<TaskRenderItem> = emptyList(),
-    val levelById: Map<Int, Int> = emptyMap(),
-
-    )
-
-data class CategoryRenderItem(
-    val category: CategoryEntity,
-    val level: Int,
-    val hasChildren: Boolean,
-    val isExpanded: Boolean,
-    val isVisible: Boolean
-)
-
-data class FlattenResult(
-    val items: List<CategoryRenderItem>,
-    val levelById: Map<Int, Int>
-)
-
-data class RemindersInputs(
-    val tid: Int?,
-    val schKey: Int?,
-    val draftList: List<TaskReminderUi>,
-    val pendingMap: Map<Int, List<TaskReminderUi>>,
-)
-
-data class TaskMiniUi(
-    val id: Int,
-    val title: String,
-    val isDone: Boolean = false,
-    val hasSchedule: Boolean = false,
-
-    val parentTaskId: Int? = null,
-    val siblingIndex: Int = 0,
-    val priority: Int = 0
-)
-
-data class TaskRenderItem(
-    val task: TaskMiniUi,
-    val level: Int,        // 1..4 (نمایشی)
-    val hasChildren: Boolean,
-    val isExpanded: Boolean,
-    val isVisible: Boolean
-)
-
-data class ChildLevelUi(
-    val allowed: Set<Int> = setOf(0),
-    val maxAllowed: Int = 0
-)
-
-data class TaskScheduleUi(
-    val key: Int,              // برای pending منفی، برای DB همون id
-    val schedule: TaskSchedule,
-    val isPending: Boolean
-)
-
-data class TaskReminderUi(
-    val key: Int,              // برای pending منفی، برای DB همون id
-    val entity: TaskReminderEntity,
-    val isPending: Boolean
-)
-
-
-data class CategoryDraft(
-    val name: String = "",
-    val parentId: Int = -1,
-    val iconName: String = "QuestionMark",
-    val color: String =  "#2196F3",  // آبی متریال
-    val description: String = ""
-)
-
-data class TaskDraft(
-    val name: String = "",
-    val categoryId: Int? = null,
-    val priority: Int = 0,
-    val isCompleted: Boolean = false,
-    val note: String = "",
-
-    // ✅ جدیدها برای دیالوگ
-    val insertAtTop: Boolean = false, // false=آخر لیست، true=اول لیست
-    val childLevel: Int = 0,           // 0..3 (0 یعنی هیچ)
-
-    // ✅ Pomodoro
-    val taskMode: TaskMode = TaskMode.NORMAL,
-    val pomodoroTargetUnits: Int? = null,
-    val pomodoroDoneUnits: Int = 0,
-)
-
-data class ScheduleDraft(
-    val title: String = "",
-    val mode: ScheduleMode = ScheduleMode.TIME_RANGE,
-
-    val date: LocalDate = LocalDate.now(),
-    val start: LocalTime = LocalTime.of(20, 0),
-    val end: LocalTime = LocalTime.of(21, 0),
-    val durationMinutes: Int = 0,
-
-    // ✅ Pomodoro
-    val focusMinutes: Int = 25,
-    val shortBreakMinutes: Int = 5,
-    val longBreakMinutes: Int = 15,
-    val longBreakEvery: Int = 4,
-    val pomodoroUnitsPerDay: Int = 1,
-
-    val note: String = "",
-
-    val repeat: RepeatDraft = RepeatDraft(),
-    val reminder: ReminderDraft? = null
-)
-
-data class RepeatDraft(
-    val enabled: Boolean = false,
-    val interval: Int = 1,
-    val unit: RepeatUnit = RepeatUnit.DAY,
-    val weekdaysMask: Int = 0
-)
-
-data class ReminderDraft(
-    val mode: ReminderMode = ReminderMode.ALLOCATED,
-    val title: String = "",
-
-    // Allocated
-    val offsetDays: Int = 0,
-    val offsetHours: Int = 0,
-    val offsetMinutes: Int = 0,
-    val beforeAfter: BeforeAfter = BeforeAfter.BEFORE,
-    val anchor: StartEnd = StartEnd.START,
-
-    // Fixed time
-    val fixedTime: LocalTime = LocalTime.of(11, 0),
-
-    // Strength
-    val strength: ReminderStrengthMode = ReminderStrengthMode.NOTIFICATION,
-    val vibrate: Boolean = true,
-
-    // Sound (برای Alarm ها)
-    val alarmSoundUri: String? = null, // Uri.toString()
-
-    // Captcha
-    val captchaEnabled: Boolean = false, // فقط وقتی strength = ALARM_AND_CAPTCHA
-)

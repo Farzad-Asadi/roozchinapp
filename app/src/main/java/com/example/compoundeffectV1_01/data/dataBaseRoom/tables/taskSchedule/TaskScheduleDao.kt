@@ -111,10 +111,14 @@ SELECT
   s.longBreakMinutes  AS s_longBreakMinutes,
   s.longBreakEvery    AS s_longBreakEvery,
   s.pomodoroUnitsPerDay AS s_pomodoroUnitsPerDay,
+  
+  s.parentRuleScheduleId      AS s_parentRuleScheduleId,
+  s.occurrenceDateEpochDay    AS s_occurrenceDateEpochDay,
 
   t.taskMode            AS t_taskMode,
   t.pomodoroTargetUnits AS t_pomodoroTargetUnits,
   t.pomodoroDoneUnits   AS t_pomodoroDoneUnits,
+
 
   t.id             AS t_id,
   t.name           AS t_name,

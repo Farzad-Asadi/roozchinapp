@@ -71,7 +71,9 @@ class ScheduleScreenViewModel @Inject constructor(
                         shortBreakMinutes = r.s_shortBreakMinutes,
                         longBreakMinutes = r.s_longBreakMinutes,
                         longBreakEvery = r.s_longBreakEvery,
-                        pomodoroUnitsPerDay = r.s_pomodoroUnitsPerDay
+                        pomodoroUnitsPerDay = r.s_pomodoroUnitsPerDay,
+                        parentRuleScheduleId = r.s_parentRuleScheduleId,
+                        occurrenceDateEpochDay = r.s_occurrenceDateEpochDay,
                     )
                 }
             }
@@ -193,6 +195,39 @@ class ScheduleScreenViewModel @Inject constructor(
         }
     }
 
+    fun materializeVirtual(
+        virtual: ScheduleScreenItem,
+        newDate: LocalDate,
+        newStartMin: Int,
+        newEndMin: Int,
+        inPallet: Boolean = false
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val ruleId = virtual.parentRuleScheduleId ?: return@launch
+            val occDay = virtual.occurrenceDateEpochDay ?: return@launch
+
+            // اینجا باید بسته به ساختار Entity شما پر بشه:
+            val entity = TaskSchedule(
+                // id اگر auto است null بزن
+                id = null, // یا null (طبق Entity خودت)
+                taskId = virtual.taskId,
+                mode = virtual.mode,
+
+                dateEpochDay = newDate.toEpochDay(),
+                startMinuteOfDay = newStartMin,
+                endMinuteOfDay = newEndMin,
+
+                inPallet = inPallet,
+                repeating = false,
+
+                parentRuleScheduleId = ruleId,
+                occurrenceDateEpochDay = occDay,
+            )
+
+            taskScheduleRepo.insert(entity)
+        }
+    }
+
 
 }
 
@@ -234,6 +269,8 @@ data class ScheduleScreenItem(
     val longBreakEvery: Int?,
     val pomodoroUnitsPerDay: Int?,
 
+    val parentRuleScheduleId: Int?,
+    val occurrenceDateEpochDay: Long?,
     )
 
 data class PendingMove(
@@ -262,6 +299,9 @@ data class ScheduleItemsRow(
     val s_longBreakMinutes: Int?,
     val s_longBreakEvery: Int?,
     val s_pomodoroUnitsPerDay: Int?,
+
+    val s_parentRuleScheduleId: Int?,
+    val s_occurrenceDateEpochDay: Long?,
 
     val t_taskMode: TaskMode,
     val t_pomodoroTargetUnits: Int?,

@@ -39,6 +39,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -106,7 +107,90 @@ fun ScheduleScreen(
 ) {
     val allItems by viewModel.allItems.collectAsState()
 
-    val timelineItems = remember(allItems) { allItems.filter { !it.inPallet } }
+    val timelineItemsReal = remember(allItems) { allItems.filter { !it.inPallet } }
+
+    val overrideKeys = remember(timelineItemsReal) {
+        // key = "ruleId|occurrenceDay"
+        timelineItemsReal
+            .asSequence()
+            .filter { it.parentRuleScheduleId != null && it.occurrenceDateEpochDay != null }
+            .map { "${it.parentRuleScheduleId}|${it.occurrenceDateEpochDay}" }
+            .toHashSet()
+    }
+
+    val numDays = 5
+    val startDate = remember { LocalDate.now() } // یا هر startDate که تایم‌لاین‌ات دارد
+    val endDate = remember(startDate) { startDate.plusDays((numDays - 1).toLong()) }
+
+    val timelineItems = remember(timelineItemsReal, startDate, endDate, overrideKeys) {
+        val existingKeys = HashSet<String>(timelineItemsReal.size * 2)
+
+        fun keyOf(taskId: Int, dateEpochDay: Long, startMin: Int, endMin: Int, mode: ScheduleMode): String =
+            "$taskId|$dateEpochDay|$startMin|$endMin|$mode"
+
+        // کلیدهای آیتم‌های واقعی (برای جلوگیری از دوبل)
+        timelineItemsReal.forEach { it ->
+            val d = it.dateEpochDay ?: return@forEach
+            val sMin = it.start.toLocalTime().hour * 60 + it.start.toLocalTime().minute
+            val eMin = it.end.toLocalTime().hour * 60 + it.end.toLocalTime().minute
+            existingKeys += keyOf(it.taskId, d, sMin, eMin, it.mode)
+        }
+
+        val repeatingRules = timelineItemsReal
+            .asSequence()
+            .filter { it.repeating && it.repeatUnit != null }
+            .toList()
+
+        val virtuals = ArrayList<ScheduleScreenItem>(64)
+
+        var d = startDate
+        while (!d.isAfter(endDate)) {
+            val dEpoch = d.toEpochDay()
+
+            repeatingRules.forEach { rule ->
+                val baseDate = rule.dateEpochDay?.let(LocalDate::ofEpochDay) ?: return@forEach
+                if (d == baseDate) return@forEach
+
+                // ✅ اگر برای این روز override ثبت شده، occurrence مجازی نساز
+                val ovKey = "${rule.scheduleId}|$dEpoch"
+                if (overrideKeys.contains(ovKey)) return@forEach
+
+                // ✅ فعال بودن rule در این روز
+                if (!ruleIsActiveOnDate(rule, d)) return@forEach
+
+                val sMin = rule.start.toLocalTime().hour * 60 + rule.start.toLocalTime().minute
+                val eMin = rule.end.toLocalTime().hour * 60 + rule.end.toLocalTime().minute
+                if (eMin <= sMin) return@forEach
+
+                // ✅ اگر آیتم واقعی همون بازه وجود داره، occurrence مجازی نساز
+                val k = keyOf(rule.taskId, dEpoch, sMin, eMin, rule.mode)
+                if (existingKeys.contains(k)) return@forEach
+
+                // ✅ یک ID منفی برای آیتم مجازی
+                val virtualId = -kotlin.math.abs((rule.scheduleId * 31) xor (dEpoch.toInt() * 17)).coerceAtLeast(1)
+
+                virtuals += rule.copy(
+                    scheduleId = virtualId,     // منفی یعنی مجازی
+                    dateEpochDay = dEpoch,
+                    start = d.atStartOfDay().plusMinutes(sMin.toLong()),
+                    end = d.atStartOfDay().plusMinutes(eMin.toLong()),
+                    repeating = false,          // این خود rule نیست، occurrence است
+                    inPallet = false,
+
+                    // ✅ مهم: لینک دادن به rule
+                    parentRuleScheduleId = rule.scheduleId,
+                    occurrenceDateEpochDay = dEpoch
+                )
+
+                existingKeys += k
+            }
+
+            d = d.plusDays(1)
+        }
+
+        timelineItemsReal + virtuals
+    }
+
     val palletItems = remember(allItems) {
         allItems.filter { it.inPallet && it.mode != ScheduleMode.POMODORO }
     }
@@ -159,11 +243,6 @@ fun ScheduleScreen(
             }
             .sortedBy { it.taskName }
     }
-
-
-    // ✅ تنظیمات تایم‌لاین
-    val numDays = 5
-    val startDate by rememberSaveable { mutableStateOf(LocalDate.now()) }
 
     // مقدار ذخیره‌شونده برای اینکه بعد rotate/process-death هم برگرده
     var verticalZoomSaved by rememberSaveable { mutableFloatStateOf(1f) }
@@ -689,25 +768,98 @@ fun ScheduleScreen(
                                             }
                                         },
                                         onMoveCommit = { scheduleId, date, s, e ->
-                                            pendingMove[scheduleId] = PendingMove(date, s, e)
-                                            if (item.mode == ScheduleMode.POMODORO) {
-                                                viewModel.movePomodoroSchedule(
-                                                    scheduleId,
-                                                    date,
-                                                    s,
-                                                    e
+                                            val isVirtual = scheduleId < 0
+
+                                            if (isVirtual) {
+                                                // 🔥 مجازی → واقعی بساز (Override)
+                                                // پیشنهاد: توی ViewModel یه تابع unified داشته باشی که هم TIME_RANGE هم POMODORO رو ساپورت کنه
+                                                viewModel.materializeVirtual(
+                                                    virtual = displayItem,
+                                                    newDate = date,
+                                                    newStartMin = s,
+                                                    newEndMin = e,
+                                                    inPallet = false
                                                 )
+
+                                                selectedScheduleId = null
+                                                return@TimelineItemBox
+                                            }
+
+                                            // واقعی → همان رفتار فعلی
+                                            pendingMove[scheduleId] = PendingMove(date, s, e)
+
+                                            if (item.mode == ScheduleMode.POMODORO) {
+                                                viewModel.movePomodoroSchedule(scheduleId, date, s, e)
                                             } else {
                                                 viewModel.moveSchedule(scheduleId, date, s, e)
                                             }
                                         },
                                         onResizeEndCommit = { scheduleId, newEnd ->
+                                            val isVirtual = scheduleId < 0
+
+                                            if (isVirtual) {
+                                                val d = displayItem.start.toLocalDate()
+                                                val startMin =
+                                                    displayItem.start.toLocalTime().hour * 60 + displayItem.start.toLocalTime().minute
+
+                                                viewModel.materializeVirtual(
+                                                    virtual = displayItem,
+                                                    newDate = d,
+                                                    newStartMin = startMin,
+                                                    newEndMin = newEnd,
+                                                    inPallet = false
+                                                )
+
+                                                selectedScheduleId = null
+                                                return@TimelineItemBox
+                                            }
+
                                             viewModel.resizeScheduleEnd(scheduleId, newEnd)
                                         },
                                         onResizeStartCommit = { scheduleId, newStart ->
+                                            val isVirtual = scheduleId < 0
+
+                                            if (isVirtual) {
+                                                val d = displayItem.start.toLocalDate()
+                                                val endMin =
+                                                    displayItem.end.toLocalTime().hour * 60 + displayItem.end.toLocalTime().minute
+
+                                                viewModel.materializeVirtual(
+                                                    virtual = displayItem,
+                                                    newDate = d,
+                                                    newStartMin = newStart,
+                                                    newEndMin = endMin,
+                                                    inPallet = false
+                                                )
+
+                                                selectedScheduleId = null
+                                                return@TimelineItemBox
+                                            }
+
                                             viewModel.resizeScheduleStart(scheduleId, newStart)
                                         },
                                         onSendToPallet = { scheduleId, _ ->
+                                            val isVirtual = scheduleId < 0
+
+                                            if (isVirtual) {
+                                                val d = displayItem.start.toLocalDate()
+                                                val s =
+                                                    displayItem.start.toLocalTime().hour * 60 + displayItem.start.toLocalTime().minute
+                                                val e =
+                                                    displayItem.end.toLocalTime().hour * 60 + displayItem.end.toLocalTime().minute
+
+                                                viewModel.materializeVirtual(
+                                                    virtual = displayItem,
+                                                    newDate = d,
+                                                    newStartMin = s,
+                                                    newEndMin = e,
+                                                    inPallet = true
+                                                )
+
+                                                selectedScheduleId = null
+                                                return@TimelineItemBox
+                                            }
+
                                             viewModel.moveScheduleFromTimeLineToPallet(scheduleId)
                                             selectedScheduleId = null
                                         },
@@ -1335,6 +1487,8 @@ private fun TimelineItemBox(
     }
     val showHeader = taskH >= 56.dp   // ✅ این عدد را به سلیقه‌ات تنظیم کن
 
+    val isVirtual = item.scheduleId < 0
+
     //  Box اصلی
     Box(
         modifier = Modifier
@@ -1359,6 +1513,27 @@ private fun TimelineItemBox(
             }
 
     ) {
+
+        if (isVirtual) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 6.dp, end = 6.dp)
+                    .size(22.dp)
+                    .background(
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                        shape = CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Link,
+                    contentDescription = "Virtual occurrence",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        }
 
 
         //  آیکون گروه + نام اسکچول یا تسک
@@ -2099,8 +2274,8 @@ private fun computeOverlapLayouts(
             val widthFrac = (1f - chosen * OVERLAP_STEP_FRAC).coerceAtLeast(OVERLAP_STEP_FRAC)
             val offsetFrac = (chosen * OVERLAP_STEP_FRAC).coerceIn(0f, 1f - OVERLAP_STEP_FRAC)
 
-            // zIndex: level بالاتر همیشه روی‌تر + جدیدترها (scheduleId بزرگتر) روی‌تر
-            val z = (chosen * 1_000_000 + it.scheduleId).toFloat()
+            val idForZ = kotlin.math.abs(it.scheduleId)
+            val z = (10_000_000 + chosen * 1_000_000 + idForZ).toFloat()
 
             result[it.scheduleId] = OverlapLayout(
                 level = chosen,
@@ -2150,4 +2325,54 @@ private fun ruleIsActiveToday(rule: ScheduleScreenItem, today: LocalDate): Boole
 
         else -> true
     }
+}
+
+
+private fun ruleIsActiveOnDate(rule: ScheduleScreenItem, date: LocalDate): Boolean {
+    val base = rule.dateEpochDay?.let(LocalDate::ofEpochDay) ?: return false
+    if (date.isBefore(base)) return false
+
+    val unit = rule.repeatUnit ?: return false
+    val interval = (rule.repeatInterval ?: 1).coerceAtLeast(1)
+
+    return when (unit) {
+        RepeatUnit.WEEK -> {
+            val mask = (rule.weekdaysMask ?: 0)
+            if (mask == 0) return false
+
+            fun bitIndex(dow: DayOfWeek): Int = when (dow) {
+                DayOfWeek.SATURDAY -> 0
+                DayOfWeek.SUNDAY -> 1
+                DayOfWeek.MONDAY -> 2
+                DayOfWeek.TUESDAY -> 3
+                DayOfWeek.WEDNESDAY -> 4
+                DayOfWeek.THURSDAY -> 5
+                DayOfWeek.FRIDAY -> 6
+            }
+
+            val allowed = (mask and (1 shl bitIndex(date.dayOfWeek))) != 0
+            if (!allowed) return false
+
+            val weeks = ChronoUnit.WEEKS.between(base, date)
+            weeks >= 0 && (weeks % interval == 0L)
+        }
+
+        RepeatUnit.DAY -> {
+            val days = ChronoUnit.DAYS.between(base, date)
+            days >= 0 && (days % interval == 0L)
+        }
+
+        else -> {
+            // فعلاً مثل DAY
+            val days = ChronoUnit.DAYS.between(base, date)
+            days >= 0 && (days % interval == 0L)
+        }
+    }
+}
+
+// 2) یک syntheticId پایدار برای occurrence ها:
+private fun syntheticOccurrenceId(ruleScheduleId: Int, dateEpochDay: Long): Int {
+    // منفی که با آیتم‌های واقعی تداخل نکنه
+    val h = (ruleScheduleId * 31) xor (dateEpochDay.toInt() * 17)
+    return -kotlin.math.abs(h.coerceAtLeast(1))
 }

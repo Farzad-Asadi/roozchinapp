@@ -116,13 +116,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.ReminderMode
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.ScheduleMode
-
+import androidx.compose.material.icons.filled.*
 
 data class IconOption(val key: String, val icon: ImageVector)
 data class IconSection(val title: String, val options: List<IconOption>)
 
 
+
+
+
 fun buildIconSections(): List<IconSection> = listOf(
+
     IconSection(
         title = "Buildings & furniture",
         options = listOf(
@@ -130,17 +134,46 @@ fun buildIconSections(): List<IconSection> = listOf(
             IconOption("Apartment", Icons.Filled.Apartment),
             IconOption("Business", Icons.Filled.Business),
             IconOption("Warehouse", Icons.Filled.Warehouse),
+            IconOption("Store", Icons.Filled.Store),
+            IconOption("Storefront", Icons.Filled.Storefront),
+            IconOption("Church", Icons.Filled.Church),
+            IconOption("Mosque", Icons.Filled.Mosque),
+            IconOption("Synagogue", Icons.Filled.Synagogue),
+            IconOption("TempleBuddhist", Icons.Filled.TempleBuddhist),
+            IconOption("TempleHindu", Icons.Filled.TempleHindu),
+            IconOption("Castle", Icons.Filled.Castle),
+            IconOption("Stadium", Icons.Filled.Stadium),
+            IconOption("MeetingRoom", Icons.Filled.MeetingRoom),
+            IconOption("DoorFront", Icons.Filled.DoorFront),
+            IconOption("Chair", Icons.Filled.Chair),
+            IconOption("Weekend", Icons.Filled.Weekend),
+            IconOption("Desk", Icons.Filled.Desk),
+            IconOption("Kitchen", Icons.Filled.Kitchen),
+            IconOption("Bathtub", Icons.Filled.Bathtub),
+            IconOption("Bathroom", Icons.Filled.Bathroom),
+            IconOption("Key", Icons.Filled.Key),
+            IconOption("Lock", Icons.Filled.Lock),
         )
     ),
+
     IconSection(
         title = "People",
         options = listOf(
             IconOption("Person", Icons.Filled.Person),
+            IconOption("Groups", Icons.Filled.Groups),
+            IconOption("FamilyRestroom", Icons.Filled.FamilyRestroom),
+            IconOption("ChildCare", Icons.Filled.ChildCare),
+            IconOption("AccessibilityNew", Icons.Filled.AccessibilityNew),
+            IconOption("Elderly", Icons.Filled.Elderly),
+            IconOption("Handshake", Icons.Filled.Handshake),
+            IconOption("ThumbUp", Icons.Filled.ThumbUp),
             IconOption("School", Icons.Filled.School),
             IconOption("Engineering", Icons.Filled.Engineering),
-            IconOption("Groups", Icons.Filled.Groups),
+            IconOption("Work", Icons.Filled.Work),
+            IconOption("Badge", Icons.Filled.Badge),
         )
     ),
+
     IconSection(
         title = "Food & cooking",
         options = listOf(
@@ -148,26 +181,72 @@ fun buildIconSections(): List<IconSection> = listOf(
             IconOption("LocalCafe", Icons.Filled.LocalCafe),
             IconOption("LunchDining", Icons.Filled.LunchDining),
             IconOption("BakeryDining", Icons.Filled.BakeryDining),
+            IconOption("Fastfood", Icons.Filled.Fastfood),
+            IconOption("LocalPizza", Icons.Filled.LocalPizza),
+            IconOption("Icecream", Icons.Filled.Icecream),
+            IconOption("Cake", Icons.Filled.Cake),
+            IconOption("LocalBar", Icons.Filled.LocalBar),
+            IconOption("WineBar", Icons.Filled.WineBar),
+            IconOption("Coffee", Icons.Filled.Coffee),
+            IconOption("KebabDining", Icons.Filled.KebabDining),
+            IconOption("RamenDining", Icons.Filled.RamenDining),
+            IconOption("SoupKitchen", Icons.Filled.SoupKitchen),
+            IconOption("DinnerDining", Icons.Filled.DinnerDining),
+            IconOption("SetMeal", Icons.Filled.SetMeal),
+            IconOption("Blender", Icons.Filled.Blender),
+            IconOption("Microwave", Icons.Filled.Microwave),
+            IconOption("OutdoorGrill", Icons.Filled.OutdoorGrill),
+            IconOption("Kitchen", Icons.Filled.Kitchen),
         )
     ),
+
     IconSection(
         title = "Shopping & clothes",
         options = listOf(
             IconOption("ShoppingCart", Icons.Filled.ShoppingCart),
-            IconOption("Checkroom", Icons.Filled.Checkroom),
             IconOption("LocalMall", Icons.Filled.LocalMall),
             IconOption("Sell", Icons.Filled.Sell),
+            IconOption("ReceiptLong", Icons.Filled.ReceiptLong),
+            IconOption("LocalOffer", Icons.Filled.LocalOffer),
+            IconOption("Checkroom", Icons.Filled.Checkroom),
+            IconOption("Diamond", Icons.Filled.Diamond),
+            IconOption("Watch", Icons.Filled.Watch),
+            IconOption("Luggage", Icons.Filled.Luggage),
+            IconOption("CardGiftcard", Icons.Filled.CardGiftcard),
+            IconOption("Celebration", Icons.Filled.Celebration),
+            IconOption("Loyalty", Icons.Filled.Loyalty),
+            IconOption("Payments", Icons.Filled.Payments),
         )
     ),
+
     IconSection(
         title = "Sport",
         options = listOf(
+            IconOption("SportsFootball", Icons.Filled.SportsFootball),
             IconOption("SportsSoccer", Icons.Filled.SportsSoccer),
             IconOption("SportsBasketball", Icons.Filled.SportsBasketball),
-            IconOption("SportsTennis", Icons.Filled.SportsTennis),
             IconOption("SportsVolleyball", Icons.Filled.SportsVolleyball),
+            IconOption("SportsTennis", Icons.Filled.SportsTennis),
+            IconOption("SportsBaseball", Icons.Filled.SportsBaseball),
+            IconOption("SportsCricket", Icons.Filled.SportsCricket),
+            IconOption("SportsGolf", Icons.Filled.SportsGolf),
+            IconOption("SportsHockey", Icons.Filled.SportsHockey),
+            IconOption("SportsRugby", Icons.Filled.SportsRugby),
+            IconOption("SportsMma", Icons.Filled.SportsMma),
+            IconOption("FitnessCenter", Icons.Filled.FitnessCenter),
+            IconOption("SportsMartialArts", Icons.Filled.SportsMartialArts),
+            IconOption("Pool", Icons.Filled.Pool),
+            IconOption("DirectionsRun", Icons.Filled.DirectionsRun),
+            IconOption("DirectionsBike", Icons.Filled.DirectionsBike),
+            IconOption("Hiking", Icons.Filled.Hiking),
+            IconOption("Skateboarding", Icons.Filled.Skateboarding),
+            IconOption("Snowboarding", Icons.Filled.Snowboarding),
+            IconOption("DownhillSkiing", Icons.Filled.DownhillSkiing),
+            IconOption("Surfing", Icons.Filled.Surfing),
+            IconOption("Kayaking", Icons.Filled.Kayaking),
         )
     ),
+
     IconSection(
         title = "Medicine & health",
         options = listOf(
@@ -175,45 +254,246 @@ fun buildIconSections(): List<IconSection> = listOf(
             IconOption("LocalHospital", Icons.Filled.LocalHospital),
             IconOption("Vaccines", Icons.Filled.Vaccines),
             IconOption("HealthAndSafety", Icons.Filled.HealthAndSafety),
+            IconOption("MonitorHeart", Icons.Filled.MonitorHeart),
+            IconOption("Favorite", Icons.Filled.Favorite),
+            IconOption("Bloodtype", Icons.Filled.Bloodtype),
+            IconOption("Medication", Icons.Filled.Medication),
+//            IconOption("MedicationLiquid", Icons.Filled.MedicationLiquid),
+            IconOption("SmokingRooms", Icons.Filled.SmokingRooms),
+//            IconOption("NoSmoking", Icons.Filled.NoSmoking),
+            IconOption("Masks", Icons.Filled.Masks),
+            IconOption("Sick", Icons.Filled.Sick),
+            IconOption("Psychology", Icons.Filled.Psychology),
+        )
+    ),
+
+    IconSection(
+        title = "Finance",
+        options = listOf(
+            IconOption("CreditCard", Icons.Filled.CreditCard),
+            IconOption("AttachMoney", Icons.Filled.AttachMoney),
+            IconOption("AccountBalanceWallet", Icons.Filled.AccountBalanceWallet),
+            IconOption("Savings", Icons.Filled.Savings),
+            IconOption("BusinessCenter", Icons.Filled.BusinessCenter),
+            IconOption("AccountTree", Icons.Filled.AccountTree),
+            IconOption("ShowChart", Icons.Filled.ShowChart),
+            IconOption("BarChart", Icons.Filled.BarChart),
+            IconOption("PieChart", Icons.Filled.PieChart),
+            IconOption("StackedLineChart", Icons.Filled.StackedLineChart),
+            IconOption("Payments", Icons.Filled.Payments),
+            IconOption("Receipt", Icons.Filled.Receipt),
+        )
+    ),
+
+    IconSection(
+        title = "Science & education",
+        options = listOf(
+            IconOption("School", Icons.Filled.School),
+            IconOption("MenuBook", Icons.Filled.MenuBook),
+            IconOption("Book", Icons.Filled.Book),
+            IconOption("Newspaper", Icons.Filled.Newspaper),
+            IconOption("Inbox", Icons.Filled.Inbox),
+            IconOption("LocalOffer", Icons.Filled.LocalOffer),
+            IconOption("Map", Icons.Filled.Map),
+            IconOption("Science", Icons.Filled.Science),
+            IconOption("Biotech", Icons.Filled.Biotech),
+            IconOption("Coronavirus", Icons.Filled.Coronavirus),
+            IconOption("Functions", Icons.Filled.Functions),
+            IconOption("Calculate", Icons.Filled.Calculate),
+            IconOption("Palette", Icons.Filled.Palette),
+            IconOption("Mic", Icons.Filled.Mic),
+//            IconOption("Telescope", Icons.Filled.Telescope),
+            IconOption("TravelExplore", Icons.Filled.TravelExplore),
+        )
+    ),
+
+    IconSection(
+        title = "Transport",
+        options = listOf(
+            IconOption("TwoWheeler", Icons.Filled.TwoWheeler),
+            IconOption("Motorcycle", Icons.Filled.Motorcycle),
+            IconOption("DirectionsCar", Icons.Filled.DirectionsCar),
+            IconOption("LocalShipping", Icons.Filled.LocalShipping),
+            IconOption("RVHookup", Icons.Filled.RvHookup),
+            IconOption("Agriculture", Icons.Filled.Agriculture),
+            IconOption("AirportShuttle", Icons.Filled.AirportShuttle),
+            IconOption("Train", Icons.Filled.Train),
+            IconOption("DirectionsBoat", Icons.Filled.DirectionsBoat),
+//            IconOption("Helicopter", Icons.Filled.Helicopter),
+            IconOption("Flight", Icons.Filled.Flight),
+            IconOption("Air", Icons.Filled.Air),
+//            IconOption("HotAirBalloon", Icons.Filled.HotAirBalloon),
+            IconOption("RocketLaunch", Icons.Filled.RocketLaunch),
+            IconOption("Satellite", Icons.Filled.Satellite),
+            IconOption("Speed", Icons.Filled.Speed),
+            IconOption("Traffic", Icons.Filled.Traffic),
+            IconOption("LocalGasStation", Icons.Filled.LocalGasStation),
+            IconOption("Signpost", Icons.Filled.Signpost),
+            IconOption("Anchor", Icons.Filled.Anchor),
+            IconOption("Luggage", Icons.Filled.Luggage),
+        )
+    ),
+
+    IconSection(
+        title = "Devices",
+        options = listOf(
+            IconOption("Tv", Icons.Filled.Tv),
+            IconOption("Laptop", Icons.Filled.Laptop),
+            IconOption("DesktopWindows", Icons.Filled.DesktopWindows),
+            IconOption("PhoneAndroid", Icons.Filled.PhoneAndroid),
+            IconOption("Call", Icons.Filled.Call),
+            IconOption("Watch", Icons.Filled.Watch),
+            IconOption("Tablet", Icons.Filled.Tablet),
+            IconOption("NoPhotography", Icons.Filled.NoPhotography),
+            IconOption("Print", Icons.Filled.Print),
+            IconOption("PresentToAll", Icons.Filled.PresentToAll),
+            IconOption("Calculate", Icons.Filled.Calculate),
+            IconOption("Keyboard", Icons.Filled.Keyboard),
+            IconOption("SportsEsports", Icons.Filled.SportsEsports),
+            IconOption("Router", Icons.Filled.Router),
+            IconOption("DevicesOther", Icons.Filled.DevicesOther),
+            IconOption("SdCard", Icons.Filled.SdCard),
+            IconOption("Memory", Icons.Filled.Memory),
+            IconOption("Toys", Icons.Filled.Toys),
+            IconOption("CameraAlt", Icons.Filled.CameraAlt),
+            IconOption("Speaker", Icons.Filled.Speaker),
+            IconOption("Headphones", Icons.Filled.Headphones),
+            IconOption("Mic", Icons.Filled.Mic),
+        )
+    ),
+
+    IconSection(
+        title = "Software",
+        options = listOf(
+            IconOption("Movie", Icons.Filled.Movie),
+            IconOption("Android", Icons.Filled.Android),
+            IconOption("Terminal", Icons.Filled.Terminal),
+//            IconOption("Apple", Icons.Filled.Apple),
+            IconOption("Window", Icons.Filled.Window),
+//            IconOption("Skype", Icons.Filled.Skype),
+            IconOption("PhoneInTalk", Icons.Filled.PhoneInTalk),
+            IconOption("Facebook", Icons.Filled.Facebook),
+//            IconOption("X", Icons.Filled.X),
+//            IconOption("Instagram", Icons.Filled.Instagram),
+            IconOption("ChromeReaderMode", Icons.Filled.ChromeReaderMode),
+            IconOption("Explore", Icons.Filled.Explore),
+            IconOption("Cloud", Icons.Filled.Cloud),
+            IconOption("Email", Icons.Filled.Email),
+            IconOption("Security", Icons.Filled.Security),
+            IconOption("WizardHat", Icons.Filled.AutoFixHigh),
+            IconOption("Casino", Icons.Filled.Casino),
+            IconOption("Extension", Icons.Filled.Extension),
+            IconOption("SportsEsports", Icons.Filled.SportsEsports),
+        )
+    ),
+
+    IconSection(
+        title = "Animals",
+        options = listOf(
+            IconOption("PestControlRodent", Icons.Filled.PestControlRodent),
+            IconOption("CrueltyFree", Icons.Filled.CrueltyFree),
+            IconOption("Pets", Icons.Filled.Pets),
+            IconOption("BugReport", Icons.Filled.BugReport),
+            IconOption("EmojiNature", Icons.Filled.EmojiNature),
+            IconOption("EmojiAnimals", Icons.Filled.EmojiNature), // اگر EmojiAnimals نداری
+        )
+    ),
+
+    IconSection(
+        title = "Nature",
+        options = listOf(
+            IconOption("Park", Icons.Filled.Park),
+            IconOption("Forest", Icons.Filled.Forest),
+            IconOption("BeachAccess", Icons.Filled.BeachAccess),
+            IconOption("Landscape", Icons.Filled.Landscape),
+            IconOption("Yard", Icons.Filled.Yard),
+            IconOption("Spa", Icons.Filled.Spa),
+            IconOption("LocalFlorist", Icons.Filled.LocalFlorist),
+            IconOption("Eco", Icons.Filled.Eco),
+            IconOption("Waves", Icons.Filled.Waves),
+            IconOption("AcUnit", Icons.Filled.AcUnit),
+            IconOption("Cloud", Icons.Filled.Cloud),
+            IconOption("Bolt", Icons.Filled.Bolt),
+            IconOption("NightsStay", Icons.Filled.NightsStay),
+            IconOption("WbSunny", Icons.Filled.WbSunny),
+            IconOption("Public", Icons.Filled.Public),
+            IconOption("Star", Icons.Filled.Star),
+        )
+    ),
+
+    IconSection(
+        title = "Tools",
+        options = listOf(
+            IconOption("CleaningServices", Icons.Filled.CleaningServices),
+            IconOption("ContentCut", Icons.Filled.ContentCut),
+            IconOption("Brush", Icons.Filled.Brush),
+            IconOption("Construction", Icons.Filled.Construction),
+            IconOption("Hardware", Icons.Filled.Hardware),
+            IconOption("Build", Icons.Filled.Build),
+            IconOption("Handyman", Icons.Filled.Handyman),
+            IconOption("PrecisionManufacturing", Icons.Filled.PrecisionManufacturing),
+            IconOption("Settings", Icons.Filled.Settings),
+            IconOption("BuildCircle", Icons.Filled.BuildCircle),
+            IconOption("Plumbing", Icons.Filled.Plumbing),
+            IconOption("Carpenter", Icons.Filled.Carpenter),
+            IconOption("ElectricBolt", Icons.Filled.ElectricBolt),
+            IconOption("Search", Icons.Filled.Search),
+            IconOption("Timeline", Icons.Filled.Timeline),
+            IconOption("Alarm", Icons.Filled.Alarm),
+            IconOption("HourglassEmpty", Icons.Filled.HourglassEmpty),
+            IconOption("Stopwatch", Icons.Filled.Timer),
+        )
+    ),
+
+    IconSection(
+        title = "Signs",
+        options = listOf(
+            IconOption("Bedtime", Icons.Filled.Bedtime),
+            IconOption("Wc", Icons.Filled.Wc),
+            IconOption("Share", Icons.Filled.Share),
+            IconOption("Code", Icons.Filled.Code),
+            IconOption("MusicNote", Icons.Filled.MusicNote),
+            IconOption("Translate", Icons.Filled.Translate),
+            IconOption("Functions", Icons.Filled.Functions),
+            IconOption("QrCode", Icons.Filled.QrCode),
+            IconOption("YinYang", Icons.Filled.Yard), // اگر YinYang نداری، جایگزین
+            IconOption("RemoveCircle", Icons.Filled.RemoveCircle),
+            IconOption("Block", Icons.Filled.Block),
+            IconOption("DoNotDisturbOn", Icons.Filled.DoNotDisturbOn),
+            IconOption("Place", Icons.Filled.Place),
+            IconOption("GpsFixed", Icons.Filled.GpsFixed),
+            IconOption("Autorenew", Icons.Filled.Autorenew),
+            IconOption("Warning", Icons.Filled.Warning),
+            IconOption("Radioactive", Icons.Filled.Dangerous),
+            IconOption("Flag", Icons.Filled.Flag),
+        )
+    ),
+
+    IconSection(
+        title = "Smiles",
+        options = listOf(
+            IconOption("SentimentVerySatisfied", Icons.Filled.SentimentVerySatisfied),
+            IconOption("SentimentSatisfied", Icons.Filled.SentimentSatisfied),
+            IconOption("SentimentNeutral", Icons.Filled.SentimentNeutral),
+            IconOption("SentimentDissatisfied", Icons.Filled.SentimentDissatisfied),
         )
     ),
 )
 
+private val iconMap: Map<String, ImageVector> = buildIconSections()
+    .flatMap { it.options }
+    .associate { it.key to it.icon }
+
 fun iconFromKey(key: String): ImageVector {
-    return when (key) {
-        "Home" -> Icons.Filled.Home
-        "Apartment" -> Icons.Filled.Apartment
-        "Business" -> Icons.Filled.Business
-        "Warehouse" -> Icons.Filled.Warehouse
-
-        "Person" -> Icons.Filled.Person
-        "School" -> Icons.Filled.School
-        "Engineering" -> Icons.Filled.Engineering
-        "Groups" -> Icons.Filled.Groups
-
-        "Restaurant" -> Icons.Filled.Restaurant
-        "LocalCafe" -> Icons.Filled.LocalCafe
-        "LunchDining" -> Icons.Filled.LunchDining
-        "BakeryDining" -> Icons.Filled.BakeryDining
-
-        "ShoppingCart" -> Icons.Filled.ShoppingCart
-        "Checkroom" -> Icons.Filled.Checkroom
-        "LocalMall" -> Icons.Filled.LocalMall
-        "Sell" -> Icons.Filled.Sell
-
-        "SportsSoccer" -> Icons.Filled.SportsSoccer
-        "SportsBasketball" -> Icons.Filled.SportsBasketball
-        "SportsTennis" -> Icons.Filled.SportsTennis
-        "SportsVolleyball" -> Icons.Filled.SportsVolleyball
-
-        "MedicalServices" -> Icons.Filled.MedicalServices
-        "LocalHospital" -> Icons.Filled.LocalHospital
-        "Vaccines" -> Icons.Filled.Vaccines
-        "HealthAndSafety" -> Icons.Filled.HealthAndSafety
-
-        else -> Icons.Filled.Category
-    }
+    return iconMap[key] ?: Icons.Filled.Category
 }
+
+
+
+
+
+
+
 
 
 //ایکون مود های ریمایندر

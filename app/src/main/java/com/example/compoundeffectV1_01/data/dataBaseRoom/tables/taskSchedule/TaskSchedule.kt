@@ -56,6 +56,10 @@ data class TaskSchedule(
     val repeatUnit: RepeatUnit? = null,
     val weekdaysMask: Int? = null,
 
+    // ✅ override linking
+    val parentRuleScheduleId: Int? = null,
+    val occurrenceDateEpochDay: Long? = null,
+
 )
 
 

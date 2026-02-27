@@ -12,6 +12,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navigation
 import com.example.compoundeffectV1_01.ui.categoryScreen.CategoryScreen
 import com.example.compoundeffectV1_01.ui.scheduleScreen.ScheduleScreen
+import com.example.compoundeffectV1_01.ui.taskScreen.TaskScreen
 
 
 @Composable
@@ -32,7 +33,12 @@ fun AppNavGraph(
             composable(AppRoutes.CATEGORY) {
                 CategoryScreen(navController = navController)
             }
-            composable(AppRoutes.SCHEDULE) { ScheduleScreen() }
+            composable(AppRoutes.SCHEDULE) {
+                ScheduleScreen()
+            }
+            composable(AppRoutes.TASK) {
+                TaskScreen()
+            }
         }
     }
 }
@@ -48,6 +54,7 @@ fun AppNavGraph(
 object AppRoutes {
     const val CATEGORY = "category"
     const val SCHEDULE = "schedule"
+    const val TASK = "task"
 }
 
 object AppGraphRoutes {

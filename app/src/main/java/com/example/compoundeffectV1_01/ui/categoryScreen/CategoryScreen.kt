@@ -1704,7 +1704,7 @@ private fun CategorySheetTasksMode(
 //>>>>>>>>>>>>>>>> Dialogs <<<<<<<<<<<<<<<<<<
 
 @Composable
-fun ReminderRow(
+private fun ReminderRow(
     ui: TaskReminderUi,
     onClick: () -> Unit,
     onRequestDelete: () -> Unit
@@ -1760,7 +1760,7 @@ fun ReminderRow(
 
 
 @Composable
-fun AddCategoryDialog(
+private fun AddCategoryDialog(
     draft: CategoryDraft,
     parentName: String,
     parentIconName: String,
@@ -1880,7 +1880,7 @@ fun AddCategoryDialog(
 }
 
 @Composable
-fun AddEditeTaskDialog(
+private fun AddEditeTaskDialog(
     addTaskMod: Boolean,
     categoryName: String,
     categoryIconName: String,
@@ -2190,7 +2190,7 @@ fun AddEditeTaskDialog(
 }
 
 @Composable
-fun AddEditeScheduleDialog(
+private fun AddEditeScheduleDialog(
     addSchedule: Boolean,
     taskName: String,
     draft: ScheduleDraft,
@@ -2450,7 +2450,7 @@ fun AddEditeScheduleDialog(
 }
 
 @Composable
-fun AddEditeReminderDialog(
+private fun AddEditeReminderDialog(
     addReminder: Boolean,
     draft: ReminderDraft,
     onDismiss: () -> Unit,
@@ -2616,7 +2616,7 @@ fun AddEditeReminderDialog(
 }
 
 @Composable
-fun AddEditDescriptionDialog(
+private fun AddEditDescriptionDialog(
     title: String,
     value: String,
     onValueChange: (String) -> Unit,
@@ -3271,7 +3271,7 @@ private fun openAppDetailsSettings(context: Context) {
 }
 
 @Composable
-fun AddEditeDialogTopBar(
+private fun AddEditeDialogTopBar(
     title: String,
     onNavigationClick: (() -> Unit)? = null,
     navigationIcon: ImageVector = Icons.Filled.ArrowBackIosNew,
@@ -3318,7 +3318,7 @@ fun AddEditeDialogTopBar(
 }
 
 @Composable
-fun AddEditeDialogTextField(
+private fun AddEditeDialogTextField(
     value: String,
     onValueChange: (String) -> Unit,
     hint: String,
@@ -3364,7 +3364,7 @@ fun AddEditeDialogTextField(
 }
 
 @Composable
-fun AddEditeDialogRow(
+private fun AddEditeDialogRow(
     onClick: (() -> Unit)? = null,
     content: @Composable () -> Unit,
     showDivider: Boolean = true,
@@ -3845,7 +3845,7 @@ private fun TaskRow(
 }
 
 @Composable
-fun PickParentDialogSmall(
+private fun PickParentDialogSmall(
     items: List<CategoryRenderItem>,
     levelById: Map<Int, Int>,
     onDismiss: () -> Unit,
@@ -3903,7 +3903,7 @@ fun PickParentDialogSmall(
 }
 
 @Composable
-fun ChooseIconDialog(
+private fun ChooseIconDialog(
     selectedKey: String,
     onDismiss: () -> Unit,
     onPick: (IconOption) -> Unit,
@@ -4047,7 +4047,7 @@ private fun IconGrid4(
 
 
 @Composable
-fun ChooseColorDialog(
+private fun ChooseColorDialog(
     initialHex: String,
     onDismiss: () -> Unit,
     onConfirm: (hex: String) -> Unit
@@ -4233,7 +4233,7 @@ private fun SheetTasksCompactRow(
 }
 
 @Composable
-fun TasksOptionsMenu(
+private fun TasksOptionsMenu(
     sortMode: TaskSortMode,
     onChangeSort: (TaskSortMode) -> Unit,
     onCompleteAll: () -> Unit,
@@ -5289,7 +5289,7 @@ enum class ConfirmAction { SAVE_AND_CLOSE, SAVE_AND_CONTINUE }
 enum class TaskSortMode { NONE, BY_NAME, BY_PRIORITY, BY_COMPLETED }
 
 const val ROOT = -1
-fun TaskReminderEntity.buildSummary(): String {
+private fun TaskReminderEntity.buildSummary(): String {
     return when (mode) {
 
         ReminderMode.ALLOCATED -> {
@@ -5329,3 +5329,4 @@ private fun formatMinutes(total: Int): String {
     val m = total % 60
     return "%02d:%02d".format(h, m)
 }
+
