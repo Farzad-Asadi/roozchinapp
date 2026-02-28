@@ -36,7 +36,7 @@ fun AppNavGraph(
                 CategoryScreen(navController = navController)
             }
             composable(AppRoutes.SCHEDULE) {
-                ScheduleScreen()
+                ScheduleScreen(navController = navController)
             }
             composable(
                 route = AppRoutes.TASK_ROUTE,

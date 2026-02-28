@@ -37,16 +37,23 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBackIos
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Timeline
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -84,8 +91,10 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.NavHostController
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.RepeatUnit
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.ScheduleMode
+import com.example.compoundeffectV1_01.ui.navigation.AppRoutes
 import com.example.compoundeffectV1_01.utils.convertToPersianDatePretty
 import com.example.compoundeffectV1_01.utils.iconFromKey
 import com.example.compoundeffectV1_01.utils.scheduleModeColor
@@ -103,6 +112,7 @@ import kotlin.math.roundToInt
 
 @Composable
 fun ScheduleScreen(
+    navController: NavHostController,
     viewModel: ScheduleScreenViewModel = hiltViewModel()
 ) {
     val allItems by viewModel.allItems.collectAsState()
@@ -874,6 +884,29 @@ fun ScheduleScreen(
                                         onBringDayIntoView = { dayIndex ->
                                             pendingBringDayIntoView = dayIndex
                                         },
+                                        onEdit = { taskId ->
+                                            // ✅ همان مسیر CategoryScreen
+                                            navController.navigate(AppRoutes.taskEdit(taskId))
+                                        },
+                                        onDelete = { scheduleId ->
+                                            viewModel.deleteScheduleById(scheduleId)
+                                            selectedScheduleId = null
+                                        },
+                                        onMakeIndependent = {
+                                            // این callback فقط از منوی آیتم مجازی صدا زده می‌شود
+                                            val d = displayItem.start.toLocalDate()
+                                            val s = displayItem.start.toLocalTime().hour * 60 + displayItem.start.toLocalTime().minute
+                                            val e = displayItem.end.toLocalTime().hour * 60 + displayItem.end.toLocalTime().minute
+
+                                            viewModel.materializeVirtual(
+                                                virtual = displayItem,
+                                                newDate = d,
+                                                newStartMin = s,
+                                                newEndMin = e,
+                                                inPallet = false
+                                            )
+                                            selectedScheduleId = null
+                                        },
 
                                         )
                                 }
@@ -1123,41 +1156,6 @@ fun ScheduleScreen(
 }
 
 
-@Composable
-private fun CurrentTimeLine(
-    startDate: LocalDate,
-    numDays: Int,
-    dayWidthDp: Dp,
-    hourHeightDp: Dp
-) {
-    val now = remember { mutableStateOf(LocalDateTime.now()) }
-
-    // هر 60 ثانیه آپدیت
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(60_000)
-            now.value = LocalDateTime.now()
-        }
-    }
-
-    val today = now.value.toLocalDate()
-    val dayIndex = ChronoUnit.DAYS.between(startDate, today).toInt()
-    if (dayIndex !in 0 until numDays) return
-
-    val minutes = now.value.toLocalTime().hour * 60 + now.value.toLocalTime().minute
-    val y = hourHeightDp * (minutes / 60f)
-
-    val xStart = dayWidthDp * dayIndex
-    val xEnd = xStart + dayWidthDp
-
-    Box(
-        modifier = Modifier
-            .offset(x = xStart, y = y)
-            .width(dayWidthDp)
-            .height(2.dp)
-            .background(MaterialTheme.colorScheme.primary)
-    )
-}
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -1180,6 +1178,9 @@ private fun TimelineItemBox(
     onAutoScrollStop: () -> Unit,
     vScrollValueProvider: () -> Int,
     onBringDayIntoView: (dayIndex: Int) -> Unit,
+    onEdit: (taskId: Int) -> Unit,
+    onDelete: (scheduleId: Int) -> Unit,
+    onMakeIndependent: () -> Unit,
 
 
     ) {
@@ -1296,6 +1297,8 @@ private fun TimelineItemBox(
     // محدودش کن که کارت خیلی از ستون خارج نشه (اختیاری ولی خوش‌دست‌تر)
     val previewDx = residualDx.coerceIn(-dayWpx * 0.45f, dayWpx * 0.45f)
 
+    var menuExpanded by remember(item.scheduleId) { mutableStateOf(false) }
+    var showDeleteConfirm by remember(item.scheduleId) { mutableStateOf(false) }
 
     val level = overlapLayout?.level ?: 0
 
@@ -1729,27 +1732,80 @@ private fun TimelineItemBox(
             }
 
 
-            // to pallet
+
+
+            // --- More menu (move/edit/delete) ---
             Box(
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
                     .padding(end = 6.dp)
-                    .size(34.dp)
-                    .background(
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
-                        shape = CircleShape
-                    )
-                    .clickable {
-                        onSendToPallet(item.scheduleId, item.taskId)
-                    },
-                contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowForward, // یا ArrowForwardIos
-                    contentDescription = "Send to pallet",
-                    tint = MaterialTheme.colorScheme.onSurface
-                )
+                IconButton(
+                    onClick = { menuExpanded = true },
+                    modifier = Modifier
+                        .size(34.dp)
+                        .background(
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                            shape = CircleShape
+                        )
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.MoreVert,
+                        contentDescription = "More",
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                DropdownMenu(
+                    expanded = menuExpanded,
+                    onDismissRequest = { menuExpanded = false }
+                ) {
+                    if (isVirtual) {
+                        // ✅ فقط یک گزینه برای مجازی‌ها
+                        DropdownMenuItem(
+                            text = { Text("تبدیل به زمان‌بندی مستقل") },
+                            leadingIcon = {
+                                Icon(Icons.Default.Link, contentDescription = null)
+                                // اگر آیکون بهتری داشتی: LinkOff / CallSplit
+                            },
+                            onClick = {
+                                menuExpanded = false
+                                onMakeIndependent()
+                            }
+                        )
+                    } else {
+                        // ✅ آیتم‌های واقعی: Move / Edit / Delete
+                        DropdownMenuItem(
+                            text = { Text("Move to pallet") },
+                            leadingIcon = { Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null) },
+                            onClick = {
+                                menuExpanded = false
+                                onSendToPallet(item.scheduleId, item.taskId)
+                            }
+                        )
+
+                        DropdownMenuItem(
+                            text = { Text("Edit") },
+                            leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
+                            onClick = {
+                                menuExpanded = false
+                                onEdit(item.taskId)
+                            }
+                        )
+
+                        DropdownMenuItem(
+                            text = { Text("Delete") },
+                            leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) },
+                            onClick = {
+                                menuExpanded = false
+                                showDeleteConfirm = true
+                            }
+                        )
+                    }
+                }
             }
+
+
 
 
             // --- Bottom handle (resize end) ---
@@ -1787,6 +1843,26 @@ private fun TimelineItemBox(
             }
 
 
+        }
+
+
+        if (showDeleteConfirm) {
+            AlertDialog(
+                onDismissRequest = { showDeleteConfirm = false },
+                title = { Text("Delete schedule?") },
+                text = { Text("This action cannot be undone.") },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showDeleteConfirm = false
+                            onDelete(item.scheduleId)
+                        }
+                    ) { Text("Delete") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") }
+                }
+            )
         }
     }
 }
@@ -2145,7 +2221,6 @@ private const val DAY_MAX = 24 * 60
 
 private const val ZOOM_MIN = 0.6f
 private const val ZOOM_MAX = 6.0f
-private const val ZOOM_STEP = 0.1f
 
 
 private const val OVERLAP_MAX_LEVEL = 3            // 0..3  => 4 لایه
@@ -2210,8 +2285,6 @@ private data class DayKey(val date: LocalDate, val dayIndex: Int)
 private fun minuteOfDay(dt: LocalDateTime): Int =
     dt.toLocalTime().hour * 60 + dt.toLocalTime().minute
 
-private fun overlaps(aStart: Int, aEnd: Int, bStart: Int, bEnd: Int): Boolean =
-    aStart < bEnd && bStart < aEnd
 
 /**
  * فقط داخل یک روز همپوشانی را محاسبه می‌کند.
@@ -2370,9 +2443,3 @@ private fun ruleIsActiveOnDate(rule: ScheduleScreenItem, date: LocalDate): Boole
     }
 }
 
-// 2) یک syntheticId پایدار برای occurrence ها:
-private fun syntheticOccurrenceId(ruleScheduleId: Int, dateEpochDay: Long): Int {
-    // منفی که با آیتم‌های واقعی تداخل نکنه
-    val h = (ruleScheduleId * 31) xor (dateEpochDay.toInt() * 17)
-    return -kotlin.math.abs(h.coerceAtLeast(1))
-}
