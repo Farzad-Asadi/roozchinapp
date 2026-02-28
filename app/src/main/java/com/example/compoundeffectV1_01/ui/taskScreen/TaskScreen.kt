@@ -128,14 +128,15 @@ import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskMode
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.RepeatUnit
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.ScheduleMode
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.TaskSchedule
+import com.example.compoundeffectV1_01.data.dataClasses.CategoryRenderItem
+import com.example.compoundeffectV1_01.data.dataClasses.ReminderDraft
+import com.example.compoundeffectV1_01.data.dataClasses.ScheduleDraft
+import com.example.compoundeffectV1_01.data.dataClasses.TaskDraft
+import com.example.compoundeffectV1_01.data.dataClasses.TaskReminderUi
+import com.example.compoundeffectV1_01.data.dataClasses.TaskScheduleUi
 import com.example.compoundeffectV1_01.data.notification.rememberPostNotificationsPermissionRequester
-import com.example.compoundeffectV1_01.ui.categoryScreen.CategoryRenderItem
+
 import com.example.compoundeffectV1_01.ui.categoryScreen.ConfirmAction
-import com.example.compoundeffectV1_01.ui.categoryScreen.ReminderDraft
-import com.example.compoundeffectV1_01.ui.categoryScreen.ScheduleDraft
-import com.example.compoundeffectV1_01.ui.categoryScreen.TaskDraft
-import com.example.compoundeffectV1_01.ui.categoryScreen.TaskReminderUi
-import com.example.compoundeffectV1_01.ui.categoryScreen.TaskScheduleUi
 import com.example.compoundeffectV1_01.utils.DimmedDialog
 import com.example.compoundeffectV1_01.utils.colorFromHex
 import com.example.compoundeffectV1_01.utils.durationMinutesSameDay
@@ -163,16 +164,11 @@ fun TaskScreen(
 ) {
 
     val state by viewModel.uiState.collectAsState()
-    val draft by viewModel.draft.collectAsState()
-    val createResult by viewModel.createResult.collectAsState()
     val pickerFlatten by viewModel.parentPickerItems.collectAsState()
     val editingTaskId by viewModel.editingTaskId.collectAsState()
     val taskDraft by viewModel.taskDraft.collectAsState()
     val scheduleDraft by viewModel.scheduleDraft.collectAsState()
     val menuCategoryId by viewModel.menuCategoryId.collectAsState()
-    val tasksForMenu by viewModel.tasksForMenuCategory.collectAsState()
-    val tasksWithSchedule by viewModel.tasksWithScheduleForMenu.collectAsState()
-    val scheduledCount by viewModel.scheduledCountForMenu.collectAsState()
     val childLevelUi by viewModel.childLevelUi.collectAsState()
     val schedules by viewModel.schedulesUiForTaskDialog.collectAsState()
     val editingScheduleKey by viewModel.editingScheduleKey.collectAsState()
