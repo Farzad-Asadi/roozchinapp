@@ -18,6 +18,9 @@ class TaskScheduleRepositoryImpl @Inject constructor(
     override suspend fun delete(schedule: TaskSchedule) = dao.delete(schedule)
 
     override suspend fun deleteByTaskId(taskId: Int) = dao.deleteByTaskId(taskId)
+    override suspend fun getAllScheduleByTaskId(taskId: Int): List<TaskSchedule> =
+        dao.getAllScheduleByTaskId(taskId)
+
     override suspend fun deleteAllForTask(taskId: Int) = dao.deleteAllForTask(taskId)
 
 

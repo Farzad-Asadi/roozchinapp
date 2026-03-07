@@ -37,7 +37,8 @@ interface TaskScheduleDao {
     @Query("SELECT * FROM task_schedule WHERE taskId = :taskId LIMIT 1")
     suspend fun getByTaskId(taskId: Int): TaskSchedule?
 
-
+    @Query("SELECT * FROM task_schedule WHERE taskId = :taskId")
+    suspend fun getAllScheduleByTaskId(taskId: Int): List<TaskSchedule>
 
 
     @Delete

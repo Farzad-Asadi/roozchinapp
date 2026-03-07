@@ -195,9 +195,12 @@ private fun computeNextTriggerAtMillis(
         val startMin = schedule.startMinuteOfDay ?: return null
         val start = date.atTime(minuteToTime(startMin))
 
+        val endMin = schedule.endMinuteOfDay ?: return null
+        val end = date.atTime(minuteToTime(endMin))
+
         return when (schedule.mode) {
             ScheduleMode.TIME_RANGE -> {
-                val endMin = schedule.endMinuteOfDay ?: return null
+//                val endMin = schedule.endMinuteOfDay ?: return null
                 val endSameDay = date.atTime(minuteToTime(endMin))
 
                 // اگر end قبل از start باشد (time-range شبانه)، فعلاً پشتیبانی نمی‌کنیم:
@@ -214,8 +217,9 @@ private fun computeNextTriggerAtMillis(
             }
 
             ScheduleMode.POMODORO -> { //فعلاً مثل AmountOfTime محاسبه کن
-                val dur = schedule.durationMinutes ?: return null
-                val end = start.plusMinutes(dur.toLong()) // ممکن است وارد فردا شود
+//                val dur = schedule.durationMinutes ?: return null
+//                val end = start.plusMinutes(dur.toLong()) // ممکن است وارد فردا شود
+                if (schedule.inPallet) return null
                 Occurrence(start, end)
             }
         }

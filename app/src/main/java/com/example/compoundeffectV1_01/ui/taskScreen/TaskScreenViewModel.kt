@@ -716,20 +716,7 @@ class TaskScreenViewModel @Inject constructor(
         dfs(rootParentId, realDepth = 1, ancestorCollapsed = false)
         return items
     }
-    private fun wouldCreateTaskCycle(
-        draggedId: Int,
-        newParentId: Int,
-        parentById: Map<Int, Int>
-    ): Boolean {
-        var cur = newParentId
-        var guard = 0
-        while (cur != ROOT && guard < 200) {
-            if (cur == draggedId) return true
-            cur = parentById[cur] ?: ROOT
-            guard++
-        }
-        return false
-    }
+
 
 
 
@@ -913,7 +900,15 @@ class TaskScreenViewModel @Inject constructor(
             // DB delete
             viewModelScope.launch(Dispatchers.IO) {
                 val target = schedulesUiForTaskDialog.value.firstOrNull { it.key == key }?.schedule
-                if (target != null) scheduleRepo.delete(target)
+                if (target?.id != null) {
+                    val reminders = reminderRepo.getByScheduleId(target.id)
+                    reminders.forEach { rUi ->
+                        try {
+                            reminderScheduler.cancel(rUi.id)   // ✅ این خط حیاتی است
+                        } catch (_: Throwable) {}
+                    }
+                    scheduleRepo.delete(target)
+                }
             }
         }
     }
@@ -1127,6 +1122,7 @@ class TaskScreenViewModel @Inject constructor(
         // DB
         viewModelScope.launch(Dispatchers.IO) {
             reminderRepo.deleteById(key)
+            reminderScheduler.cancel(key)
         }
     }
     fun finishEditReminder() {

@@ -5,15 +5,18 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.category.CategoryEntity
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.category.CategoryRepository
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.TaskReminderRepository
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.Task
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskRepository
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskWithSchedule
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.TaskScheduleRepository
 import com.example.compoundeffectV1_01.data.dataClasses.CategoryDraft
 import com.example.compoundeffectV1_01.data.dataClasses.CategoryRenderItem
 import com.example.compoundeffectV1_01.data.dataClasses.CategoryUiState2
 import com.example.compoundeffectV1_01.data.dataClasses.FlattenResult
 import com.example.compoundeffectV1_01.data.dataClasses.TaskMiniUi
 import com.example.compoundeffectV1_01.data.dataClasses.TaskRenderItem
+import com.example.compoundeffectV1_01.data.workManager.ReminderScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -35,6 +38,9 @@ import javax.inject.Inject
 @HiltViewModel
 class CategoryViewModel @Inject constructor(
     private val categoryRepository: CategoryRepository,
+    private val taskScheduleRepo: TaskScheduleRepository,
+    private val reminderRepo: TaskReminderRepository,
+    private val reminderScheduler: ReminderScheduler,
     private val taskRepo: TaskRepository,
 ) : ViewModel() {
 
@@ -376,6 +382,56 @@ class CategoryViewModel @Inject constructor(
         }
         return false
     }
+    fun deleteCategoryPromoteChildren(categoryId: Int) {
+        viewModelScope.launch {
+            val all = uiState.value.categories
+            val target = all.firstOrNull { it.categoryId == categoryId } ?: return@launch
+
+            val parentOfTarget = target.parentCategoryId
+            val children = all.filter { it.parentCategoryId == categoryId }
+
+            // 1) بچه‌ها رو به parentِ کتگوری حذف‌شده وصل کن
+            // siblingIndex جدید: بعد از آخرین بچه‌های parentOfTarget
+            val baseIndex = all.count { it.parentCategoryId == parentOfTarget }
+
+            children.forEachIndexed { i, child ->
+                categoryRepository.updateCategory(
+                    child.copy(
+                        parentCategoryId = parentOfTarget,
+                        siblingIndex = baseIndex + i
+                    )
+                )
+            }
+
+            //حذف ورک منیجرهای تسکهای کتگوری
+
+            val taskList = target.categoryId?.let { taskRepo.getTasksByCategory(it) }
+            taskList?.forEach { t ->
+                val scheduleList = t.id?.let { taskScheduleRepo.getAllScheduleByTaskId(it) }
+
+                scheduleList?.forEach { tech ->
+                    val reminders = tech.id?.let { reminderRepo.getByScheduleId(it) }
+                    reminders?.forEach { rUi ->
+                        try {
+                            reminderScheduler.cancel(rUi.id)   // ✅ این خط حیاتی است
+                        } catch (_: Throwable) {}
+                    }
+
+                }
+
+            }
+
+
+            // 2) خود کتگوری حذف شود
+            categoryRepository.deleteCategory(target)
+
+            // 3) مرتب‌سازی siblingIndex برای parent قبلی (جای خالی پر شود)
+            reorderSiblings(parentOfTarget)
+
+            // 4) مرتب‌سازی siblingIndex برای parent جدید (بعد از promote)
+            reorderSiblings(parentOfTarget)
+        }
+    }
 
 
 
@@ -385,6 +441,22 @@ class CategoryViewModel @Inject constructor(
         viewModelScope.launch {
             val t = taskRepo.getTaskById(taskId) ?: return@launch
             withContext(Dispatchers.IO) {
+
+
+                val scheduleList = taskScheduleRepo.getAllScheduleByTaskId(taskId)
+
+                scheduleList.forEach { tech ->
+                    val reminders = tech.id?.let { reminderRepo.getByScheduleId(it) }
+                    reminders?.forEach { rUi ->
+                        try {
+                            reminderScheduler.cancel(rUi.id)   // ✅ این خط حیاتی است
+                        } catch (_: Throwable) {}
+                    }
+
+                }
+
+
+
                 taskRepo.deleteTask(t)
             }
         }
@@ -728,37 +800,7 @@ class CategoryViewModel @Inject constructor(
         return FlattenResult(items, levelById)
     }
 
-    fun deleteCategoryPromoteChildren(categoryId: Int) {
-        viewModelScope.launch {
-            val all = uiState.value.categories
-            val target = all.firstOrNull { it.categoryId == categoryId } ?: return@launch
 
-            val parentOfTarget = target.parentCategoryId
-            val children = all.filter { it.parentCategoryId == categoryId }
-
-            // 1) بچه‌ها رو به parentِ کتگوری حذف‌شده وصل کن
-            // siblingIndex جدید: بعد از آخرین بچه‌های parentOfTarget
-            val baseIndex = all.count { it.parentCategoryId == parentOfTarget }
-
-            children.forEachIndexed { i, child ->
-                categoryRepository.updateCategory(
-                    child.copy(
-                        parentCategoryId = parentOfTarget,
-                        siblingIndex = baseIndex + i
-                    )
-                )
-            }
-
-            // 2) خود کتگوری حذف شود
-            categoryRepository.deleteCategory(target)
-
-            // 3) مرتب‌سازی siblingIndex برای parent قبلی (جای خالی پر شود)
-            reorderSiblings(parentOfTarget)
-
-            // 4) مرتب‌سازی siblingIndex برای parent جدید (بعد از promote)
-            reorderSiblings(parentOfTarget)
-        }
-    }
 
     private suspend fun reorderSiblings(parentId: Int?) {
         val siblings = uiState.value.categories

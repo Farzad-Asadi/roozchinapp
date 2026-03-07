@@ -11,6 +11,7 @@ interface TaskScheduleRepository {
     suspend fun upsertAndReturnId(schedule: TaskSchedule):Int
     suspend fun delete(schedule: TaskSchedule)
     suspend fun deleteByTaskId(taskId: Int)
+    suspend fun getAllScheduleByTaskId(taskId: Int): List<TaskSchedule>
     suspend fun deleteAllForTask(taskId: Int)
 
     suspend fun insert(schedule: TaskSchedule): Int

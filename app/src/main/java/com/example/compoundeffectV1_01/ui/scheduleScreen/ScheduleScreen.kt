@@ -42,7 +42,9 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -132,6 +134,8 @@ fun ScheduleScreen(
     val startDate = remember { LocalDate.now() } // یا هر startDate که تایم‌لاین‌ات دارد
     val endDate = remember(startDate) { startDate.plusDays((numDays - 1).toLong()) }
 
+    val today = remember { LocalDate.now() }
+
     val timelineItems = remember(timelineItemsReal, startDate, endDate, overrideKeys) {
         val existingKeys = HashSet<String>(timelineItemsReal.size * 2)
 
@@ -177,7 +181,9 @@ fun ScheduleScreen(
                 if (existingKeys.contains(k)) return@forEach
 
                 // ✅ یک ID منفی برای آیتم مجازی
-                val virtualId = -kotlin.math.abs((rule.scheduleId * 31) xor (dEpoch.toInt() * 17)).coerceAtLeast(1)
+                val virtualId =
+                    if (d == today) rule.scheduleId
+                    else -kotlin.math.abs((rule.scheduleId * 31) xor (dEpoch.toInt() * 17)).coerceAtLeast(1)
 
                 virtuals += rule.copy(
                     scheduleId = virtualId,     // منفی یعنی مجازی
@@ -206,7 +212,7 @@ fun ScheduleScreen(
     }
 
 
-    val today = remember { LocalDate.now() }
+
 
     // ✅ rule های پومودورو (برای expectedToday و config)
     val pomodoroRulesToday = remember(allItems) {
@@ -570,7 +576,8 @@ fun ScheduleScreen(
                                     var animJob: kotlinx.coroutines.Job? = null
 
                                     while (true) {
-                                        val event = awaitPointerEvent(pass = PointerEventPass.Initial)
+                                        val event =
+                                            awaitPointerEvent(pass = PointerEventPass.Initial)
                                         val pressed = event.changes.filter { it.pressed }
                                         if (pressed.size < 2) break
 
@@ -584,7 +591,10 @@ fun ScheduleScreen(
                                             val zoomChange = dist / lastDistance
 
                                             // 1) rawZoom پیوسته
-                                            val newRaw = (verticalZoomRaw * zoomChange).coerceIn(ZOOM_MIN, ZOOM_MAX)
+                                            val newRaw = (verticalZoomRaw * zoomChange).coerceIn(
+                                                ZOOM_MIN,
+                                                ZOOM_MAX
+                                            )
                                             verticalZoomRaw = newRaw
 
                                             // 2) پله‌ی هدف
@@ -599,17 +609,28 @@ fun ScheduleScreen(
                                                 animJob = scope.launch {
                                                     // --- 1) anchor را در لحظه‌ی شروع پله‌ جدید قفل کن ---
                                                     // نقطه‌ی انگشت داخل viewport گرید
-                                                    val focusYInWindow = focus.y + overlayLayerOriginInRoot.y
+                                                    val focusYInWindow =
+                                                        focus.y + overlayLayerOriginInRoot.y
                                                     val focusYInGridViewport =
-                                                        (focusYInWindow - gridOriginInWindow.y).coerceIn(0f, gridViewportHeightPx)
+                                                        (focusYInWindow - gridOriginInWindow.y).coerceIn(
+                                                            0f,
+                                                            gridViewportHeightPx
+                                                        )
 
                                                     // زوم فعلیِ نمایشی (شروع انیمیشن)
                                                     val z0 = verticalZoomAnim.value
-                                                    val hourH0 = with(density) { (72.dp * z0).coerceIn(48.dp, 360.dp).toPx() }
+                                                    val hourH0 = with(density) {
+                                                        (72.dp * z0).coerceIn(
+                                                            48.dp,
+                                                            360.dp
+                                                        ).toPx()
+                                                    }
 
                                                     // دقیقه‌ای که دقیقاً زیر انگشت است (در مختصات محتوا)
-                                                    val contentY0 = vScroll.value + focusYInGridViewport
-                                                    val minuteUnderFinger = (contentY0 / hourH0) * 60f
+                                                    val contentY0 =
+                                                        vScroll.value + focusYInGridViewport
+                                                    val minuteUnderFinger =
+                                                        (contentY0 / hourH0) * 60f
 
                                                     // --- 2) انیمیشن دستی: هم‌زمان zoom و scroll ---
                                                     val z1 = targetStep
@@ -619,9 +640,10 @@ fun ScheduleScreen(
 
                                                     while (true) {
                                                         val now = withFrameNanos { it }
-                                                        val tRaw = ((now - startNs).toDouble() / (endNs - startNs).toDouble())
-                                                            .coerceIn(0.0, 1.0)
-                                                            .toFloat()
+                                                        val tRaw =
+                                                            ((now - startNs).toDouble() / (endNs - startNs).toDouble())
+                                                                .coerceIn(0.0, 1.0)
+                                                                .toFloat()
 
                                                         // easing مشابه FastOutSlowInEasing (تقریب خوب و سبک)
                                                         val t = FastOutSlowInEasing.transform(tRaw)
@@ -633,11 +655,18 @@ fun ScheduleScreen(
                                                         verticalZoomAnim.snapTo(z)
 
                                                         // 2-2) محاسبه‌ی اسکرول لازم برای ثابت ماندن دقیقه زیر انگشت
-                                                        val hourH = with(density) { (72.dp * z).coerceIn(48.dp, 360.dp).toPx() }
-                                                        val contentY = (minuteUnderFinger / 60f) * hourH
-                                                        val targetScroll = (contentY - focusYInGridViewport)
-                                                            .roundToInt()
-                                                            .coerceIn(0, vScroll.maxValue)
+                                                        val hourH = with(density) {
+                                                            (72.dp * z).coerceIn(
+                                                                48.dp,
+                                                                360.dp
+                                                            ).toPx()
+                                                        }
+                                                        val contentY =
+                                                            (minuteUnderFinger / 60f) * hourH
+                                                        val targetScroll =
+                                                            (contentY - focusYInGridViewport)
+                                                                .roundToInt()
+                                                                .coerceIn(0, vScroll.maxValue)
 
                                                         vScroll.scrollTo(targetScroll)
 
@@ -1185,27 +1214,37 @@ private fun TimelineItemBox(
 
     ) {
 
+
     val density = LocalDensity.current
+
+    //ثابت ها
+    val minDur = 15
+
+
+    //متغییر های کلی
     val dayWpx = with(density) { dayWidthDp.toPx() }
     val hourHpx = with(density) { hourHeightDp.toPx() }
     val snapStep = snapStepForZoom(verticalZoom)
-    Log.i("TEST", "verticalZoom =$verticalZoom ,snapStep =$snapStep")
 
+
+    //مشخصات اسکچول
+    //فاصله روز اسکچول با روز جاری
     val dayIndex0 = ChronoUnit.DAYS.between(startDate, item.start.toLocalDate()).toInt()
     if (dayIndex0 !in 0 until numDays) return
-
-    val minDur = 15
     val startMin0 = item.start.toLocalTime().hour * 60 + item.start.toLocalTime().minute
     val endMin0 = item.end.toLocalTime().hour * 60 + item.end.toLocalTime().minute
     val dur0 = (endMin0 - startMin0).coerceAtLeast(minDur)
 
-    // ---------------- Move state ----------------
+
+    // Move state
     var dragDx by remember(item.scheduleId) { mutableFloatStateOf(0f) }
     var dragDy by remember(item.scheduleId) { mutableFloatStateOf(0f) }
 
 
+    //ترشولد برای جایجایی افقی
     val daySnapThresholdPx = dayWpx / 4f
 
+    //دلتا برای حرکت افقی
     val dayDelta = when {
         dragDx > 0f -> ((dragDx + daySnapThresholdPx) / dayWpx).toInt()
         dragDx < 0f -> ((dragDx - daySnapThresholdPx) / dayWpx).toInt()
@@ -1228,8 +1267,8 @@ private fun TimelineItemBox(
     val moveEnd = moveRange.end
 
     // ---------------- Resize state ----------------
-    var topDy by remember(item.scheduleId) { mutableStateOf(0f) }
-    var bottomDy by remember(item.scheduleId) { mutableStateOf(0f) }
+    var topDy by remember(item.scheduleId) { mutableFloatStateOf(0f) }
+    var bottomDy by remember(item.scheduleId) { mutableFloatStateOf(0f) }
 
     val topDeltaMin = ((topDy / hourHpx) * 60f).roundToInt()
     val bottomDeltaMin = ((bottomDy / hourHpx) * 60f).roundToInt()
@@ -1275,19 +1314,22 @@ private fun TimelineItemBox(
     val widthFrac = overlapLayout?.widthFrac ?: 1f
     val offsetFrac = overlapLayout?.offsetFrac ?: 0f
     val z = overlapLayout?.z ?: item.scheduleId.toFloat()
-    val hasShadow = (overlapLayout?.level ?: 0) >= 1
 
     val x = dayWidthDp * displayDayIndex + (baseW * offsetFrac)
     val y = hourHeightDp * (displayStart / 60f)
     val h = hourHeightDp * (((displayEnd - displayStart).coerceAtLeast(minDur)) / 60f)
 
     val taskH = h.coerceAtLeast(24.dp) // ✅ حداقل خیلی کوچک فقط برای قابل لمس بودن/رندر
-    val selectionH = taskH            // ✅ دیگر هیچ حداقل جداگانه برای selected نداریم
-    val extra = 0.dp
-    val dashed = false
+    val selectionH =
+        if (taskH >=76.dp) taskH else 76.dp
+    Log.i("TEST" , "h=$h ")
+    Log.i("TEST" , "taskH=$taskH ")
+    Log.i("TEST" , "selectionH=$selectionH ")
+    Log.i("TEST" , "-------------------")
+
     val containerY = (y + 2.dp)
 
-    val scheduleColor = scheduleModeColor(item.mode).copy(alpha = 0.35f)
+
 
     var lastBroughtDay by remember(item.scheduleId) { mutableIntStateOf(dayIndex0) }
 
@@ -1359,7 +1401,7 @@ private fun TimelineItemBox(
     val focusMin = (item.focusMinutes ?: 25).coerceAtLeast(1)
     val breakMin = (item.shortBreakMinutes ?: 5).coerceAtLeast(0)
 
-// اگر schedule طولش با focus+break یکی نبود، باز هم نسبت رو از همین‌ها می‌گیریم
+    // اگر schedule طولش با focus+break یکی نبود، باز هم نسبت رو از همین‌ها می‌گیریم
     val totalPomo = (focusMin + breakMin).coerceAtLeast(1)
     val focusFrac = (focusMin.toFloat() / totalPomo).coerceIn(0f, 1f)
 
@@ -1371,7 +1413,9 @@ private fun TimelineItemBox(
     val colorForBorder = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
     val allowResize = selected && item.mode != ScheduleMode.POMODORO
     val showTimeHandles = selected || isMoving   // ✅ در حالت move هم نمایش بده
-    val showHandles = (selected || isMoving) && taskH >= 44.dp
+    val showHandles = (selected || isMoving)
+
+
     val resizeStartModifier = if (allowResize) {
         Modifier.pointerInput(item.scheduleId, item.start, item.end) {
             detectVerticalDragGestures(
@@ -1386,7 +1430,9 @@ private fun TimelineItemBox(
                     change.consume()
                     topDy += dragAmount
 
-                    val topDeltaNow = ((topDy / hourHpx) * 60f).roundToInt()
+                    val effectiveTopDy = topDy
+                    val topDeltaNow =
+                        ((effectiveTopDy / hourHpx) * 60f).toInt()
                     val raw = (startMin0 + topDeltaNow)
                         .coerceIn(
                             DAY_MIN,
@@ -1396,7 +1442,7 @@ private fun TimelineItemBox(
                     val desired = snap(raw, snapStep)
                     val clamped = clampRange(desired, endMin0)
 
-                    onAutoScroll(clamped.start, endMin0, AutoScrollMode.RESIZE_START)
+                    onAutoScroll(endMin0,clamped.start,  AutoScrollMode.RESIZE_START)
                 },
                 onDragEnd = {
                     val topDeltaMin2 = ((topDy / hourHpx) * 60f).roundToInt()
@@ -1426,6 +1472,8 @@ private fun TimelineItemBox(
     } else {
         Modifier
     }
+
+
     val resizeEndModifier = if (allowResize) {
         Modifier.pointerInput(item.scheduleId, item.start, item.end) {
             detectVerticalDragGestures(
@@ -1455,6 +1503,12 @@ private fun TimelineItemBox(
 
                     onAutoScroll(startMin0, clamped.end, AutoScrollMode.RESIZE_END)
 
+//                    Log.i("TEST" , "bottomDy=$bottomDy ")
+//                    Log.i("TEST" , "bottomDeltaNow=$bottomDeltaNow ")
+//                    Log.i("TEST" , "raw=$raw ")
+//                    Log.i("TEST" , "desired=$desired ")
+//                    Log.i("TEST" , "clamped=$clamped ")
+//                    Log.i("TEST" , "------------------- ")
                 },
                 onDragEnd = {
                     val effectiveBottomDy2 = bottomDy
@@ -1488,11 +1542,24 @@ private fun TimelineItemBox(
     } else {
         Modifier
     }
+
+
+
     val showHeader = taskH >= 56.dp   // ✅ این عدد را به سلیقه‌ات تنظیم کن
 
     val isVirtual = item.scheduleId < 0
 
-    //  Box اصلی
+    val scheduleColor =if (isVirtual) {
+        scheduleModeColor(item.mode).copy(alpha = 0.15f)
+    }else{
+        scheduleModeColor(item.mode).copy(alpha = 0.35f)
+    }
+
+    val dashed = taskH <= 76.dp && selected
+
+
+
+
     Box(
         modifier = Modifier
             .offset(x = x + 6.dp, y = containerY)
@@ -1517,6 +1584,7 @@ private fun TimelineItemBox(
 
     ) {
 
+        //آیکون وضعیت بالا راست
         if (isVirtual) {
             Box(
                 modifier = Modifier
@@ -1531,6 +1599,26 @@ private fun TimelineItemBox(
             ) {
                 Icon(
                     imageVector = Icons.Default.Link,
+                    contentDescription = "Virtual occurrence",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        }
+        else if (item.repeating){
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 6.dp, end = 6.dp)
+                    .size(22.dp)
+                    .background(
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                        shape = CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Repeat,
                     contentDescription = "Virtual occurrence",
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(24.dp)
@@ -1594,7 +1682,9 @@ private fun TimelineItemBox(
                             .align(Alignment.BottomStart)
                     )
                 }
-            } else {
+            }
+            //(is time range)
+            else {
                 // ✅ حالت عادی همان رنگ قبلی
                 Box(
                     modifier = Modifier
@@ -1744,10 +1834,10 @@ private fun TimelineItemBox(
                     onClick = { menuExpanded = true },
                     modifier = Modifier
                         .size(34.dp)
-                        .background(
-                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
-                            shape = CircleShape
-                        )
+//                        .background(
+//                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+//                            shape = CircleShape
+//                        )
                 ) {
                     Icon(
                         imageVector = Icons.Filled.MoreVert,
@@ -1765,7 +1855,7 @@ private fun TimelineItemBox(
                         DropdownMenuItem(
                             text = { Text("تبدیل به زمان‌بندی مستقل") },
                             leadingIcon = {
-                                Icon(Icons.Default.Link, contentDescription = null)
+                                Icon(Icons.Default.LinkOff, contentDescription = null)
                                 // اگر آیکون بهتری داشتی: LinkOff / CallSplit
                             },
                             onClick = {
