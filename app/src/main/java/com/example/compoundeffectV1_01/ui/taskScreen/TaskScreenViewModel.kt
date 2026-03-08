@@ -165,7 +165,6 @@ class TaskScreenViewModel @Inject constructor(
         )
 
 
-
     private val _draft = MutableStateFlow(CategoryDraft())
     val draft = _draft.asStateFlow()
 
@@ -185,9 +184,6 @@ class TaskScreenViewModel @Inject constructor(
     val taskDraft = _taskDraft.asStateFlow()
 
 
-
-
-
     private val _editingTaskId = MutableStateFlow<Int?>(null)
     val editingTaskId = _editingTaskId.asStateFlow()
 
@@ -195,7 +191,6 @@ class TaskScreenViewModel @Inject constructor(
     val scheduleDraft = _scheduleDraft.asStateFlow()
 
     private val _scheduleConfirmedForNewTask = MutableStateFlow(false)
-
 
 
     // ✅ شمارش scheduled (دو روش)
@@ -230,7 +225,8 @@ class TaskScreenViewModel @Inject constructor(
 
             val insertionIndex =
                 if (editingId == null) flat.size
-                else flat.indexOfFirst { it.id == editingId }.let { if (it == -1) flat.size else it }
+                else flat.indexOfFirst { it.id == editingId }
+                    .let { if (it == -1) flat.size else it }
 
             val prevId = flat.getOrNull(insertionIndex - 1)?.id
             val prevDepth = if (prevId == null) -1 else depthOfId(prevId)
@@ -247,7 +243,6 @@ class TaskScreenViewModel @Inject constructor(
                 maxAllowed = allowed.maxOrNull() ?: 0
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ChildLevelUi())
-
 
 
     private val _editingScheduleKey = MutableStateFlow<Int?>(null)
@@ -332,7 +327,7 @@ class TaskScreenViewModel @Inject constructor(
             reminderRepo.observeByScheduleId(schKey).map { list ->
                 list.map { e ->
                     TaskReminderUi(
-                        key = e.id,          // Int
+                        key = e.id ?: 0,          // Int
                         entity = e,
                         isPending = false
                     )
@@ -341,21 +336,24 @@ class TaskScreenViewModel @Inject constructor(
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
 
-
-
-
     init {
-        val categoryId = savedStateHandle.get<Int>(com.example.compoundeffectV1_01.ui.navigation.AppRoutes.ARG_CATEGORY_ID) ?: -1
-        val taskId = savedStateHandle.get<Int>(com.example.compoundeffectV1_01.ui.navigation.AppRoutes.ARG_TASK_ID) ?: -1
+        val categoryId =
+            savedStateHandle.get<Int>(com.example.compoundeffectV1_01.ui.navigation.AppRoutes.ARG_CATEGORY_ID)
+                ?: -1
+        val taskId =
+            savedStateHandle.get<Int>(com.example.compoundeffectV1_01.ui.navigation.AppRoutes.ARG_TASK_ID)
+                ?: -1
 
         when {
             taskId != -1 -> {
                 startEditTask(taskId)
             }
+
             categoryId != -1 -> {
                 _menuCategoryId.value = categoryId
                 startAddTask(categoryId)
             }
+
             else -> {
                 // fallback: چیزی پاس داده نشده
             }
@@ -363,16 +361,11 @@ class TaskScreenViewModel @Inject constructor(
     }
 
 
-
-
-
     //کتگوری ها
 
     fun setTaskCategoryId(categoryId: Int) {
         _taskDraft.update { it.copy(categoryId = categoryId) }
     }
-
-
 
 
     //تسک ها
@@ -383,6 +376,7 @@ class TaskScreenViewModel @Inject constructor(
         _scheduleConfirmedForNewTask.value = false
         _pendingSchedulesForNewTask.value = emptyList()
     }
+
     private fun startEditTask(taskId: Int) {
         viewModelScope.launch {
             val t = taskRepo.getTaskById(taskId) ?: return@launch
@@ -413,6 +407,7 @@ class TaskScreenViewModel @Inject constructor(
 
         }
     }
+
     fun setTaskName(v: String) = _taskDraft.update { it.copy(name = v) }
     fun setTaskPriority(p: Int) = _taskDraft.update { it.copy(priority = p) }
     fun setTaskCompleted(v: Boolean) = _taskDraft.update { it.copy(isCompleted = v) }
@@ -434,6 +429,7 @@ class TaskScreenViewModel @Inject constructor(
             )
         }
     }
+
     fun setTaskPomodoroTargetUnits(v: Int?) = _taskDraft.update { cur ->
         val target = v?.coerceAtLeast(0)
         val done = cur.pomodoroDoneUnits.coerceAtLeast(0)
@@ -442,11 +438,13 @@ class TaskScreenViewModel @Inject constructor(
             pomodoroDoneUnits = if (target != null) done.coerceAtMost(target) else done
         )
     }
+
     fun setTaskPomodoroDoneUnits(v: Int) = _taskDraft.update { cur ->
         val done = v.coerceAtLeast(0)
         val target = cur.pomodoroTargetUnits
         cur.copy(pomodoroDoneUnits = if (target != null) done.coerceAtMost(target) else done)
     }
+
     fun resetTaskDraftKeepSomeDefaults() {
         val cur = _taskDraft.value
         _taskDraft.value = TaskDraft(
@@ -464,6 +462,7 @@ class TaskScreenViewModel @Inject constructor(
         _scheduleDraft.value = ScheduleDraft()
         _scheduleConfirmedForNewTask.value = false
     }
+
     fun createTaskForCategory(categoryColor: String) {
         val d = _taskDraft.value
         if (d.name.isBlank()) return
@@ -527,7 +526,6 @@ class TaskScreenViewModel @Inject constructor(
             }
 
 
-
             val pendingSchedules = _pendingSchedulesForNewTask.value
             val pendingRemindersMap = _pendingRemindersByScheduleKey.value
 
@@ -546,7 +544,8 @@ class TaskScreenViewModel @Inject constructor(
                             )
                             try {
                                 reminderScheduler.reschedule(rid)   // ✅ این خط حیاتی است
-                            } catch (_: Throwable) {}
+                            } catch (_: Throwable) {
+                            }
                         }
                     }
                 }
@@ -599,6 +598,7 @@ class TaskScreenViewModel @Inject constructor(
             }
         }
     }
+
     fun saveEditedTask(categoryColor: String) {
         val taskId = _editingTaskId.value ?: return
         val d = _taskDraft.value
@@ -614,13 +614,15 @@ class TaskScreenViewModel @Inject constructor(
 
             val (finalParentId, finalSiblingIndex) =
                 if (categoryChanged) {
-                    val allNew = withContext(Dispatchers.IO) { taskRepo.getTasksByCategory(newCategoryId) }
+                    val allNew =
+                        withContext(Dispatchers.IO) { taskRepo.getTasksByCategory(newCategoryId) }
                     val rootSiblings = allNew.filter { it.parentTaskId == ROOT }
                     ROOT to rootSiblings.size
 
                 } else {
                     val categoryId = current.categoryId ?: return@launch
-                    val all = withContext(Dispatchers.IO) { taskRepo.getTasksByCategory(categoryId) }
+                    val all =
+                        withContext(Dispatchers.IO) { taskRepo.getTasksByCategory(categoryId) }
                     val parentById = buildParentById(all)
                     val curDepth = current.id?.let { depthOf(it, parentById) } ?: 0
 
@@ -631,10 +633,10 @@ class TaskScreenViewModel @Inject constructor(
                     val flat = flattenAllTasks(miniAll)
 
                     // محل درج برای edit: قبل از خود آیتم
-                    val insertionIndex = flat.indexOfFirst { it.id == taskId }.let { if (it == -1) flat.size else it }
+                    val insertionIndex = flat.indexOfFirst { it.id == taskId }
+                        .let { if (it == -1) flat.size else it }
 
                     val desiredDepth = d.childLevel.coerceIn(0, 3)
-
 
 
                     val newParent = pickParentIdForDesiredDepth(
@@ -676,6 +678,7 @@ class TaskScreenViewModel @Inject constructor(
             finishEditTask()
         }
     }
+
     private fun flattenTaskTreeWithLevelsAndVisibility(
         all: List<TaskMiniUi>,
         collapsedIds: Set<Int>,
@@ -718,13 +721,6 @@ class TaskScreenViewModel @Inject constructor(
     }
 
 
-
-
-
-
-
-
-
     //اسچدول ها
     fun setScheduleTitle(v: String) = _scheduleDraft.update { it.copy(title = v) }
     fun setScheduleMode(m: ScheduleMode) = _scheduleDraft.update { cur ->
@@ -738,9 +734,12 @@ class TaskScreenViewModel @Inject constructor(
             )
         }
     }
+
     fun setScheduleStart(t: LocalTime) = _scheduleDraft.update { it.copy(start = t) }
     fun setScheduleEnd(t: LocalTime) = _scheduleDraft.update { it.copy(end = t) }
-    fun setScheduleDuration(min: Int) = _scheduleDraft.update { it.copy(durationMinutes = min.coerceAtLeast(0)) }
+    fun setScheduleDuration(min: Int) =
+        _scheduleDraft.update { it.copy(durationMinutes = min.coerceAtLeast(0)) }
+
     fun confirmScheduleFromDialog() {
         val sd = _scheduleDraft.value
         fun LocalTime.toMinuteOfDay() = hour * 60 + minute
@@ -820,8 +819,12 @@ class TaskScreenViewModel @Inject constructor(
                     val reminders = _pendingRemindersForScheduleDraft.value
                     if (reminders.isNotEmpty()) {
                         reminders.forEach { ui ->
-                            val rid = reminderRepo.upsert(ui.entity.copy(id = 0, scheduleId = scheduleId))
-                            try { reminderScheduler.reschedule(rid) } catch (_: Throwable) {}
+                            val rid =
+                                reminderRepo.upsert(ui.entity.copy(id = 0, scheduleId = scheduleId))
+                            try {
+                                reminderScheduler.reschedule(rid)
+                            } catch (_: Throwable) {
+                            }
                         }
                     }
                 }
@@ -839,6 +842,7 @@ class TaskScreenViewModel @Inject constructor(
 
         }
     }
+
     private fun TaskSchedule.toDraft(): ScheduleDraft {
         fun minuteToLocalTime(min: Int) = LocalTime.of(min / 60, min % 60)
 
@@ -853,6 +857,12 @@ class TaskScreenViewModel @Inject constructor(
             end = endMinuteOfDay?.let(::minuteToLocalTime) ?: LocalTime.of(21, 0),
             durationMinutes = durationMinutes ?: 0,
 
+            focusMinutes =focusMinutes ?: 25,
+            shortBreakMinutes =shortBreakMinutes ?: 5,
+            longBreakMinutes =longBreakMinutes ?: 15,
+            longBreakEvery =longBreakEvery ?: 4,
+            pomodoroUnitsPerDay =pomodoroUnitsPerDay ?: 5,
+
             repeat = RepeatDraft(
                 enabled = enabled,
                 interval = (repeatInterval ?: 1).coerceIn(1, 99),
@@ -861,6 +871,7 @@ class TaskScreenViewModel @Inject constructor(
             )
         )
     }
+
     fun startEditScheduleByKey(key: Int) {
         viewModelScope.launch {
             _editingScheduleKey.value = key
@@ -887,10 +898,12 @@ class TaskScreenViewModel @Inject constructor(
             // ✅ اگر task pending و این schedule هیچ reminder نداشت، چیزی لازم نیست
         }
     }
+
     fun finishEditSchedule() {
         _editingScheduleKey.value = null
         _scheduleDraft.value = ScheduleDraft()
     }
+
     fun deleteScheduleByKey(key: Int) {
         val tid = _editingTaskId.value
         if (tid == null) {
@@ -901,17 +914,25 @@ class TaskScreenViewModel @Inject constructor(
             viewModelScope.launch(Dispatchers.IO) {
                 val target = schedulesUiForTaskDialog.value.firstOrNull { it.key == key }?.schedule
                 if (target?.id != null) {
+                    val childScheduleList = scheduleRepo.getAllScheduleByPomodoroParentId(target.id)
+
+                    childScheduleList.forEach { sch ->
+                        sch.id?.let { scheduleRepo.deleteById(it) }
+                    }
+
                     val reminders = reminderRepo.getByScheduleId(target.id)
                     reminders.forEach { rUi ->
                         try {
                             reminderScheduler.cancel(rUi.id)   // ✅ این خط حیاتی است
-                        } catch (_: Throwable) {}
+                        } catch (_: Throwable) {
+                        }
                     }
                     scheduleRepo.delete(target)
                 }
             }
         }
     }
+
     fun startAddSchedule() {
         _editingScheduleKey.value = null      // یعنی Add schedule (نه edit)
         val base = defaultScheduleDraftNow()
@@ -932,7 +953,7 @@ class TaskScreenViewModel @Inject constructor(
                     shortBreakMinutes = 5,
                     longBreakMinutes = 15,
                     longBreakEvery = 4,
-                    pomodoroUnitsPerDay = 1,
+                    pomodoroUnitsPerDay = 5,
                     durationMinutes = 30 // صرفاً برای سازگاری/نمایش؛ بعداً می‌تونه حذف شه
                 )
             } else {
@@ -943,15 +964,18 @@ class TaskScreenViewModel @Inject constructor(
         _activeScheduleKeyForReminder.value = null
         _pendingRemindersForScheduleDraft.value = emptyList()
     }
+
     fun setScheduleDate(d: LocalDate) = _scheduleDraft.update { it.copy(date = d) }
     fun setRepeatEnabled(v: Boolean) {
         _scheduleDraft.update { it.copy(repeat = it.repeat.copy(enabled = v)) }
     }
+
     fun setRepeatInterval(n: Int) {
         _scheduleDraft.update {
             it.copy(repeat = it.repeat.copy(interval = n.coerceIn(1, 99)))
         }
     }
+
     fun setRepeatUnit(u: RepeatUnit) {
         _scheduleDraft.update { d ->
             val r = d.repeat
@@ -964,19 +988,35 @@ class TaskScreenViewModel @Inject constructor(
             d.copy(repeat = r.copy(unit = u, weekdaysMask = newMask))
         }
     }
+
     fun setRepeatWeekdaysMask(mask: Int) {
-        _scheduleDraft.update { it.copy(repeat = it.repeat.copy(weekdaysMask = mask.coerceIn(0, 127))) }
+        _scheduleDraft.update {
+            it.copy(
+                repeat = it.repeat.copy(
+                    weekdaysMask = mask.coerceIn(
+                        0,
+                        127
+                    )
+                )
+            )
+        }
     }
+
     fun setScheduleFocusMinutes(v: Int) =
         _scheduleDraft.update { it.copy(focusMinutes = v.coerceIn(1, 240)) }
+
     fun setScheduleShortBreakMinutes(v: Int) =
         _scheduleDraft.update { it.copy(shortBreakMinutes = v.coerceIn(0, 60)) }
+
     fun setScheduleLongBreakMinutes(v: Int) =
         _scheduleDraft.update { it.copy(longBreakMinutes = v.coerceIn(0, 120)) }
+
     fun setScheduleLongBreakEvery(v: Int) =
         _scheduleDraft.update { it.copy(longBreakEvery = v.coerceIn(2, 12)) }
+
     fun setSchedulePomodoroUnitsPerDay(v: Int) =
         _scheduleDraft.update { it.copy(pomodoroUnitsPerDay = v.coerceIn(1, 20)) }
+
     private fun todayBitIndex(): Int {
         // اگر خواستی دقیق با تقویم خودت تنظیم می‌کنیم؛
         // فعلاً یک نگاشت ساده:
@@ -993,24 +1033,28 @@ class TaskScreenViewModel @Inject constructor(
     }
 
 
-
     //reminder
     fun setReminderMode(m: ReminderMode) = _reminderDraft.update { it.copy(mode = m) }
     fun setReminderTitle(s: String) = _reminderDraft.update { it.copy(title = s) }
-    fun setReminderOffsetDays(v: Int)= _reminderDraft.update { it.copy(offsetDays = v) }
-    fun setReminderOffsetHours(v: Int)= _reminderDraft.update { it.copy(offsetHours = v) }
-    fun setReminderOffsetMinutes(v: Int)= _reminderDraft.update { it.copy(offsetMinutes = v) }
-    fun setReminderBeforeAfter(v: BeforeAfter)= _reminderDraft.update { it.copy(beforeAfter = v) }
-    fun setReminderAnchor(v: StartEnd)= _reminderDraft.update { it.copy(anchor = v) }
-    fun setReminderFixedTime(t: LocalTime)= _reminderDraft.update { it.copy(fixedTime = t) }
-    fun setReminderStrength(v: ReminderStrengthMode)= _reminderDraft.update { it.copy(strength = v) }
-    fun setReminderVibrate(v: Boolean)= _reminderDraft.update { it.copy(vibrate = v) }
-    fun setReminderAlarmSoundUri(v: String?)= _reminderDraft.update { it.copy(alarmSoundUri = v) }
-    fun setReminderCaptchaEnabled(v: Boolean)= _reminderDraft.update { it.copy(captchaEnabled = v) }
+    fun setReminderOffsetDays(v: Int) = _reminderDraft.update { it.copy(offsetDays = v) }
+    fun setReminderOffsetHours(v: Int) = _reminderDraft.update { it.copy(offsetHours = v) }
+    fun setReminderOffsetMinutes(v: Int) = _reminderDraft.update { it.copy(offsetMinutes = v) }
+    fun setReminderBeforeAfter(v: BeforeAfter) = _reminderDraft.update { it.copy(beforeAfter = v) }
+    fun setReminderAnchor(v: StartEnd) = _reminderDraft.update { it.copy(anchor = v) }
+    fun setReminderFixedTime(t: LocalTime) = _reminderDraft.update { it.copy(fixedTime = t) }
+    fun setReminderStrength(v: ReminderStrengthMode) =
+        _reminderDraft.update { it.copy(strength = v) }
+
+    fun setReminderVibrate(v: Boolean) = _reminderDraft.update { it.copy(vibrate = v) }
+    fun setReminderAlarmSoundUri(v: String?) = _reminderDraft.update { it.copy(alarmSoundUri = v) }
+    fun setReminderCaptchaEnabled(v: Boolean) =
+        _reminderDraft.update { it.copy(captchaEnabled = v) }
+
     fun startAddReminder() {
         _editingReminderKey.value = null
         _reminderDraft.value = ReminderDraft() // یا defaultReminderDraft()
     }
+
     fun startEditReminderByKey(key: Int) {
         viewModelScope.launch {
             _editingReminderKey.value = key
@@ -1034,6 +1078,7 @@ class TaskScreenViewModel @Inject constructor(
             _reminderDraft.value = entity.toDraft() // پایین helper می‌دیم
         }
     }
+
     fun confirmReminderFromDialog() {
         val tid = _editingTaskId.value
         val schKey = _editingScheduleKey.value
@@ -1100,6 +1145,7 @@ class TaskScreenViewModel @Inject constructor(
         return
 
     }
+
     fun deleteReminderByKey(key: Int) {
         val tid = _editingTaskId.value
         val schKey = _editingScheduleKey.value
@@ -1125,17 +1171,19 @@ class TaskScreenViewModel @Inject constructor(
             reminderScheduler.cancel(key)
         }
     }
+
     fun finishEditReminder() {
         _editingReminderKey.value = null
         _reminderDraft.value = ReminderDraft()
     }
+
     private fun TaskReminderEntity.toDraft(): ReminderDraft {
         val fixed = fixedMinuteOfDay?.let(::minuteOfDayToLocalTime) ?: LocalTime.of(11, 0)
 
 
         return ReminderDraft(
             mode = mode,
-            title = title ?:"",
+            title = title ?: "",
 
             // Allocated
             offsetDays = offsetDays.coerceIn(0, 999),
@@ -1158,6 +1206,7 @@ class TaskScreenViewModel @Inject constructor(
             captchaEnabled = captchaEnabled
         )
     }
+
     private fun ReminderDraft.toEntity(
         id: Int,
         scheduleId: Int
@@ -1236,11 +1285,10 @@ class TaskScreenViewModel @Inject constructor(
     }
 
 
-
-
-
-
-    private fun buildTaskMiniAll(tasks: List<Task>, schedules: Map<Int, Boolean> = emptyMap()): List<TaskMiniUi> =
+    private fun buildTaskMiniAll(
+        tasks: List<Task>,
+        schedules: Map<Int, Boolean> = emptyMap()
+    ): List<TaskMiniUi> =
         tasks.mapNotNull { t ->
             val id = t.id ?: return@mapNotNull null
             TaskMiniUi(
@@ -1300,7 +1348,6 @@ class TaskScreenViewModel @Inject constructor(
         val parent = before.lastOrNull { depthOfLocal(it.id) == parentDepth } ?: return null
         return parent.id
     }
-
 
 
     private fun buildParentById(tasks: List<Task>): Map<Int, Int> =
@@ -1459,7 +1506,7 @@ class TaskScreenViewModel @Inject constructor(
                 enabled = false,
                 interval = 1,
                 unit = RepeatUnit.DAY,
-                weekdaysMask = 0
+                weekdaysMask = 127
             )
         )
     }
@@ -1470,8 +1517,6 @@ class TaskScreenViewModel @Inject constructor(
         val safe = min.coerceIn(0, 23 * 60 + 59)
         return LocalTime.of(safe / 60, safe % 60)
     }
-
-
 
 
 }

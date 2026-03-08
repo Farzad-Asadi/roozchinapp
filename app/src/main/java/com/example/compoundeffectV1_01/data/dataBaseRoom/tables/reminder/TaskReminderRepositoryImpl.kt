@@ -12,10 +12,8 @@ class TaskReminderRepositoryImpl @Inject constructor(
    override suspend fun getById(id: Int) = dao.getById(id)
 
    override suspend fun upsert(entity: TaskReminderEntity): Int {
-        // Room @Insert برمی‌گردونه Long (rowId). برای INSERT جدید مفیده.
-        // برای UPDATE همون id قبلی معمولاً معتبره.
-        val rowId = dao.upsert(entity)
-        return if (entity.id != 0) entity.id else rowId.toInt()
+
+        return dao.upsert(entity).toInt()
     }
 
    override suspend fun upsertAll(list: List<TaskReminderEntity>) = dao.upsertAll(list)

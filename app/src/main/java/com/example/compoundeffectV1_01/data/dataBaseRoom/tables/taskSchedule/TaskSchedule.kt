@@ -1,15 +1,10 @@
 package com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule
 
-import androidx.room.Embedded
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
-import androidx.room.Relation
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.Task
-import java.time.LocalDate
-import java.time.LocalTime
-
 
 
 @Entity(
@@ -46,6 +41,7 @@ data class TaskSchedule(
     val longBreakEvery: Int? = null,
     val isLongBreak: Boolean = false,
     val pomodoroUnitsPerDay: Int? = null,
+    val pomodoroParentId: Int? = null,
 
 
     // common
@@ -68,7 +64,7 @@ data class TaskSchedule(
 
 
 
-enum class ScheduleMode { TIME_RANGE, AMOUNT_OF_TIME, POMODORO  }
+enum class ScheduleMode { TIME_RANGE, AMOUNT_OF_TIME, POMODORO }
 enum class RepeatUnit { DAY, WEEK, MONTH, YEAR }
 
 

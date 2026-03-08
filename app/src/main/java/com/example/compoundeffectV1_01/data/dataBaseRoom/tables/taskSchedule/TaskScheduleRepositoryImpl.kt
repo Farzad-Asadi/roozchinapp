@@ -127,6 +127,9 @@ class TaskScheduleRepositoryImpl @Inject constructor(
         dao.updateJustTimeRange(scheduleId, date.toEpochDay(), startMin, endMin)
     }
 
+    override suspend fun getAllScheduleByPomodoroParentId(pomodoroParentId : Int) : List<TaskSchedule> =
+        dao.getAllScheduleByPomodoroParentId(pomodoroParentId)
+
     /** آیا این Rule در این تاریخ فعال است؟ */
     private fun isRuleActiveOnDate(rule: TaskSchedule, date: LocalDate): Boolean {
         if (!rule.repeating) return false

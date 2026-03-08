@@ -103,7 +103,7 @@ data class ScheduleDraft(
     val shortBreakMinutes: Int = 5,
     val longBreakMinutes: Int = 15,
     val longBreakEvery: Int = 4,
-    val pomodoroUnitsPerDay: Int = 1,
+    val pomodoroUnitsPerDay: Int = 5,
 
     val note: String = "",
 
@@ -115,7 +115,7 @@ data class RepeatDraft(
     val enabled: Boolean = false,
     val interval: Int = 1,
     val unit: RepeatUnit = RepeatUnit.DAY,
-    val weekdaysMask: Int = 0
+    val weekdaysMask: Int = 127
 )
 
 data class ReminderDraft(

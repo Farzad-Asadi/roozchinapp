@@ -23,7 +23,6 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
-import java.time.ZonedDateTime
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
@@ -42,13 +41,15 @@ class ReminderScheduler @Inject constructor(
 
 
     //ایجاد زمانبندی
-    suspend fun reschedule(reminderId: Int) {
+    suspend fun reschedule(reminderId: Int?) {
+        if (reminderId == null) return
 
         //خواندن از دیتابیس
         val reminder = reminderRepo.getById(reminderId) ?: return
         val schedule = scheduleRepo.getById(reminder.scheduleId) ?: return
 
-
+        Log.i("TEST1","reminder=${reminder.id}")
+        Log.i("TEST1","schedule=${schedule.id}")
 
         // زمان اجرای نهایی را حساب کن
         // زمان الان
@@ -96,7 +97,9 @@ class ReminderScheduler @Inject constructor(
 
 
     //کنسل کردن کار در صف کار
-    fun cancel(reminderId: Int) {
+    fun cancel(reminderId: Int?) {
+        if (reminderId == null) return
+
         wm.cancelUniqueWork(workName(reminderId))
     }
 
@@ -222,6 +225,7 @@ private fun computeNextTriggerAtMillis(
                 if (schedule.inPallet) return null
                 Occurrence(start, end)
             }
+
         }
     }
 

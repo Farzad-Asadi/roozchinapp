@@ -19,7 +19,7 @@ import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.Tas
     indices = [Index("scheduleId")]
 )
 data class TaskReminderEntity(
-    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    @PrimaryKey(autoGenerate = true) val id: Int? = 0,
     val scheduleId: Int,
     val title: String? = null,
 

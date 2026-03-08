@@ -39,4 +39,6 @@ interface TaskScheduleRepository {
 
     suspend fun updatePomodoroTimeRange(scheduleId: Int, date: LocalDate, startMin: Int, endMin: Int)
 
+    suspend fun getAllScheduleByPomodoroParentId(pomodoroParentId : Int) : List<TaskSchedule>
+
 }

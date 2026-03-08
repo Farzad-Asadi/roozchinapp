@@ -1,11 +1,9 @@
 package com.example.compoundeffectV1_01.utils
 
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.TrendingDown
 import androidx.compose.material.icons.filled.Abc
 import androidx.compose.material.icons.filled.AcUnit
 import androidx.compose.material.icons.filled.AccessAlarm
-import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Accessibility
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.AccountBalanceWallet
@@ -88,10 +86,7 @@ import androidx.compose.material.icons.filled.Outlet
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.QuestionMark
-import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Restaurant
-import androidx.compose.material.icons.filled.Route
-import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material.icons.filled.ShoppingCart
@@ -105,7 +100,6 @@ import androidx.compose.material.icons.filled.TableBar
 import androidx.compose.material.icons.filled.Thermostat
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.Timer
-import androidx.compose.material.icons.filled.TrendingDown
 import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material.icons.filled.Vaccines
 import androidx.compose.material.icons.filled.Villa

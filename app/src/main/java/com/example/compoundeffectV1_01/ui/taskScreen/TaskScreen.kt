@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
@@ -885,6 +886,7 @@ private fun AddEditeScheduleDialog(
                 }
             }
 
+            Log.i("TEST2","draft.repeat.weekdaysMask=${draft.repeat.weekdaysMask}")
 
             //WeeklyPicker for Mode.POMODORO
             if (draft.mode == ScheduleMode.POMODORO) {

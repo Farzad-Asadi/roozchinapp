@@ -2,7 +2,6 @@ package com.example.compoundeffectV1_01.ui.scheduleScreen
 
 import android.util.Log
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -68,7 +67,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -215,7 +213,7 @@ fun ScheduleScreen(
 
 
     // ✅ rule های پومودورو (برای expectedToday و config)
-    val pomodoroRulesToday = remember(allItems) {
+    val pomodoroPARENTRulesToday = remember(allItems) {
         allItems.filter { it.mode == ScheduleMode.POMODORO && it.repeating }
             .filter { ruleIsActiveToday(it, today) } // تابع پایین رو اضافه می‌کنیم
     }
@@ -227,8 +225,8 @@ fun ScheduleScreen(
     }
 
     // ✅ کارت‌های تجمیعی پالت
-    val pomodoroPalletCards = remember(pomodoroRulesToday, todayTimelinePomodoros) {
-        pomodoroRulesToday
+    val pomodoroPalletCards = remember(pomodoroPARENTRulesToday, todayTimelinePomodoros) {
+        pomodoroPARENTRulesToday
             .groupBy { it.taskId }
             .mapNotNull { (taskId, rules) ->
                 val any = rules.first()
@@ -241,6 +239,7 @@ fun ScheduleScreen(
 
                 PomodoroPalletCardItem(
                     taskId = taskId,
+                    scheduleId =any.scheduleId ,
                     taskName = any.title,
 
                     totalTarget = any.pomodoroTargetUnits ?: 0,
@@ -986,7 +985,7 @@ fun ScheduleScreen(
                     dragX += dx
                     dragY += dy
                 },
-                onDragEnd = {
+                onDragEnd = { scheduleId ->
                     val localX = dragX - gridOriginInWindow.x
                     val localY = dragY - gridOriginInWindow.y
 
@@ -1026,6 +1025,7 @@ fun ScheduleScreen(
                             val id = withContext(Dispatchers.IO) {
                                 viewModel.insertOnePomodoroTimelineItem(
                                     taskId = pomo.taskId,
+                                    scheduleId = scheduleId,
                                     date = date,
                                     startMin = startMin,
                                     focus = pomo.focus,
@@ -1035,6 +1035,7 @@ fun ScheduleScreen(
 
                             pomodoroAdjust = PomodoroAdjustState(
                                 taskId = pomo.taskId,
+                                scheduleId = scheduleId,
                                 date = date,
                                 startMin = startMin,
                                 focus = pomo.focus,
@@ -1158,6 +1159,7 @@ fun ScheduleScreen(
                             val newId = withContext(Dispatchers.IO) {
                                 viewModel.insertOnePomodoroTimelineItem(
                                     taskId = st.taskId,
+                                    scheduleId=st.scheduleId,
                                     date = st.date,
                                     startMin = nextStart,
                                     focus = st.focus,
@@ -1170,7 +1172,9 @@ fun ScheduleScreen(
                     onDec = {
                         if (st.ids.size <= 1) return@PomodoroCountStepperOverlay
                         val lastId = st.ids.last()
-                        viewModel.deleteScheduleById(lastId)
+                        if (lastId != null) {
+                            viewModel.deleteScheduleById(lastId)
+                        }
                         pomodoroAdjust = st.copy(ids = st.ids.dropLast(1))
                     },
                     onDismiss = { pomodoroAdjust = null }
@@ -1396,7 +1400,7 @@ private fun TimelineItemBox(
         }
     }
 
-    val isPomodoro = item.mode == ScheduleMode.POMODORO
+    val isPomodoroPARENT = item.mode == ScheduleMode.POMODORO
 
     val focusMin = (item.focusMinutes ?: 25).coerceAtLeast(1)
     val breakMin = (item.shortBreakMinutes ?: 5).coerceAtLeast(0)
@@ -1660,7 +1664,7 @@ private fun TimelineItemBox(
                 .clip(MaterialTheme.shapes.medium) // ✅ مهم: دو رنگ داخل شکل کلیپ شوند
         ) {
 
-            if (isPomodoro) {
+            if (isPomodoroPARENT) {
                 // ✅ دو رنگ: بالا فوکوس، پایین استراحت
                 Box(Modifier.fillMaxSize()) {
 
@@ -1968,7 +1972,7 @@ private fun RightPallet(
     onDragStart: (ScheduleScreenItem, Float, Float, Float, Float) -> Unit,
     onPomodoroDragStart: (PomodoroPalletCardItem, Float, Float, Float, Float) -> Unit,
     onDrag: (dx: Float, dy: Float) -> Unit,
-    onDragEnd: () -> Unit,
+    onDragEnd: (scheduleId: Int) -> Unit,
     onDragCancel: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -2020,7 +2024,7 @@ private fun RightPallet(
                                 item = c,
                                 onDragStart = onPomodoroDragStart,
                                 onDrag = onDrag,
-                                onDragEnd = onDragEnd,
+                                onDragEnd = { onDragEnd(c.scheduleId) },
                                 onDragCancel = onDragCancel
                             )
                             HorizontalDivider(thickness = 0.5.dp)
@@ -2030,7 +2034,7 @@ private fun RightPallet(
                                 item = t,
                                 onDragStart = onDragStart,
                                 onDrag = onDrag,
-                                onDragEnd = onDragEnd,
+                                onDragEnd = { onDragEnd(t.scheduleId) },
                                 onDragCancel = onDragCancel
                             )
                             HorizontalDivider(thickness = 0.5.dp)

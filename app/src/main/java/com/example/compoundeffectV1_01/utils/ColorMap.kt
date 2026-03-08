@@ -1,15 +1,6 @@
 package com.example.compoundeffectV1_01.utils
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Anchor
-import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.PushPin
-import androidx.compose.material.icons.filled.Timeline
-import androidx.compose.material.icons.filled.Timer
-import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
-import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.ReminderMode
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.ScheduleMode
 
 

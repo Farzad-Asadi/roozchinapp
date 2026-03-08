@@ -217,5 +217,7 @@ WHERE id = :scheduleId
     )
 
 
+    @Query("SELECT * FROM task_schedule WHERE pomodoroParentId = :pomodoroParentId")
+    suspend fun getAllScheduleByPomodoroParentId(pomodoroParentId : Int) : List<TaskSchedule>
 
 }

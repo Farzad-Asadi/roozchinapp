@@ -1,6 +1,7 @@
 package com.example.compoundeffectV1_01.ui.scheduleScreen
 
 
+import android.util.Log
 import androidx.compose.ui.geometry.Offset
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -86,118 +87,8 @@ class ScheduleScreenViewModel @Inject constructor(
 
 
 
+    //common
 
-
-
-
-
-
-
-
-    fun moveSchedule(scheduleId: Int, newDate: LocalDate, newStart: Int, newEnd: Int) {
-        viewModelScope.launch(Dispatchers.IO) {
-            taskScheduleRepo.updateTimeRange(scheduleId, newDate, newStart, newEnd)
-
-
-            val reminders = reminderRepo.getByScheduleId(scheduleId)
-            reminders.forEach { rUi ->
-                try {
-                    reminderScheduler.reschedule(rUi.id)   // ✅ این خط حیاتی است
-                } catch (_: Throwable) {}
-            }
-
-        }
-
-    }
-
-    fun resizeScheduleEnd(scheduleId: Int, newEnd: Int) {
-        viewModelScope.launch(Dispatchers.IO) {
-            taskScheduleRepo.updateEndMinute(scheduleId, newEnd)
-
-            val reminders = reminderRepo.getByScheduleId(scheduleId)
-            reminders.forEach { rUi ->
-                try {
-                    reminderScheduler.reschedule(rUi.id)   // ✅ این خط حیاتی است
-                } catch (_: Throwable) {}
-            }
-        }
-    }
-
-    fun resizeScheduleStart(scheduleId: Int, newStart: Int) {
-        viewModelScope.launch(Dispatchers.IO) {
-            taskScheduleRepo.updateStartMinute(scheduleId, newStart)
-
-            val reminders = reminderRepo.getByScheduleId(scheduleId)
-            reminders.forEach { rUi ->
-                try {
-                    reminderScheduler.reschedule(rUi.id)   // ✅ این خط حیاتی است
-                } catch (_: Throwable) {}
-            }
-        }
-    }
-
-    fun moveScheduleFromTimeLineToPallet(scheduleId: Int) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val reminders = reminderRepo.getByScheduleId(scheduleId)
-            reminders.forEach { rUi ->
-                try {
-                    reminderScheduler.cancel(rUi.id)   // ✅ این خط حیاتی است
-                } catch (_: Throwable) {}
-            }
-            taskScheduleRepo.setSchedulePalletState(scheduleId, true)
-        }
-    }
-
-    fun dropScheduleFromPalletToTimeLine(
-        scheduleId: Int,
-        date: LocalDate,
-        startMin: Int,
-        endMin: Int
-    ) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val reminders = reminderRepo.getByScheduleId(scheduleId)
-            reminders.forEach { rUi ->
-                try {
-                    reminderScheduler.reschedule(rUi.id)   // ✅ این خط حیاتی است
-                } catch (_: Throwable) {}
-            }
-            taskScheduleRepo.dropFromPalletToTimeline(scheduleId, date, startMin, endMin)
-        }
-    }
-
-    suspend fun insertOnePomodoroTimelineItem(
-        taskId: Int,
-        date: LocalDate,
-        startMin: Int,
-        focus: Int,
-        shortBreak: Int,
-    ): Int {
-        val end = (startMin + focus + shortBreak).coerceAtMost(24 * 60)
-
-        val schedule = TaskSchedule(
-            id = null,
-            taskId = taskId,
-            mode = ScheduleMode.POMODORO,
-            inPallet = false,
-            repeating = false,
-            dateEpochDay = date.toEpochDay(),
-            startMinuteOfDay = startMin,
-            endMinuteOfDay = end,
-            focusMinutes = focus,
-            shortBreakMinutes = shortBreak
-        )
-
-        val scheduleId=taskScheduleRepo.insert(schedule)
-
-        val reminders = reminderRepo.getByScheduleId(scheduleId)
-        reminders.forEach { rUi ->
-            try {
-                reminderScheduler.reschedule(rUi.id)   // ✅ این خط حیاتی است
-            } catch (_: Throwable) {}
-        }
-
-        return scheduleId
-    }
 
     fun deleteScheduleById(scheduleId: Int) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -210,19 +101,6 @@ class ScheduleScreenViewModel @Inject constructor(
             }
         }
     }
-
-    fun movePomodoroSchedule(scheduleId: Int, newDate: LocalDate, newStart: Int, newEnd: Int) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val reminders = reminderRepo.getByScheduleId(scheduleId)
-            reminders.forEach { rUi ->
-                try {
-                    reminderScheduler.reschedule(rUi.id)   // ✅ این خط حیاتی است
-                } catch (_: Throwable) {}
-            }
-            taskScheduleRepo.updatePomodoroTimeRange(scheduleId, newDate, newStart, newEnd)
-        }
-    }
-
     fun materializeVirtual(
         virtual: ScheduleScreenItem,
         newDate: LocalDate,
@@ -255,6 +133,140 @@ class ScheduleScreenViewModel @Inject constructor(
             taskScheduleRepo.insert(entity)
         }
     }
+
+
+
+
+    //only Schedule TIME_RANGE
+
+    fun resizeScheduleEnd(scheduleId: Int, newEnd: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            taskScheduleRepo.updateEndMinute(scheduleId, newEnd)
+
+            val reminders = reminderRepo.getByScheduleId(scheduleId)
+            reminders.forEach { rUi ->
+                try {
+                    reminderScheduler.reschedule(rUi.id)   // ✅ این خط حیاتی است
+                } catch (_: Throwable) {}
+            }
+        }
+    }
+    fun resizeScheduleStart(scheduleId: Int, newStart: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            taskScheduleRepo.updateStartMinute(scheduleId, newStart)
+
+            val reminders = reminderRepo.getByScheduleId(scheduleId)
+            reminders.forEach { rUi ->
+                try {
+                    reminderScheduler.reschedule(rUi.id)   // ✅ این خط حیاتی است
+                } catch (_: Throwable) {}
+            }
+        }
+    }
+    fun moveSchedule(scheduleId: Int, newDate: LocalDate, newStart: Int, newEnd: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            taskScheduleRepo.updateTimeRange(scheduleId, newDate, newStart, newEnd)
+
+
+            val reminders = reminderRepo.getByScheduleId(scheduleId)
+            reminders.forEach { rUi ->
+                try {
+                    reminderScheduler.reschedule(rUi.id)   // ✅ این خط حیاتی است
+                } catch (_: Throwable) {}
+            }
+
+        }
+
+    }
+    fun moveScheduleFromTimeLineToPallet(scheduleId: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val reminders = reminderRepo.getByScheduleId(scheduleId)
+            reminders.forEach { rUi ->
+                try {
+                    reminderScheduler.cancel(rUi.id)   // ✅ این خط حیاتی است
+                } catch (_: Throwable) {}
+            }
+            taskScheduleRepo.setSchedulePalletState(scheduleId, true)
+        }
+    }
+    fun dropScheduleFromPalletToTimeLine(
+        scheduleId: Int,
+        date: LocalDate,
+        startMin: Int,
+        endMin: Int
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val reminders = reminderRepo.getByScheduleId(scheduleId)
+            reminders.forEach { rUi ->
+                try {
+                    reminderScheduler.reschedule(rUi.id)   // ✅ این خط حیاتی است
+                } catch (_: Throwable) {}
+            }
+            taskScheduleRepo.dropFromPalletToTimeline(scheduleId, date, startMin, endMin)
+        }
+    }
+
+
+
+
+    //only Schedule  POMODORO
+
+    suspend fun insertOnePomodoroTimelineItem(
+        taskId: Int,
+        scheduleId: Int,
+        date: LocalDate,
+        startMin: Int,
+        focus: Int,
+        shortBreak: Int,
+    ): Int? {
+        val end = (startMin + focus + shortBreak).coerceAtMost(24 * 60)
+
+        val parentSchedule = taskScheduleRepo.getById(scheduleId)
+
+        val childSchedule = parentSchedule?.copy(
+            id = null,
+            inPallet = false,
+            repeating = false,
+            dateEpochDay = date.toEpochDay(),
+            startMinuteOfDay = startMin,
+            endMinuteOfDay = end,
+            focusMinutes = focus,
+            shortBreakMinutes = shortBreak,
+            pomodoroParentId = scheduleId
+        )
+
+        val newScheduleChildId = childSchedule?.let { taskScheduleRepo.insert(it) }
+
+
+        val reminders = reminderRepo.getByScheduleId(scheduleId)
+        reminders.forEach { rUi ->
+            try {
+                val newReminder = newScheduleChildId?.let { rUi.copy(id = null ,scheduleId = it) }
+                if (newReminder != null) {
+                    val newReminderId = reminderRepo.upsert(newReminder)
+                    Log.i("TEST1","newReminderId=$newReminderId")
+                    reminderScheduler.reschedule(newReminderId)
+                }
+
+            } catch (_: Throwable) {}
+        }
+
+        return newScheduleChildId
+    }
+
+    fun movePomodoroSchedule(scheduleId: Int, newDate: LocalDate, newStart: Int, newEnd: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val reminders = reminderRepo.getByScheduleId(scheduleId)
+            reminders.forEach { rUi ->
+                try {
+                    reminderScheduler.reschedule(rUi.id)   // ✅ این خط حیاتی است
+                } catch (_: Throwable) {}
+            }
+            taskScheduleRepo.updatePomodoroTimeRange(scheduleId, newDate, newStart, newEnd)
+        }
+    }
+
+
 
 
 }
@@ -360,6 +372,7 @@ data class OverlapLayout(
 
 data class PomodoroPalletCardItem(
     val taskId: Int,
+    val scheduleId: Int,
     val taskName: String,
 
     val totalTarget: Int,
@@ -377,11 +390,12 @@ data class PomodoroPalletCardItem(
 )
 data class PomodoroAdjustState(
     val taskId: Int,
+    val scheduleId: Int,
     val date: LocalDate,
     val startMin: Int,
     val focus: Int,
     val shortBreak: Int,
-    val ids: List<Int>,
+    val ids: List<Int?>,
     val anchorInRoot: Offset, // محل نمایش stepper
     val maxAllowed: Int // remainingToday از پالت
 )
