@@ -35,6 +35,11 @@ data class TaskReminderEntity(
     // fixed
     val fixedMinuteOfDay: Int?,
 
+    //Pomodoro
+    val onStartFocus: Boolean = false,
+    val onStartBreak: Boolean = false,
+    val onEndBreak: Boolean = false,
+
     // intervallic
 //    val intervalStartMinuteOfDay: Int?,
 //    val intervalEndMinuteOfDay: Int?,
@@ -53,7 +58,7 @@ data class TaskReminderEntity(
 
 
 
-enum class ReminderMode { ALLOCATED, FIXED_TIME }
+enum class ReminderMode { ALLOCATED, FIXED_TIME,POMODORO_REMINDER }
 enum class ReminderStrengthMode { NOTIFICATION, ALARM, ALARM_AND_CAPTCHA }
 enum class BeforeAfter { BEFORE, AFTER }
 enum class StartEnd { START, END }

@@ -397,7 +397,7 @@ class TaskScreenViewModel @Inject constructor(
                 insertAtTop = false,
                 childLevel = depth,
                 taskMode = t.taskMode,
-                pomodoroTargetUnits = t.pomodoroTargetUnits,
+                pomodoroTargetUnits = t.pomodoroTargetUnits ?:50,
                 pomodoroDoneUnits = t.pomodoroDoneUnits
             )
 
@@ -424,7 +424,7 @@ class TaskScreenViewModel @Inject constructor(
         } else {
             cur.copy(
                 taskMode = TaskMode.NORMAL,
-                pomodoroTargetUnits = null,
+                pomodoroTargetUnits = 50,
                 pomodoroDoneUnits = 0
             )
         }
@@ -434,7 +434,7 @@ class TaskScreenViewModel @Inject constructor(
         val target = v?.coerceAtLeast(0)
         val done = cur.pomodoroDoneUnits.coerceAtLeast(0)
         cur.copy(
-            pomodoroTargetUnits = target,
+            pomodoroTargetUnits = target ?:50,
             pomodoroDoneUnits = if (target != null) done.coerceAtMost(target) else done
         )
     }
@@ -857,11 +857,11 @@ class TaskScreenViewModel @Inject constructor(
             end = endMinuteOfDay?.let(::minuteToLocalTime) ?: LocalTime.of(21, 0),
             durationMinutes = durationMinutes ?: 0,
 
-            focusMinutes =focusMinutes ?: 25,
-            shortBreakMinutes =shortBreakMinutes ?: 5,
-            longBreakMinutes =longBreakMinutes ?: 15,
-            longBreakEvery =longBreakEvery ?: 4,
-            pomodoroUnitsPerDay =pomodoroUnitsPerDay ?: 5,
+            focusMinutes = focusMinutes ?: 25,
+            shortBreakMinutes = shortBreakMinutes ?: 5,
+            longBreakMinutes = longBreakMinutes ?: 15,
+            longBreakEvery = longBreakEvery ?: 4,
+            pomodoroUnitsPerDay = pomodoroUnitsPerDay ?: 5,
 
             repeat = RepeatDraft(
                 enabled = enabled,
@@ -1034,7 +1034,14 @@ class TaskScreenViewModel @Inject constructor(
 
 
     //reminder
-    fun setReminderMode(m: ReminderMode) = _reminderDraft.update { it.copy(mode = m) }
+    fun setReminderMode(m: ReminderMode) = _reminderDraft.update { cur ->
+        when (m) {
+            ReminderMode.ALLOCATED -> cur.copy(mode = m)
+            ReminderMode.FIXED_TIME -> cur.copy(mode = m)
+            ReminderMode.POMODORO_REMINDER -> cur.copy(mode = m)
+        }
+    }
+
     fun setReminderTitle(s: String) = _reminderDraft.update { it.copy(title = s) }
     fun setReminderOffsetDays(v: Int) = _reminderDraft.update { it.copy(offsetDays = v) }
     fun setReminderOffsetHours(v: Int) = _reminderDraft.update { it.copy(offsetHours = v) }
@@ -1052,7 +1059,15 @@ class TaskScreenViewModel @Inject constructor(
 
     fun startAddReminder() {
         _editingReminderKey.value = null
-        _reminderDraft.value = ReminderDraft() // یا defaultReminderDraft()
+
+        val base = ReminderDraft()
+        val isPomodoroSchedule = (_scheduleDraft.value.mode == ScheduleMode.POMODORO)
+        _reminderDraft.value =
+            if (isPomodoroSchedule) {
+                base.copy(mode = ReminderMode.POMODORO_REMINDER)
+            } else {
+                base
+            }
     }
 
     fun startEditReminderByKey(key: Int) {
@@ -1087,6 +1102,7 @@ class TaskScreenViewModel @Inject constructor(
         val draft = _reminderDraft.value
 
         // تبدیل Draft به Entity (scheduleId را بعداً تعیین می‌کنیم)
+
         fun buildEntity(scheduleId: Int): TaskReminderEntity =
             draft.toEntity(
                 id = editingKey ?: 0,
@@ -1195,6 +1211,11 @@ class TaskScreenViewModel @Inject constructor(
             // Fixed time
             fixedTime = fixed,
 
+            //Pomodoro
+            onStartFocus = onStartFocus,
+            onStartBreak = onStartBreak,
+            onEndBreak = onEndBreak,
+
             // Strength
             strength = strength,
             vibrate = vibrate,
@@ -1240,6 +1261,8 @@ class TaskScreenViewModel @Inject constructor(
                     // fixed
                     fixedMinuteOfDay = null,
 
+
+
                     // strength
                     strength = safeStrength,
                     vibrate = vibrate,
@@ -1268,6 +1291,41 @@ class TaskScreenViewModel @Inject constructor(
 
                     // fixed
                     fixedMinuteOfDay = fixedMinute,
+
+                    // strength
+                    strength = safeStrength,
+                    vibrate = vibrate,
+
+                    // sound
+                    alarmSoundUri = alarmSoundUri,
+
+                    // captcha
+                    captchaEnabled = safeCaptcha
+                )
+            }
+
+            ReminderMode.POMODORO_REMINDER -> {
+                //فعلا فقط جهت بیلد شدن
+                TaskReminderEntity(
+                    id = id,
+                    scheduleId = scheduleId,
+                    title = title,
+                    mode = mode,
+
+                    // allocated
+                    offsetDays = safeOffsetDays,
+                    offsetHours = safeOffsetHours,
+                    offsetMinutes = safeOffsetMinutes,
+                    beforeAfter = beforeAfter,
+                    anchor = anchor,
+
+                    // fixed
+                    fixedMinuteOfDay = null,
+
+                    //Pomodoro
+                    onStartFocus = onStartFocus,
+                    onStartBreak = onStartBreak,
+                    onEndBreak = onEndBreak,
 
                     // strength
                     strength = safeStrength,
@@ -1518,6 +1576,17 @@ class TaskScreenViewModel @Inject constructor(
         return LocalTime.of(safe / 60, safe % 60)
     }
 
+    fun setOnStartFocusEnabled(b: Boolean) {
+        _reminderDraft.update { it.copy(onStartFocus = b) }
+    }
+
+    fun setOnStartBreakEnabled(b: Boolean) {
+        _reminderDraft.update { it.copy(onStartBreak = b) }
+    }
+
+    fun setOnEndBreakEnabled(b: Boolean) {
+        _reminderDraft.update { it.copy(onEndBreak = b) }
+    }
 
 }
 

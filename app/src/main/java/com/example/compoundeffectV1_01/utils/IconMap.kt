@@ -496,6 +496,7 @@ fun reminderModeIcon(mode: ReminderMode): ImageVector {
     return when (mode) {
         ReminderMode.ALLOCATED -> Icons.Filled.Timeline
         ReminderMode.FIXED_TIME -> Icons.Filled.Anchor
+        ReminderMode.POMODORO_REMINDER -> Icons.Filled.PushPin
     }
 }
 

@@ -85,7 +85,7 @@ data class TaskDraft(
 
     // ✅ Pomodoro
     val taskMode: TaskMode = TaskMode.NORMAL,
-    val pomodoroTargetUnits: Int? = null,
+    val pomodoroTargetUnits: Int = 50,
     val pomodoroDoneUnits: Int = 0,
 )
 
@@ -131,6 +131,11 @@ data class ReminderDraft(
 
     // Fixed time
     val fixedTime: LocalTime = LocalTime.of(11, 0),
+
+    //Pomodoro Reminder
+    val onStartFocus: Boolean = false,
+    val onStartBreak: Boolean = false,
+    val onEndBreak: Boolean = false,
 
     // Strength
     val strength: ReminderStrengthMode = ReminderStrengthMode.NOTIFICATION,

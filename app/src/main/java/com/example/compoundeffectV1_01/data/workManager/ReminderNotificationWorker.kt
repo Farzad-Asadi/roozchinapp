@@ -142,7 +142,10 @@ private fun hasPostNotificationsPermission(context: Context): Boolean {
 
 //برای ایجاد عنوان در نوتیفیکیشن
 private fun reminderTitleOrNull(e: TaskReminderEntity): String? {
-    // اگر بعداً ستون title برای Reminder اضافه کردی اینجا استفاده کن.
-    // فعلاً نداریم:
-    return null
+    return when{
+        e.onStartFocus ->"شروع زمان فوکوس"
+        e.onStartBreak ->"پایان فوکوس ،شروع استراحت"
+        e.onEndBreak ->"پایان استراحت"
+        else -> null
+    }
 }

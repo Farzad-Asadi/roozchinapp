@@ -2,6 +2,7 @@ package com.example.compoundeffectV1_01.data.workManager
 
 import android.content.Context
 import android.util.Log
+import androidx.compose.material.icons.filled.PushPin
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
@@ -191,12 +192,15 @@ private fun computeNextTriggerAtMillis(
         }
     }
 
-    data class Occurrence(val start: LocalDateTime, val end: LocalDateTime)
+    data class Occurrence(val start: LocalDateTime,val startBreak: LocalDateTime, val end: LocalDateTime)
 
     // --- ساختن start/end occurrence برای یک تاریخ مشخص (برای ALLOCATED لازم است) ---
-    fun occurrenceForDate(date: LocalDate): Occurrence? {
+    fun occurrenceForDate(date: LocalDate,focusMinutes: Int?): Occurrence? {
         val startMin = schedule.startMinuteOfDay ?: return null
         val start = date.atTime(minuteToTime(startMin))
+
+        val startBreakMin = startMin + (focusMinutes ?:0)
+        val startBreak = date.atTime(minuteToTime(startBreakMin))
 
         val endMin = schedule.endMinuteOfDay ?: return null
         val end = date.atTime(minuteToTime(endMin))
@@ -210,27 +214,27 @@ private fun computeNextTriggerAtMillis(
                 // اگر خواستی پشتیبانی کنی: end = endSameDay.plusDays(1)
                 if (endSameDay.isBefore(start)) return null
 
-                Occurrence(start, endSameDay)
+                Occurrence(start,startBreak, endSameDay)
             }
 
             ScheduleMode.AMOUNT_OF_TIME -> {
                 val dur = schedule.durationMinutes ?: return null
-                val end = start.plusMinutes(dur.toLong()) // ممکن است وارد فردا شود
-                Occurrence(start, end)
+                val endTime = start.plusMinutes(dur.toLong()) // ممکن است وارد فردا شود
+                Occurrence(start,startBreak, endTime)
             }
 
             ScheduleMode.POMODORO -> { //فعلاً مثل AmountOfTime محاسبه کن
 //                val dur = schedule.durationMinutes ?: return null
 //                val end = start.plusMinutes(dur.toLong()) // ممکن است وارد فردا شود
                 if (schedule.inPallet) return null
-                Occurrence(start, end)
+                Occurrence(start,startBreak, end)
             }
 
         }
     }
 
     // --- محاسبه fire برای یک تاریخ occurrence ---
-    fun fireDateTimeForDate(date: LocalDate, occ: Occurrence?): LocalDateTime? {
+    fun fireDateTimeForDate(date: LocalDate, occ: Occurrence?,afterLocal:LocalDateTime): LocalDateTime? {
         return when (reminder.mode) {
 
             ReminderMode.FIXED_TIME -> {
@@ -258,6 +262,27 @@ private fun computeNextTriggerAtMillis(
                 else
                     anchor.plusMinutes(offsetTotalMinutes.toLong())
             }
+            ReminderMode.POMODORO_REMINDER -> {
+                val o = occ ?: return null
+                Log.i("TEST3","in ReminderMode.POMODORO_REMINDER ")
+                Log.i("TEST3","afterLocal=$afterLocal")
+                Log.i("TEST3","o.start=${o.start}")
+                Log.i("TEST3","o.startBreak=${o.startBreak}")
+                Log.i("TEST3","o.o.end=${o.end}")
+                Log.i("TEST3","${o.start > afterLocal }")
+                Log.i("TEST3","${o.startBreak > afterLocal }")
+                Log.i("TEST3","${o.start > afterLocal }")
+                Log.i("TEST3","______________________________")
+                //فعلا فقط جهت بیلد شدن
+                // allocated به anchor نیاز دارد => occurrence باید موجود باشد
+
+                when{
+                    o.start > afterLocal -> o.start
+                    o.startBreak > afterLocal -> o.startBreak
+                    else -> o.end
+                }
+
+            }
         }
     }
 
@@ -265,8 +290,8 @@ private fun computeNextTriggerAtMillis(
     var date = nextScheduleDateOnOrAfter(afterLocal.toLocalDate()) ?: return null
 
     repeat(366) {
-        val occ = if (reminder.mode == ReminderMode.ALLOCATED) occurrenceForDate(date) else null
-        val dt = fireDateTimeForDate(date, occ)
+        val occ = if (reminder.mode == ReminderMode.ALLOCATED || reminder.mode == ReminderMode.POMODORO_REMINDER ) occurrenceForDate(date,schedule.focusMinutes) else null
+        val dt = fireDateTimeForDate(date, occ , afterLocal)
 
         if (dt != null && toMillis(dt) > afterMillis) return toMillis(dt)
 

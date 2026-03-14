@@ -186,6 +186,7 @@ class ScheduleScreenViewModel @Inject constructor(
                     reminderScheduler.cancel(rUi.id)   // ✅ این خط حیاتی است
                 } catch (_: Throwable) {}
             }
+            val schedule=taskScheduleRepo.getById(scheduleId)
             taskScheduleRepo.setSchedulePalletState(scheduleId, true)
         }
     }
@@ -256,13 +257,17 @@ class ScheduleScreenViewModel @Inject constructor(
 
     fun movePomodoroSchedule(scheduleId: Int, newDate: LocalDate, newStart: Int, newEnd: Int) {
         viewModelScope.launch(Dispatchers.IO) {
+
+            taskScheduleRepo.updatePomodoroTimeRange(scheduleId, newDate, newStart, newEnd)
+
             val reminders = reminderRepo.getByScheduleId(scheduleId)
             reminders.forEach { rUi ->
                 try {
-                    reminderScheduler.reschedule(rUi.id)   // ✅ این خط حیاتی است
+                    Log.i("TEST3","in movePomodoroSchedule}")
+                    reminderScheduler.reschedule(rUi.id)
                 } catch (_: Throwable) {}
             }
-            taskScheduleRepo.updatePomodoroTimeRange(scheduleId, newDate, newStart, newEnd)
+
         }
     }
 

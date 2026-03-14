@@ -1326,12 +1326,9 @@ private fun TimelineItemBox(
     val taskH = h.coerceAtLeast(24.dp) // ✅ حداقل خیلی کوچک فقط برای قابل لمس بودن/رندر
     val selectionH =
         if (taskH >=76.dp) taskH else 76.dp
-    Log.i("TEST" , "h=$h ")
-    Log.i("TEST" , "taskH=$taskH ")
-    Log.i("TEST" , "selectionH=$selectionH ")
-    Log.i("TEST" , "-------------------")
 
-    val containerY = (y + 2.dp)
+
+    val containerY = (y )
 
 
 
@@ -2283,7 +2280,7 @@ private fun CurrentTimeOverlay(
             .offset(y = yViewport)
             .height(24.dp) // فضای کافی برای متن + خط
             .drawBehind {
-                val y = size.height / 2f
+                val y = (size.height / 2f) - 20f   //تیون کردن دستی
                 val xStart = with(density) { sidebarWidth.toPx() }
                 drawLine(
                     color = red,

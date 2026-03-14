@@ -243,6 +243,7 @@ fun TaskScreen(
                                 viewModel.finishEditTask()
                                 onClickBack()
                             }
+
                             ConfirmAction.SAVE_AND_CONTINUE -> {
                                 // توی حالت edit معمولاً Save هم می‌تونه Close باشه،
                                 // ولی اگر می‌خوای باز بمونه، همینجا هیچ کاری نکن.
@@ -257,6 +258,7 @@ fun TaskScreen(
                                 viewModel.finishEditTask()
                                 onClickBack()
                             }
+
                             ConfirmAction.SAVE_AND_CONTINUE -> {
                                 // می‌مونه توی صفحه برای ساخت تسک بعدی
                                 viewModel.resetTaskDraftKeepSomeDefaults()
@@ -352,6 +354,7 @@ fun TaskScreen(
                         showReminderDialog = false
                         viewModel.finishEditReminder() // ✅ اگر داری؛ اگر نداری پایین میگم چی باید باشه
                     },
+                    isPomodoroSchedule=scheduleDraft.mode == ScheduleMode.POMODORO,
                     onTitleChange = viewModel::setReminderTitle,
                     onModeChange = viewModel::setReminderMode,
                     onOffsetDaysChange = viewModel::setReminderOffsetDays,
@@ -364,6 +367,9 @@ fun TaskScreen(
                     onVibrateChange = viewModel::setReminderVibrate,
                     onAlarmSoundUriChange = viewModel::setReminderAlarmSoundUri,
                     onCaptchaEnabledChange = viewModel::setReminderCaptchaEnabled,
+                    onStartFocusToggle =viewModel::setOnStartFocusEnabled,
+                    onStartBreakToggle =viewModel::setOnStartBreakEnabled,
+                    onEndBreakToggle =viewModel::setOnEndBreakEnabled,
                     onConfirm = {
                         requestPostNotifPermission { granted ->
                             viewModel.confirmReminderFromDialog()
@@ -886,7 +892,7 @@ private fun AddEditeScheduleDialog(
                 }
             }
 
-            Log.i("TEST2","draft.repeat.weekdaysMask=${draft.repeat.weekdaysMask}")
+            Log.i("TEST2", "draft.repeat.weekdaysMask=${draft.repeat.weekdaysMask}")
 
             //WeeklyPicker for Mode.POMODORO
             if (draft.mode == ScheduleMode.POMODORO) {
@@ -968,8 +974,12 @@ private fun AddEditeReminderDialog(
     onFixedTimeChange: (LocalTime) -> Unit,
     onStrengthChange: (ReminderStrengthMode) -> Unit,
     onVibrateChange: (Boolean) -> Unit,
+    isPomodoroSchedule: Boolean,
     onAlarmSoundUriChange: (String?) -> Unit = {},
     onCaptchaEnabledChange: (Boolean) -> Unit,
+    onStartFocusToggle: (Boolean) -> Unit,
+    onStartBreakToggle: (Boolean) -> Unit,
+    onEndBreakToggle: (Boolean) -> Unit,
     onConfirm: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -1011,8 +1021,13 @@ private fun AddEditeReminderDialog(
             AddEditeDialogRow(
                 onClick = null,
                 content = {
+                    val allowedModes =
+                        if (isPomodoroSchedule) listOf(ReminderMode.POMODORO_REMINDER )
+                        else listOf(ReminderMode.ALLOCATED, ReminderMode.FIXED_TIME)
+
                     ModeReminderDropdownRow(
                         mode = draft.mode,
+                        allowedModes = allowedModes,
                         onPick = onModeChange
                     )
                 },
@@ -1036,6 +1051,15 @@ private fun AddEditeReminderDialog(
                     FixedTimeRow(
                         time = draft.fixedTime,
                         onTimeChange = onFixedTimeChange
+                    )
+                }
+
+                ReminderMode.POMODORO_REMINDER -> {
+                    PomodoroReminderRows(
+                        draft = draft,
+                        onStartFocusToggle = onStartFocusToggle,
+                        onStartBreakToggle = onStartBreakToggle,
+                        onEndBreakToggle =onEndBreakToggle,
                     )
                 }
 
@@ -1118,14 +1142,6 @@ private fun AddEditeReminderDialog(
         }
     }
 }
-
-
-
-
-
-
-
-
 
 
 @Composable
@@ -1302,8 +1318,6 @@ private fun AddEditeDialogTopBar(
         }
     }
 }
-
-
 
 
 @Composable
@@ -2691,6 +2705,7 @@ private fun ReminderOptionsMenu(
 @Composable
 private fun ModeReminderDropdownRow(
     mode: ReminderMode,
+    allowedModes: List<ReminderMode>,
     onPick: (ReminderMode) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -2698,16 +2713,18 @@ private fun ModeReminderDropdownRow(
     val selectedLabel = when (mode) {
         ReminderMode.ALLOCATED -> "Allocated"
         ReminderMode.FIXED_TIME -> "Fixed time"
+        ReminderMode.POMODORO_REMINDER -> "Pomodoro Reminder"
     }
 
-    val items = listOf(
-        ReminderMode.ALLOCATED to "Allocated",
-        ReminderMode.FIXED_TIME to "Fixed time",
-    )
-    val icon = when (mode) {
-        ReminderMode.ALLOCATED -> Icons.Filled.Timeline
-        ReminderMode.FIXED_TIME -> Icons.Filled.Anchor
+
+    val items = allowedModes.map { m ->
+        m to when (m) {
+            ReminderMode.ALLOCATED -> "Allocated"
+            ReminderMode.FIXED_TIME -> "Fixed time"
+            ReminderMode.POMODORO_REMINDER -> "Pomodoro Reminder"
+        }
     }
+
 
     ExposedDropdownMenuBox(
         expanded = expanded,
@@ -2851,6 +2868,103 @@ private fun AllocatedRows(
         startPadding = 0,
 //        showDivider = false
     )
+}
+
+@Composable
+private fun PomodoroReminderRows(
+    draft: ReminderDraft,
+    onStartFocusToggle: (Boolean) -> Unit,
+    onStartBreakToggle: (Boolean) -> Unit,
+    onEndBreakToggle: (Boolean) -> Unit,
+) {
+
+    //on Start focus
+    AddEditeDialogRow(
+        onClick = null,
+        content = {
+            val onStartFocus = draft.onStartFocus
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clickable { onStartFocusToggle(!onStartFocus) }
+                    .padding(start = 86.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Start
+            ) {
+
+                Icon(
+                    imageVector = if (onStartFocus) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
+                    contentDescription = null,
+                    tint = if (onStartFocus) Color(0xFF2E7D32) else Color.Gray
+                )
+                Spacer(Modifier.width(8.dp))
+                Text("on Start focus")
+
+            }
+
+        },
+        startPadding = 0,
+        showDivider = false
+    )
+
+    //on Start break
+    AddEditeDialogRow(
+        onClick = null,
+        content = {
+            val onStartBreak = draft.onStartBreak
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clickable { onStartBreakToggle(!onStartBreak) }
+                    .padding(start = 86.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Start
+            ) {
+
+                Icon(
+                    imageVector = if (onStartBreak) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
+                    contentDescription = null,
+                    tint = if (onStartBreak) Color(0xFF2E7D32) else Color.Gray
+                )
+                Spacer(Modifier.width(8.dp))
+                Text("on Start break")
+
+            }
+
+        },
+        startPadding = 0,
+        showDivider = false
+    )
+
+    //on End break
+    AddEditeDialogRow(
+        onClick = null,
+        content = {
+            val onEndBreak = draft.onEndBreak
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clickable { onEndBreakToggle(!onEndBreak) }
+                    .padding(start = 86.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Start
+            ) {
+
+                Icon(
+                    imageVector = if (onEndBreak) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
+                    contentDescription = null,
+                    tint = if (onEndBreak) Color(0xFF2E7D32) else Color.Gray
+                )
+                Spacer(Modifier.width(8.dp))
+                Text("on End break")
+
+            }
+
+        },
+        startPadding = 0,
+        showDivider = true
+    )
+
 }
 
 @Composable
@@ -3149,13 +3263,6 @@ private fun SoundSettingsRow(
 }
 
 
-
-
-
-
-
-
-
 //>>>>>>>>>>>>>>>> Utils <<<<<<<<<<<<<<<<<<
 
 private fun TaskReminderEntity.buildSummary(): String {
@@ -3189,6 +3296,8 @@ private fun TaskReminderEntity.buildSummary(): String {
             val m = minute % 60
             "%02d:%02d".format(h, m)
         }
+
+        ReminderMode.POMODORO_REMINDER -> "Pomodoro Reminder"
 
     }
 }
