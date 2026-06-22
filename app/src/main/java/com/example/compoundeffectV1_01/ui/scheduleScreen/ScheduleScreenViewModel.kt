@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.compose.ui.geometry.Offset
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.compoundeffectV1_01.data.alarm.PomodoroAlarmScheduler
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.TaskReminderRepository
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskMode
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskRepository
@@ -15,11 +16,16 @@ import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.Tas
 import com.example.compoundeffectV1_01.data.workManager.ReminderScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
 import javax.inject.Inject
@@ -30,9 +36,13 @@ class ScheduleScreenViewModel @Inject constructor(
     private val taskScheduleRepo: TaskScheduleRepository,
     private val reminderScheduler: ReminderScheduler,
     private val reminderRepo: TaskReminderRepository,
+    private val pomodoroAlarmScheduler: PomodoroAlarmScheduler,
 ) : ViewModel() {
 
+    private var runningPomodoroJob: Job? = null
 
+    private val _runningPomodoro = MutableStateFlow<RunningPomodoroUiState?>(null)
+    val runningPomodoro = _runningPomodoro.asStateFlow()
 
 
 
@@ -131,6 +141,116 @@ class ScheduleScreenViewModel @Inject constructor(
             )
 
             taskScheduleRepo.insert(entity)
+        }
+    }
+
+    fun startPomodoroNow(scheduleId: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val schedule = taskScheduleRepo.getById(scheduleId) ?: return@launch
+            if (schedule.mode != ScheduleMode.POMODORO) return@launch
+
+            val focus = schedule.focusMinutes ?: return@launch
+            val shortBreak = schedule.shortBreakMinutes ?: 0
+
+            val rawNow = LocalDateTime.now()
+
+            val now = if (rawNow.second > 0 || rawNow.nano > 0) {
+                rawNow.plusMinutes(1).withSecond(0).withNano(0)
+            } else {
+                rawNow.withSecond(0).withNano(0)
+            }
+
+            val date = now.toLocalDate()
+            val startMin = now.hour * 60 + now.minute
+            val endMin = (startMin + focus + shortBreak).coerceAtMost(24 * 60)
+
+            taskScheduleRepo.updatePomodoroTimeRange(
+                scheduleId = scheduleId,
+                date = date,
+                startMin = startMin,
+                endMin = endMin
+            )
+
+            val focusEnd = now.plusMinutes(focus.toLong())
+            val breakEnd = now.plusMinutes((focus + shortBreak).toLong())
+
+
+            pomodoroAlarmScheduler.cancelPomodoroAlarms(scheduleId)
+
+            pomodoroAlarmScheduler.scheduleFocusStart(scheduleId, now)
+            pomodoroAlarmScheduler.scheduleFocusEnd(scheduleId, focusEnd)
+            pomodoroAlarmScheduler.scheduleBreakEnd(scheduleId, breakEnd)
+
+            startRunningPomodoroTimer(
+                schedule = schedule,
+                clickedAt = rawNow,
+                realStartAt = now,
+                focusMinutes = focus,
+                shortBreakMinutes = shortBreak
+            )
+        }
+    }
+
+    private fun startRunningPomodoroTimer(
+        schedule: TaskSchedule,
+        clickedAt: LocalDateTime,
+        realStartAt: LocalDateTime,
+        focusMinutes: Int,
+        shortBreakMinutes: Int
+    ) {
+        runningPomodoroJob?.cancel()
+
+        val focusEndAt = realStartAt.plusMinutes(focusMinutes.toLong())
+        val breakEndAt = focusEndAt.plusMinutes(shortBreakMinutes.toLong())
+
+        runningPomodoroJob = viewModelScope.launch {
+            while (true) {
+                val now = LocalDateTime.now()
+
+                val phase = when {
+                    now.isBefore(realStartAt) -> PomodoroRunPhase.WAITING_TO_START
+                    now.isBefore(focusEndAt) -> PomodoroRunPhase.FOCUS
+                    now.isBefore(breakEndAt) -> PomodoroRunPhase.BREAK
+                    else -> PomodoroRunPhase.FINISHED
+                }
+
+                val waitingSeconds = if (now.isBefore(realStartAt)) {
+                    Duration.between(now, realStartAt).seconds
+                        .coerceAtLeast(0)
+                } else {
+                    0
+                }
+
+                val focusElapsed = java.time.Duration.between(realStartAt, now)
+                    .seconds
+                    .coerceIn(0, focusMinutes * 60L)
+
+                val breakElapsed = java.time.Duration.between(focusEndAt, now)
+                    .seconds
+                    .coerceIn(0, shortBreakMinutes * 60L)
+
+                _runningPomodoro.value = RunningPomodoroUiState(
+                    scheduleId = schedule.id ?: return@launch,
+                    taskId = schedule.taskId,
+                    title = schedule.title ?: "Pomodoro",
+                    clickedAt = clickedAt,
+                    realStartAt = realStartAt,
+                    focusEndAt = focusEndAt,
+                    breakEndAt = breakEndAt,
+                    phase = phase,
+                    waitingSeconds = waitingSeconds,
+                    focusElapsedSeconds = focusElapsed,
+                    breakElapsedSeconds = breakElapsed
+                )
+
+                if (phase == PomodoroRunPhase.FINISHED) {
+                    delay(3_000)
+                    _runningPomodoro.value = null
+                    break
+                }
+
+                delay(1_000)
+            }
         }
     }
 
@@ -404,3 +524,32 @@ data class PomodoroAdjustState(
     val anchorInRoot: Offset, // محل نمایش stepper
     val maxAllowed: Int // remainingToday از پالت
 )
+
+
+
+data class RunningPomodoroUiState(
+    val scheduleId: Int,
+    val taskId: Int,
+    val title: String,
+    val clickedAt: LocalDateTime,
+    val realStartAt: LocalDateTime,
+    val focusEndAt: LocalDateTime,
+    val breakEndAt: LocalDateTime,
+    val phase: PomodoroRunPhase = PomodoroRunPhase.WAITING_TO_START,
+    val waitingSeconds: Long = 0,
+    val focusElapsedSeconds: Long = 0,
+    val breakElapsedSeconds: Long = 0,
+    val focusDoneApplied: Boolean = false,
+    val isPaused: Boolean = false,
+    val pauseAt: LocalDateTime? = null
+)
+
+
+
+
+enum class PomodoroRunPhase {
+    WAITING_TO_START,
+    FOCUS,
+    BREAK,
+    FINISHED
+}

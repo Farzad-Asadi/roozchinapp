@@ -1,6 +1,11 @@
 package com.example.compoundeffectV1_01.ui.scheduleScreen
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.util.Log
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -14,6 +19,7 @@ import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -36,6 +42,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBackIos
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -43,15 +50,21 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -85,11 +98,13 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.RepeatUnit
@@ -116,6 +131,8 @@ fun ScheduleScreen(
     viewModel: ScheduleScreenViewModel = hiltViewModel()
 ) {
     val allItems by viewModel.allItems.collectAsState()
+
+    val runningPomodoro by viewModel.runningPomodoro.collectAsState()
 
     val timelineItemsReal = remember(allItems) { allItems.filter { !it.inPallet } }
 
@@ -306,7 +323,8 @@ fun ScheduleScreen(
     var overlayLayerOriginInRoot by remember { mutableStateOf(Offset.Zero) }
 
     val palletContentWidth = 160.dp
-    val palletOverlayWidth = 18.dp + if (palletExpanded) palletContentWidth else 0.dp
+    val palletHandleWidth = 48.dp
+    val palletOverlayWidth = palletHandleWidth + if (palletExpanded) palletContentWidth else 0.dp
 
     val pendingMove = remember { mutableStateMapOf<Int, PendingMove>() } // key = scheduleId
 
@@ -424,7 +442,24 @@ fun ScheduleScreen(
     val overlapLayouts = remember(displayTimelineItems, startDate, numDays) {
         computeOverlapLayouts(displayTimelineItems, startDate, numDays)
     }
+    val context = LocalContext.current
 
+    val notificationPermissionLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.RequestPermission()
+        ) { }
+
+    LaunchedEffect(Unit) {
+        if (
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
 
     LaunchedEffect(isAutoScrollingActive) {
         while (isAutoScrollingActive) {
@@ -533,6 +568,8 @@ fun ScheduleScreen(
                     overlayLayerOriginInRoot = coords.positionInRoot()
                 }
         ) {
+
+
 
             Column(Modifier.fillMaxSize()) {
 
@@ -935,6 +972,10 @@ fun ScheduleScreen(
                                             )
                                             selectedScheduleId = null
                                         },
+                                        onStartPomodoroNow = { scheduleId ->
+                                            viewModel.startPomodoroNow(scheduleId)
+                                            selectedScheduleId = null
+                                        },
 
                                         )
                                 }
@@ -953,6 +994,115 @@ fun ScheduleScreen(
                         sidebarWidth = 56.dp
                     )
                 }
+            }
+
+
+
+
+            // ✅ Drag overlay
+            if (draggingFromPallet != null || draggingPomodoro != null) {
+                Box(Modifier.fillMaxSize()) {
+
+                    val title = draggingFromPallet?.title ?: draggingPomodoro?.taskName.orEmpty()
+                    val iconName = draggingFromPallet?.categoryIconName // پومودورو فعلاً icon نداره
+
+                    Box(
+                        modifier = Modifier
+                            .offset {
+                                IntOffset(
+                                    (dragX - grabOffsetX - overlayLayerOriginInRoot.x).toInt(),
+                                    (dragY - grabOffsetY - overlayLayerOriginInRoot.y).toInt()
+                                )
+                            }
+                            .width(overlayWidth)
+                            .height(
+                                if (draggingPomodoro != null) 64.dp
+                                else overlayHeight.coerceAtLeast(44.dp)
+                            )
+                            .background(
+                                scheduleModeColor(
+                                    draggingFromPallet?.mode ?: ScheduleMode.POMODORO
+                                ).copy(alpha = 0.6f)
+                            )
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .padding(start = 8.dp, top = 8.dp, end = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (iconName != null) {
+                                CategoryIconWithPlate(iconName = iconName)
+                            } else {
+                                Icon(Icons.Filled.Timeline, contentDescription = null)
+                            }
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                title,
+                                maxLines = 1,
+                                style = MaterialTheme.typography.labelLarge
+                            )
+                        }
+
+                        if (draggingPomodoro != null) {
+                            Text(
+                                "Pomodoro",
+                                modifier = Modifier
+                                    .align(Alignment.BottomStart)
+                                    .padding(start = 16.dp, bottom = 10.dp),
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
+                    }
+                }
+
+            }
+
+            //Stepper
+            pomodoroAdjust?.let { st ->
+                PomodoroCountStepperOverlay(
+                    count = st.ids.size,
+                    max = st.maxAllowed,
+                    anchorInRoot = st.anchorInRoot,
+                    onInc = {
+                        if (st.ids.size >= st.maxAllowed) return@PomodoroCountStepperOverlay
+                        val nextStart = st.startMin + (st.ids.size * (st.focus + st.shortBreak))
+                        scope.launch {
+                            val newId = withContext(Dispatchers.IO) {
+                                viewModel.insertOnePomodoroTimelineItem(
+                                    taskId = st.taskId,
+                                    scheduleId=st.scheduleId,
+                                    date = st.date,
+                                    startMin = nextStart,
+                                    focus = st.focus,
+                                    shortBreak = st.shortBreak
+                                )
+                            }
+                            pomodoroAdjust = st.copy(ids = st.ids + newId)
+                        }
+                    },
+                    onDec = {
+                        if (st.ids.size <= 1) return@PomodoroCountStepperOverlay
+                        val lastId = st.ids.last()
+                        if (lastId != null) {
+                            viewModel.deleteScheduleById(lastId)
+                        }
+                        pomodoroAdjust = st.copy(ids = st.ids.dropLast(1))
+                    },
+                    onDismiss = { pomodoroAdjust = null }
+                )
+            }
+
+
+            //تایمر پومودورو
+            runningPomodoro?.let { running ->
+                RunningPomodoroPanel(
+                    state = running,
+                    onPause = {},
+                    onResume = {},
+                    onSkip = {},
+                    onRestart = {}
+                )
             }
 
             RightPallet(
@@ -1087,99 +1237,6 @@ fun ScheduleScreen(
             )
 
 
-            // ✅ Drag overlay
-            if (draggingFromPallet != null || draggingPomodoro != null) {
-                Box(Modifier.fillMaxSize()) {
-
-                    val title = draggingFromPallet?.title ?: draggingPomodoro?.taskName.orEmpty()
-                    val iconName = draggingFromPallet?.categoryIconName // پومودورو فعلاً icon نداره
-
-                    Box(
-                        modifier = Modifier
-                            .offset {
-                                IntOffset(
-                                    (dragX - grabOffsetX - overlayLayerOriginInRoot.x).toInt(),
-                                    (dragY - grabOffsetY - overlayLayerOriginInRoot.y).toInt()
-                                )
-                            }
-                            .width(overlayWidth)
-                            .height(
-                                if (draggingPomodoro != null) 64.dp
-                                else overlayHeight.coerceAtLeast(44.dp)
-                            )
-                            .background(
-                                scheduleModeColor(
-                                    draggingFromPallet?.mode ?: ScheduleMode.POMODORO
-                                ).copy(alpha = 0.6f)
-                            )
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .align(Alignment.TopStart)
-                                .padding(start = 8.dp, top = 8.dp, end = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            if (iconName != null) {
-                                CategoryIconWithPlate(iconName = iconName)
-                            } else {
-                                Icon(Icons.Filled.Timeline, contentDescription = null)
-                            }
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                title,
-                                maxLines = 1,
-                                style = MaterialTheme.typography.labelLarge
-                            )
-                        }
-
-                        if (draggingPomodoro != null) {
-                            Text(
-                                "Pomodoro",
-                                modifier = Modifier
-                                    .align(Alignment.BottomStart)
-                                    .padding(start = 16.dp, bottom = 10.dp),
-                                style = MaterialTheme.typography.labelSmall
-                            )
-                        }
-                    }
-                }
-
-            }
-
-            //Stepper
-            pomodoroAdjust?.let { st ->
-                PomodoroCountStepperOverlay(
-                    count = st.ids.size,
-                    max = st.maxAllowed,
-                    anchorInRoot = st.anchorInRoot,
-                    onInc = {
-                        if (st.ids.size >= st.maxAllowed) return@PomodoroCountStepperOverlay
-                        val nextStart = st.startMin + (st.ids.size * (st.focus + st.shortBreak))
-                        scope.launch {
-                            val newId = withContext(Dispatchers.IO) {
-                                viewModel.insertOnePomodoroTimelineItem(
-                                    taskId = st.taskId,
-                                    scheduleId=st.scheduleId,
-                                    date = st.date,
-                                    startMin = nextStart,
-                                    focus = st.focus,
-                                    shortBreak = st.shortBreak
-                                )
-                            }
-                            pomodoroAdjust = st.copy(ids = st.ids + newId)
-                        }
-                    },
-                    onDec = {
-                        if (st.ids.size <= 1) return@PomodoroCountStepperOverlay
-                        val lastId = st.ids.last()
-                        if (lastId != null) {
-                            viewModel.deleteScheduleById(lastId)
-                        }
-                        pomodoroAdjust = st.copy(ids = st.ids.dropLast(1))
-                    },
-                    onDismiss = { pomodoroAdjust = null }
-                )
-            }
 
 
         }
@@ -1214,6 +1271,7 @@ private fun TimelineItemBox(
     onEdit: (taskId: Int) -> Unit,
     onDelete: (scheduleId: Int) -> Unit,
     onMakeIndependent: () -> Unit,
+    onStartPomodoroNow: (scheduleId: Int) -> Unit,
 
 
     ) {
@@ -1865,6 +1923,22 @@ private fun TimelineItemBox(
                             }
                         )
                     } else {
+
+
+                        if (item.mode == ScheduleMode.POMODORO) {
+                            DropdownMenuItem(
+                                text = { Text("همین حالا شروع کن") },
+                                leadingIcon = {
+                                    Icon(Icons.Filled.PlayArrow, contentDescription = null)
+                                },
+                                onClick = {
+                                    menuExpanded = false
+                                    onStartPomodoroNow(item.scheduleId)
+                                }
+                            )
+                        }
+
+
                         // ✅ آیتم‌های واقعی: Move / Edit / Delete
                         DropdownMenuItem(
                             text = { Text("Move to pallet") },
@@ -1981,10 +2055,11 @@ private fun RightPallet(
         // دکمه باز/بسته
         Box(
             modifier = Modifier
-                .width(18.dp)
+                .width(48.dp)
                 .fillMaxHeight()
-                .graphicsLayer { alpha = if (isDraggingFromPallet) 0f else 1f } // ✅ مخفی هنگام درگ
-                .clickable(enabled = !isDraggingFromPallet) { onToggle() },     // ✅ کلیک غیرفعال
+                .padding(vertical = 8.dp)
+                .graphicsLayer { alpha = if (isDraggingFromPallet) 0f else 1f }
+                .clickable(enabled = !isDraggingFromPallet) { onToggle() },
             contentAlignment = Alignment.Center
         ) {
             Icon(
@@ -2534,3 +2609,69 @@ private fun ruleIsActiveOnDate(rule: ScheduleScreenItem, date: LocalDate): Boole
     }
 }
 
+@Composable
+private fun RunningPomodoroPanel(
+    state: RunningPomodoroUiState,
+    onPause: () -> Unit,
+    onResume: () -> Unit,
+    onSkip: () -> Unit,
+    onRestart: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(12.dp),
+        elevation = CardDefaults.cardElevation(12.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp)
+                .background(MaterialTheme.colorScheme.primaryContainer),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+
+        ) {
+            Text(state.title, style = MaterialTheme.typography.titleMedium)
+
+            Text(
+                text = "انتظار تا شروع: ${formatSeconds(state.waitingSeconds)}",
+                color = Color(0xFF4CAF50)
+            )
+
+            Text(
+                text = "تمرکز: ${formatSeconds(state.focusElapsedSeconds)}",
+                color = Color.Red
+            )
+
+            if (state.phase == PomodoroRunPhase.BREAK || state.phase == PomodoroRunPhase.FINISHED) {
+                Text(
+                    text = "استراحت: ${formatSeconds(state.breakElapsedSeconds)}",
+                    color = MaterialTheme.colorScheme.tertiary
+                )
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                IconButton(onClick = onPause) {
+                    Icon(Icons.Filled.Pause, contentDescription = "Pause")
+                }
+
+                IconButton(onClick = onResume) {
+                    Icon(Icons.Filled.PlayArrow, contentDescription = "Resume")
+                }
+
+                IconButton(onClick = onSkip) {
+                    Icon(Icons.Filled.Close, contentDescription = "Skip")
+                }
+
+                IconButton(onClick = onRestart) {
+                    Icon(Icons.Filled.Refresh, contentDescription = "Restart")
+                }
+            }
+        }
+    }
+}
+
+private fun formatSeconds(totalSeconds: Long): String {
+    val m = totalSeconds / 60
+    val s = totalSeconds % 60
+    return "%02d:%02d".format(m, s)
+}
