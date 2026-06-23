@@ -37,61 +37,61 @@ class ReminderScheduler @Inject constructor(
 
 
     //ساخت ورک منیجر
-    private val wm by lazy { WorkManager.getInstance(appContext) }
+//    private val wm by lazy { WorkManager.getInstance(appContext) }
 
 
 
     //ایجاد زمانبندی
     suspend fun reschedule(reminderId: Int?) {
-        if (reminderId == null) return
-
-        //خواندن از دیتابیس
-        val reminder = reminderRepo.getById(reminderId) ?: return
-        val schedule = scheduleRepo.getById(reminder.scheduleId) ?: return
-
-        Log.i("TEST1","reminder=${reminder.id}")
-        Log.i("TEST1","schedule=${schedule.id}")
-
-        // زمان اجرای نهایی را حساب کن
-        // زمان الان
-        val after = System.currentTimeMillis() + 1000L // ✅ 1 ثانیه جلوتر تا تکرار همون لحظه نشه
-
-        //تریگر به میلی ثانیه
-        val triggerAtMillis = computeNextTriggerAtMillis(reminder, schedule, after) ?: run {
-            cancel(reminderId)
-            return
-        }
-
-        //اختلاف زمان اجرا با «الان»
-        val delay = (triggerAtMillis - System.currentTimeMillis()).coerceAtLeast(0L) // نمیگذارد منفی باشد
-
-
-
-        //درخواست Work را می‌سازد
-        val req = OneTimeWorkRequestBuilder<ReminderNotificationWorker>()
-            .setInitialDelay(delay, TimeUnit.MILLISECONDS)
-            .setInputData(workDataOf("reminderId" to reminderId))   //ارسال reminderId به doWork
-            .addTag("reminders")
-            .addTag(workName(reminderId))
-            .build()
-
-
-
-        //در صف قرار دادن درخواست کار
-        wm.enqueueUniqueWork(
-            workName(reminderId),
-            ExistingWorkPolicy.REPLACE,  // Replace: اگر قبلاً work داشته، جایگزین کن
-            req
-        )
-
-
-
-        //Log
-        val name = workName(reminderId) // همون "reminder_$reminderId"
-        withContext(Dispatchers.IO) {
-            val infos = wm.getWorkInfosForUniqueWork(name).get()
-            Log.d("WM", "after enqueue name=$name infos=${infos.map { it.state to it.id }} delayMs=$delay")
-        }
+//        if (reminderId == null) return
+//
+//        //خواندن از دیتابیس
+//        val reminder = reminderRepo.getById(reminderId) ?: return
+//        val schedule = scheduleRepo.getById(reminder.scheduleId) ?: return
+//
+//        Log.i("TEST1","reminder=${reminder.id}")
+//        Log.i("TEST1","schedule=${schedule.id}")
+//
+//        // زمان اجرای نهایی را حساب کن
+//        // زمان الان
+//        val after = System.currentTimeMillis() + 1000L // ✅ 1 ثانیه جلوتر تا تکرار همون لحظه نشه
+//
+//        //تریگر به میلی ثانیه
+//        val triggerAtMillis = computeNextTriggerAtMillis(reminder, schedule, after) ?: run {
+//            cancel(reminderId)
+//            return
+//        }
+//
+//        //اختلاف زمان اجرا با «الان»
+//        val delay = (triggerAtMillis - System.currentTimeMillis()).coerceAtLeast(0L) // نمیگذارد منفی باشد
+//
+//
+//
+//        //درخواست Work را می‌سازد
+//        val req = OneTimeWorkRequestBuilder<ReminderNotificationWorker>()
+//            .setInitialDelay(delay, TimeUnit.MILLISECONDS)
+//            .setInputData(workDataOf("reminderId" to reminderId))   //ارسال reminderId به doWork
+//            .addTag("reminders")
+//            .addTag(workName(reminderId))
+//            .build()
+//
+//
+//
+//        //در صف قرار دادن درخواست کار
+//        wm.enqueueUniqueWork(
+//            workName(reminderId),
+//            ExistingWorkPolicy.REPLACE,  // Replace: اگر قبلاً work داشته، جایگزین کن
+//            req
+//        )
+//
+//
+//
+//        //Log
+//        val name = workName(reminderId) // همون "reminder_$reminderId"
+//        withContext(Dispatchers.IO) {
+//            val infos = wm.getWorkInfosForUniqueWork(name).get()
+//            Log.d("WM", "after enqueue name=$name infos=${infos.map { it.state to it.id }} delayMs=$delay")
+//        }
 
     }
 
@@ -99,9 +99,9 @@ class ReminderScheduler @Inject constructor(
 
     //کنسل کردن کار در صف کار
     fun cancel(reminderId: Int?) {
-        if (reminderId == null) return
-
-        wm.cancelUniqueWork(workName(reminderId))
+//        if (reminderId == null) return
+//
+//        wm.cancelUniqueWork(workName(reminderId))
     }
 
 }

@@ -6,6 +6,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import com.example.compoundeffectV1_01.domain.pomodoro.scheduler.PomodoroScheduler
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -14,8 +15,39 @@ import javax.inject.Singleton
 
 @Singleton
 class PomodoroAlarmScheduler @Inject constructor(
-    @ApplicationContext private val context: Context
-) {
+    private val context: Context
+) : PomodoroScheduler {
+
+
+    override fun scheduleStart(delayMillis: Long) {
+        // کد فعلی start alarm
+    }
+
+    override fun scheduleEnd(delayMillis: Long) {
+        // کد فعلی end alarm
+    }
+
+    override fun cancelAll() {
+        // cancel alarms
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
     fun scheduleFocusStart(scheduleId: Int, triggerAt: LocalDateTime) {
@@ -78,7 +110,7 @@ class PomodoroAlarmScheduler @Inject constructor(
             "schedule alarm => scheduleId=$scheduleId type=$type triggerMillis=$triggerMillis triggerAt=$triggerAt"
         )
 
-        alarmManager.setExactAndAllowWhileIdle(
+        alarmManager.setAndAllowWhileIdle(
             AlarmManager.RTC_WAKEUP,
             triggerMillis,
             pendingIntent

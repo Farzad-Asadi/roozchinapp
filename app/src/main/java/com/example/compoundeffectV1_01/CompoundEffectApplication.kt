@@ -15,30 +15,24 @@ import javax.inject.Inject
 
 
 @HiltAndroidApp
-class CompoundEffectApplication : Application(), Configuration.Provider {
-
-    @Inject lateinit var workerFactory: HiltWorkerFactory
+class CompoundEffectApplication : Application() {
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onCreate() {
         super.onCreate()
 
-        // کانال نوتیفیکیشن
         ReminderNotifications.ensureChannel(this)
 
-        val entryPoint = EntryPointAccessors.fromApplication(this, SeederEntryPoint::class.java)
+        val entryPoint = EntryPointAccessors.fromApplication(
+            this,
+            SeederEntryPoint::class.java
+        )
+
         val seeder = entryPoint.seeder()
 
         appScope.launch {
             seeder.seedIfNeeded()
         }
     }
-
-    override val workManagerConfiguration: Configuration
-        get() = Configuration.Builder()
-            .setWorkerFactory(workerFactory)
-            // (اختیاری) اگر خواستی لاگ WorkManager بیشتر بشه:
-            // .setMinimumLoggingLevel(Log.DEBUG)
-            .build()
 }
