@@ -2,17 +2,31 @@ package com.example.compoundeffectV1_01.domain.pomodoro
 
 import com.example.compoundeffectV1_01.data.alarm.PomodoroAlarmScheduler
 import com.example.compoundeffectV1_01.domain.pomodoro.scheduler.PomodoroScheduler
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
+
+
+
+private const val FOCUS_TIME = 25 * 60 * 1000L
+private const val BREAK_TIME = 5 * 60 * 1000L
+
 
 object PomodoroEngine {
 
-    private var alarmScheduler: PomodoroAlarmScheduler? = null
+    private var sessionStartTime: Long = 0L
+    private var expectedEndTime: Long = 0L
+
+    private var scheduler: PomodoroAlarmScheduler? = null
+
+    private val _state = MutableStateFlow<PomodoroState>(PomodoroState.Idle)
+    val state = _state.asStateFlow()
 
     private var sessionIndex = 0
     private var isRunning = false
 
-    fun init(alarmScheduler: PomodoroAlarmScheduler) {
-        this.alarmScheduler = alarmScheduler
+    fun init(scheduler: PomodoroAlarmScheduler) {
+        this.scheduler = scheduler
     }
 
     fun start() {
@@ -21,29 +35,58 @@ object PomodoroEngine {
         isRunning = true
         sessionIndex = 0
 
-        startWorkSession()
-    }
+        val duration = FOCUS_TIME
 
-    private fun startWorkSession() {
-        alarmScheduler?.scheduleStart(0)
-    }
+        sessionStartTime = System.currentTimeMillis()
+        expectedEndTime = sessionStartTime + duration
 
-    fun onSessionFinished() {
-        if (!isRunning) return
+        _state.value = PomodoroState.Running(
+            sessionIndex = 0,
+            isWork = true,
+            remainingMillis = duration
+        )
 
-        sessionIndex++
-
-        val isBreak = sessionIndex % 2 == 1
-
-        if (isBreak) {
-            alarmScheduler?.scheduleEnd(0)
-        } else {
-            alarmScheduler?.scheduleStart(0)
-        }
+        scheduler?.schedule(
+            type = "FOCUS_END",
+            triggerAtMillis = expectedEndTime
+        )
     }
 
     fun stop() {
         isRunning = false
-        alarmScheduler?.cancelAll()
+        scheduler?.cancelAll()
+
+        _state.value = PomodoroState.Idle
+    }
+
+    fun onAlarmTriggered() {
+
+        if (!isRunning) return
+
+        sessionIndex++
+
+        val isFocus = sessionIndex % 2 == 0
+        val duration = if (isFocus) FOCUS_TIME else BREAK_TIME
+
+        sessionStartTime = System.currentTimeMillis()
+        expectedEndTime = sessionStartTime + duration
+
+        _state.value = PomodoroState.Running(
+            sessionIndex = sessionIndex,
+            isWork = isFocus,
+            remainingMillis = duration
+        )
+
+        scheduler?.schedule(
+            type = if (isFocus) "FOCUS_END" else "BREAK_END",
+            triggerAtMillis = expectedEndTime
+        )
+    }
+
+    private fun scheduleNext(isFocus: Boolean, triggerAt: Long) {
+        scheduler?.schedule(
+            type = if (isFocus) "FOCUS_END" else "BREAK_END",
+            triggerAtMillis = triggerAt
+        )
     }
 }

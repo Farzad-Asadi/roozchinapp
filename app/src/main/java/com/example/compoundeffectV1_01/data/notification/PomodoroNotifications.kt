@@ -5,39 +5,20 @@ import android.app.NotificationManager
 import android.content.Context
 import android.media.AudioAttributes
 import android.os.Build
+import androidx.core.app.NotificationCompat
+import com.example.compoundeffectV1_01.R
 
 object PomodoroNotifications {
+    fun show(context: Context, title: String, message: String) {
+        val notificationManager =
+            context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-    const val CHANNEL_ID = "pomodoro_alarm_channel_v2"
+        val notification = NotificationCompat.Builder(context, "pomodoro_channel")
+            .setContentTitle(title)
+            .setContentText(message)
+            .setSmallIcon(R.drawable.ic_notification)
+            .build()
 
-    fun ensureChannel(context: Context) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-
-        val manager = context.getSystemService(NotificationManager::class.java)
-
-        val existing = manager.getNotificationChannel(CHANNEL_ID)
-        if (existing != null) return
-
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            "Pomodoro Alarms",
-            NotificationManager.IMPORTANCE_HIGH
-        ).apply {
-            description = "Pomodoro focus and break alerts"
-            enableVibration(true)
-            setBypassDnd(false)
-
-            val audioAttributes = AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_NOTIFICATION_EVENT)
-                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                .build()
-
-            setSound(
-                android.provider.Settings.System.DEFAULT_NOTIFICATION_URI,
-                audioAttributes
-            )
-        }
-
-        manager.createNotificationChannel(channel)
+        notificationManager.notify(1, notification)
     }
 }

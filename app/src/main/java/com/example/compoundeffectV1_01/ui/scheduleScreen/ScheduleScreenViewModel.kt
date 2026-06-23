@@ -175,11 +175,27 @@ class ScheduleScreenViewModel @Inject constructor(
             val breakEnd = now.plusMinutes((focus + shortBreak).toLong())
 
 
-            pomodoroAlarmScheduler.cancelPomodoroAlarms(scheduleId)
+            pomodoroAlarmScheduler.schedule(
+                type = "FOCUS_END",
+                triggerAtMillis = focusEnd.atZone(java.time.ZoneId.systemDefault())
+                    .toInstant()
+                    .toEpochMilli()
+            )
 
-            pomodoroAlarmScheduler.scheduleFocusStart(scheduleId, now)
-            pomodoroAlarmScheduler.scheduleFocusEnd(scheduleId, focusEnd)
-            pomodoroAlarmScheduler.scheduleBreakEnd(scheduleId, breakEnd)
+            pomodoroAlarmScheduler.schedule(
+                type = "BREAK_END",
+                triggerAtMillis = breakEnd.atZone(java.time.ZoneId.systemDefault())
+                    .toInstant()
+                    .toEpochMilli()
+            )
+
+            pomodoroAlarmScheduler.schedule(
+                type = "FOCUS_START",
+                triggerAtMillis = now.atZone(java.time.ZoneId.systemDefault())
+                    .toInstant()
+                    .toEpochMilli()
+            )
+
 
             startRunningPomodoroTimer(
                 schedule = schedule,
