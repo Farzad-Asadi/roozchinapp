@@ -1,8 +1,11 @@
 package com.example.compoundeffectV1_01.ui.scheduleScreen
 
 import android.Manifest
+import android.app.AlarmManager
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.provider.Settings
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -549,6 +552,8 @@ fun ScheduleScreen(
             pendingScrollByPx = 0f
         }
     }
+
+
 
 
     Scaffold(
