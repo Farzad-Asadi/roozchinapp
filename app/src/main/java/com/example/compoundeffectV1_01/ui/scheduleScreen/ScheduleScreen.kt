@@ -140,6 +140,10 @@ import java.time.LocalTime
 import java.time.temporal.ChronoUnit
 import kotlin.math.round
 import kotlin.math.roundToInt
+import android.content.Context
+import android.net.Uri
+import androidx.compose.material.icons.filled.Settings as SettingsIcon
+import com.example.compoundeffectV1_01.data.notification.PomodoroNotifications
 
 @Composable
 fun ScheduleScreen(
@@ -304,10 +308,10 @@ fun ScheduleScreen(
 
     // مقدار نهایی که بقیه‌ی UI باید ببینه
     val verticalZoom = verticalZoomAnim.value
-
+    var isPinchZooming by remember { mutableStateOf(false) }
     val horizontalZoom by rememberSaveable { mutableFloatStateOf(1f) }
 
-    val hourHeightDp = (72.dp * verticalZoom).coerceIn(48.dp, 360.dp)
+    val hourHeightDp = (72.dp * verticalZoom).coerceIn(48.dp, 720.dp)
     val dayWidthDp = (220.dp * horizontalZoom).coerceIn(160.dp, 360.dp)
 
     val vScroll = rememberScrollState()
@@ -335,6 +339,7 @@ fun ScheduleScreen(
 
     // برای اینکه بفهمیم Grid کجای صفحه‌ست
     var gridOriginInWindow by remember { mutableStateOf(Offset.Zero) }
+    var timelineBodyOriginInRoot by remember { mutableStateOf(Offset.Zero) }
     var palletExpanded by rememberSaveable { mutableStateOf(false) }
 
     var overlayLayerOriginInRoot by remember { mutableStateOf(Offset.Zero) }
@@ -460,6 +465,12 @@ fun ScheduleScreen(
         computeOverlapLayouts(displayTimelineItems, startDate, numDays)
     }
     val context = LocalContext.current
+
+    val openPomodoroNotificationSettings = {
+        context.openPomodoroNotificationSettings(
+            channelId = PomodoroNotifications.CHANNEL_ID
+        )
+    }
 
     val activity = context as Activity
 
@@ -607,7 +618,8 @@ fun ScheduleScreen(
         modifier = Modifier,
         topBar = {
             CompactTopBar(
-                title = "       Schedule TopBar",
+                title = "Schedule",
+                onPomodoroNotificationSettingsClick = openPomodoroNotificationSettings
             )
         }
     ) { padding ->
@@ -655,6 +667,9 @@ fun ScheduleScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxSize()
+                            .onGloballyPositioned { coords ->
+                                timelineBodyOriginInRoot = coords.positionInRoot()
+                            }
                             .pointerInput(Unit) {
                                 awaitEachGesture {
                                     awaitFirstDown(pass = PointerEventPass.Initial)
@@ -667,7 +682,14 @@ fun ScheduleScreen(
                                         val event =
                                             awaitPointerEvent(pass = PointerEventPass.Initial)
                                         val pressed = event.changes.filter { it.pressed }
-                                        if (pressed.size < 2) break
+
+                                        if (pressed.size < 2) {
+                                            isPinchZooming = false
+                                            break
+                                        }
+
+                                        isPinchZooming = true
+
 
                                         val p1 = pressed[0].position
                                         val p2 = pressed[1].position
@@ -696,11 +718,12 @@ fun ScheduleScreen(
                                                 animJob?.cancel()
                                                 animJob = scope.launch {
                                                     // --- 1) anchor را در لحظه‌ی شروع پله‌ جدید قفل کن ---
-                                                    // نقطه‌ی انگشت داخل viewport گرید
-                                                    val focusYInWindow =
-                                                        focus.y + overlayLayerOriginInRoot.y
+                                                    // focus.y در مختصات Row است.
+                                                    // پس اول آن را به مختصات Root تبدیل می‌کنیم، بعد نسبت به Grid می‌سنجیم.
+                                                    val focusYInRoot = timelineBodyOriginInRoot.y + focus.y
+
                                                     val focusYInGridViewport =
-                                                        (focusYInWindow - gridOriginInWindow.y).coerceIn(
+                                                        (focusYInRoot - gridOriginInWindow.y).coerceIn(
                                                             0f,
                                                             gridViewportHeightPx
                                                         )
@@ -710,7 +733,7 @@ fun ScheduleScreen(
                                                     val hourH0 = with(density) {
                                                         (72.dp * z0).coerceIn(
                                                             48.dp,
-                                                            360.dp
+                                                            720.dp
                                                         ).toPx()
                                                     }
 
@@ -746,7 +769,7 @@ fun ScheduleScreen(
                                                         val hourH = with(density) {
                                                             (72.dp * z).coerceIn(
                                                                 48.dp,
-                                                                360.dp
+                                                                720.dp
                                                             ).toPx()
                                                         }
                                                         val contentY =
@@ -760,6 +783,7 @@ fun ScheduleScreen(
 
                                                         if (tRaw >= 1f) break
                                                     }
+
 
                                                     // ذخیره برای بعد
                                                     verticalZoomSaved = z1
@@ -779,7 +803,7 @@ fun ScheduleScreen(
                         Column(
                             modifier = Modifier
                                 .width(56.dp)
-                                .verticalScroll(vScroll)
+                                .verticalScroll(vScroll, enabled = !isPinchZooming)
                         ) {
                             repeat(24) { h ->
                                 Box(
@@ -808,8 +832,8 @@ fun ScheduleScreen(
                                 .onSizeChanged { size ->
                                     gridViewportHeightPx = size.height.toFloat()
                                 }
-                                .verticalScroll(vScroll)
-                                .horizontalScroll(hScroll)
+                                .verticalScroll(vScroll, enabled = !isPinchZooming)
+                                .horizontalScroll(hScroll, enabled = !isPinchZooming)
                         ) {
                             val totalHeight = hourHeightDp * 24
                             val totalWidth = dayWidthDp * numDays
@@ -1403,7 +1427,7 @@ private fun TimelineItemBox(
     if (dayIndex0 !in 0 until numDays) return
     val startMin0 = item.start.toLocalTime().hour * 60 + item.start.toLocalTime().minute
     val endMin0 = item.end.toLocalTime().hour * 60 + item.end.toLocalTime().minute
-    val dur0 = (endMin0 - startMin0).coerceAtLeast(minDur)
+    val dur0 = (endMin0 - startMin0).coerceAtLeast(MIN_GAP_MIN)
 
 
     // Move state
@@ -1487,11 +1511,16 @@ private fun TimelineItemBox(
 
     val x = dayWidthDp * displayDayIndex + (baseW * offsetFrac)
     val y = hourHeightDp * (displayStart / 60f)
-    val h = hourHeightDp * (((displayEnd - displayStart).coerceAtLeast(minDur)) / 60f)
+    val h = hourHeightDp * (((displayEnd - displayStart).coerceAtLeast(MIN_GAP_MIN)) / 60f)
 
-    val taskH = h.coerceAtLeast(24.dp) // ✅ حداقل خیلی کوچک فقط برای قابل لمس بودن/رندر
+    // ارتفاع واقعی کارت بر اساس زمان شروع و پایان.
+    // دیگر حداقل بصری برای خود کارت نداریم.
+    val taskH = h
+
+    // فقط وقتی کارت انتخاب شده و خیلی کوچک است، فضای انتخاب/بوردر را بزرگ‌تر می‌کنیم.
+    // خود کارت همچنان با ارتفاع واقعی رسم می‌شود.
     val selectionH =
-        if (taskH >=76.dp) taskH else 76.dp
+        if (selected && taskH < 76.dp) 76.dp else taskH
 
 
     val containerY = (y )
@@ -1722,7 +1751,7 @@ private fun TimelineItemBox(
         scheduleModeColor(item.mode).copy(alpha = 0.35f)
     }
 
-    val dashed = taskH <= 76.dp && selected
+    val dashed = selected && selectionH > taskH
 
 
 
@@ -1816,7 +1845,7 @@ private fun TimelineItemBox(
         //  باکس اصلی
         Box(
             modifier = Modifier
-                .align(Alignment.Center)
+                .align(Alignment.TopCenter)
                 .width(dayWidthDp - 12.dp)
                 .height(taskH)
                 .border(
@@ -1994,22 +2023,30 @@ private fun TimelineItemBox(
             // --- More menu (move/edit/delete) ---
             Box(
                 modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .padding(end = 6.dp)
+                    .align(
+                        if (selectionH > taskH) Alignment.TopEnd
+                        else Alignment.CenterEnd
+                    )
+                    .padding(
+                        end = 4.dp,
+                        top = if (selectionH > taskH) 2.dp else 0.dp
+                    )
             ) {
-                IconButton(
-                    onClick = { menuExpanded = true },
+                Box(
                     modifier = Modifier
-                        .size(34.dp)
-//                        .background(
-//                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
-//                            shape = CircleShape
-//                        )
+                        .size(28.dp)
+                        .background(
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.75f),
+                            shape = CircleShape
+                        )
+                        .clickable { menuExpanded = true },
+                    contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Filled.MoreVert,
                         contentDescription = "More",
-                        tint = MaterialTheme.colorScheme.onSurface
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(20.dp)
                     )
                 }
 
@@ -2420,16 +2457,54 @@ private fun CategoryIconWithPlate(
 }
 
 @Composable
-fun CompactTopBar(title: String) {
+fun CompactTopBar(
+    title: String,
+    onPomodoroNotificationSettingsClick: () -> Unit
+) {
+    var menuExpanded by remember { mutableStateOf(false) }
+
     Box(
         Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surface)
-//            .statusBarsPadding()
-            .height(44.dp),
-        contentAlignment = Alignment.CenterStart
+            .height(44.dp)
     ) {
-        Text(title, modifier = Modifier.padding(horizontal = 12.dp))
+        Text(
+            text = title,
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .padding(horizontal = 12.dp),
+            style = MaterialTheme.typography.titleSmall
+        )
+
+        Box(
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .padding(end = 6.dp)
+        ) {
+            IconButton(
+                onClick = { menuExpanded = true },
+                modifier = Modifier.size(40.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.SettingsIcon,
+                    contentDescription = "Schedule settings"
+                )
+            }
+
+            DropdownMenu(
+                expanded = menuExpanded,
+                onDismissRequest = { menuExpanded = false }
+            ) {
+                DropdownMenuItem(
+                    text = { Text("تغییر صدای نوتیفیکیشن پومودورو") },
+                    onClick = {
+                        menuExpanded = false
+                        onPomodoroNotificationSettingsClick()
+                    }
+                )
+            }
+        }
     }
 }
 
@@ -2554,11 +2629,11 @@ private fun CurrentTimeOverlay(
 //>>>>>>>>>>>>>>>> Utils <<<<<<<<<<<<<<<<<<
 
 private const val MIN_GAP_MIN = 5
-private const val DAY_MIN = 0
-private const val DAY_MAX = 24 * 60
+const val DAY_MIN = 0
+const val DAY_MAX = 24 * 60
 
 private const val ZOOM_MIN = 0.6f
-private const val ZOOM_MAX = 6.0f
+private const val ZOOM_MAX = 10.0f
 
 
 private const val OVERLAP_MAX_LEVEL = 3            // 0..3  => 4 لایه
@@ -2906,4 +2981,19 @@ private fun formatSeconds(totalSeconds: Long): String {
     val m = totalSeconds / 60
     val s = totalSeconds % 60
     return "%02d:%02d".format(m, s)
+}
+
+private fun Context.openPomodoroNotificationSettings(channelId: String) {
+    val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).apply {
+            putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+            putExtra(Settings.EXTRA_CHANNEL_ID, channelId)
+        }
+    } else {
+        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+            data = Uri.parse("package:$packageName")
+        }
+    }
+
+    startActivity(intent)
 }

@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.compose.ui.geometry.Offset
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.compoundeffectV1_01.data.alarm.PomodoroAlarmReceiver
 import com.example.compoundeffectV1_01.data.alarm.PomodoroAlarmScheduler
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.TaskReminderRepository
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskMode
@@ -33,6 +34,9 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import javax.inject.Inject
 
+
+private val MIN_GAP_MIN = 5
+
 @HiltViewModel
 class ScheduleScreenViewModel @Inject constructor(
     private val taskRepo: TaskRepository,
@@ -53,6 +57,8 @@ class ScheduleScreenViewModel @Inject constructor(
                 null
             )
 
+    private var autoPomodoroWatcherJob: Job? = null
+    private val autoSuppressedPomodoroIds = mutableSetOf<Int>()
 
 
     private val _runningPomodoro = MutableStateFlow<RunningPomodoroUiState?>(null)
@@ -108,7 +114,9 @@ class ScheduleScreenViewModel @Inject constructor(
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-
+    init {
+        startPomodoroAutoWatcher()
+    }
 
 
     //common
@@ -116,6 +124,9 @@ class ScheduleScreenViewModel @Inject constructor(
 
     fun deleteScheduleById(scheduleId: Int) {
         viewModelScope.launch(Dispatchers.IO) {
+
+            pomodoroAlarmScheduler.cancelPomodoroEvents(scheduleId)
+
             taskScheduleRepo.deleteById(scheduleId)
             val reminders = reminderRepo.getByScheduleId(scheduleId)
             reminders.forEach { rUi ->
@@ -125,6 +136,9 @@ class ScheduleScreenViewModel @Inject constructor(
             }
         }
     }
+
+
+
     fun materializeVirtual(
         virtual: ScheduleScreenItem,
         newDate: LocalDate,
@@ -159,15 +173,18 @@ class ScheduleScreenViewModel @Inject constructor(
     }
 
     fun startPomodoroNow(scheduleId: Int) {
+        autoSuppressedPomodoroIds.remove(scheduleId)
+
         viewModelScope.launch(Dispatchers.IO) {
             val schedule = taskScheduleRepo.getById(scheduleId) ?: return@launch
             if (schedule.mode != ScheduleMode.POMODORO) return@launch
 
-            val focus = schedule.focusMinutes ?: return@launch
+            val focus = schedule.focusMinutes ?: 25
             val shortBreak = schedule.shortBreakMinutes ?: 0
 
             val rawNow = LocalDateTime.now()
 
+            // مثل Restart، شروع را روی دقیقه‌ی بعدی تمیز می‌کنیم
             val now = if (rawNow.second > 0 || rawNow.nano > 0) {
                 rawNow.plusMinutes(1).withSecond(0).withNano(0)
             } else {
@@ -178,41 +195,20 @@ class ScheduleScreenViewModel @Inject constructor(
             val startMin = now.hour * 60 + now.minute
             val endMin = (startMin + focus + shortBreak).coerceAtMost(24 * 60)
 
-            taskScheduleRepo.updatePomodoroTimeRange(
+            // ✅ مهم:
+            // به جای اینکه فقط همین schedule جابه‌جا شود،
+            // کل زنجیره‌ی پومودوروهای چسبیده‌ی بعد از آن هم همراهش جابه‌جا می‌شود.
+            movePomodoroChainForward(
                 scheduleId = scheduleId,
-                date = date,
-                startMin = startMin,
-                endMin = endMin
+                newDate = date,
+                newStartMin = startMin,
+                newEndMin = endMin
             )
 
-            val focusEnd = now.plusMinutes(focus.toLong())
-            val breakEnd = now.plusMinutes((focus + shortBreak).toLong())
-
-
-            pomodoroAlarmScheduler.schedule(
-                type = "FOCUS_END",
-                triggerAtMillis = focusEnd.atZone(java.time.ZoneId.systemDefault())
-                    .toInstant()
-                    .toEpochMilli()
-            )
-
-            pomodoroAlarmScheduler.schedule(
-                type = "BREAK_END",
-                triggerAtMillis = breakEnd.atZone(java.time.ZoneId.systemDefault())
-                    .toInstant()
-                    .toEpochMilli()
-            )
-
-            pomodoroAlarmScheduler.schedule(
-                type = "FOCUS_START",
-                triggerAtMillis = now.atZone(java.time.ZoneId.systemDefault())
-                    .toInstant()
-                    .toEpochMilli()
-            )
-
+            val updatedSchedule = taskScheduleRepo.getById(scheduleId) ?: return@launch
 
             startRunningPomodoroTimer(
-                schedule = schedule,
+                schedule = updatedSchedule,
                 clickedAt = rawNow,
                 realStartAt = now,
                 focusMinutes = focus,
@@ -248,11 +244,14 @@ class ScheduleScreenViewModel @Inject constructor(
         )
 
         _runningPomodoro.value = initialState
+        cancelStartSoonForForwardChainChildren(initialState.scheduleId)
         startRunningPomodoroTicker(initialState)
     }
 
     private fun scheduleRunningPomodoroAlarms(state: RunningPomodoroUiState) {
-        pomodoroAlarmScheduler.cancelAll()
+        // فقط آلارم‌های همین پومودوروی در حال اجرا را عوض کن
+        // نه کل آلارم‌های پومودوروهای بعدی
+        pomodoroAlarmScheduler.cancelPomodoroEvents(state.scheduleId)
 
         val nowMillis = System.currentTimeMillis()
 
@@ -262,7 +261,9 @@ class ScheduleScreenViewModel @Inject constructor(
                 .toEpochMilli()
 
             if (millis > nowMillis) {
-                pomodoroAlarmScheduler.schedule(
+                pomodoroAlarmScheduler.schedulePomodoroEvent(
+                    scheduleId = state.scheduleId,
+                    title = state.title,
                     type = type,
                     triggerAtMillis = millis
                 )
@@ -271,18 +272,18 @@ class ScheduleScreenViewModel @Inject constructor(
 
         when (state.phase) {
             PomodoroRunPhase.WAITING_TO_START -> {
-                scheduleIfFuture("FOCUS_START", state.realStartAt)
-                scheduleIfFuture("FOCUS_END", state.focusEndAt)
-                scheduleIfFuture("BREAK_END", state.breakEndAt)
+                scheduleIfFuture(PomodoroAlarmReceiver.TYPE_FOCUS_START, state.realStartAt)
+                scheduleIfFuture(PomodoroAlarmReceiver.TYPE_FOCUS_END, state.focusEndAt)
+                scheduleIfFuture(PomodoroAlarmReceiver.TYPE_BREAK_END, state.breakEndAt)
             }
 
             PomodoroRunPhase.FOCUS -> {
-                scheduleIfFuture("FOCUS_END", state.focusEndAt)
-                scheduleIfFuture("BREAK_END", state.breakEndAt)
+                scheduleIfFuture(PomodoroAlarmReceiver.TYPE_FOCUS_END, state.focusEndAt)
+                scheduleIfFuture(PomodoroAlarmReceiver.TYPE_BREAK_END, state.breakEndAt)
             }
 
             PomodoroRunPhase.BREAK -> {
-                scheduleIfFuture("BREAK_END", state.breakEndAt)
+                scheduleIfFuture(PomodoroAlarmReceiver.TYPE_BREAK_END, state.breakEndAt)
             }
 
             PomodoroRunPhase.FINISHED -> Unit
@@ -357,41 +358,115 @@ class ScheduleScreenViewModel @Inject constructor(
         if (current.isPaused || current.phase == PomodoroRunPhase.FINISHED) return
 
         runningPomodoroJob?.cancel()
-        pomodoroAlarmScheduler.cancelAll()
 
         _runningPomodoro.value = current.copy(
             isPaused = true,
             pauseAt = LocalDateTime.now()
         )
+
+        viewModelScope.launch(Dispatchers.IO) {
+            cancelForwardPomodoroChainAlarms(current.scheduleId)
+        }
     }
 
     fun resumeRunningPomodoro() {
         val current = _runningPomodoro.value ?: return
 
-        if (!current.isPaused) return
+        if (!current.isPaused || current.phase == PomodoroRunPhase.FINISHED) return
 
         val pauseAt = current.pauseAt ?: return
         val now = LocalDateTime.now()
-        val pausedDuration = Duration.between(pauseAt, now)
 
-        val resumedState = current.copy(
-            realStartAt = current.realStartAt.plus(pausedDuration),
-            focusEndAt = current.focusEndAt.plus(pausedDuration),
-            breakEndAt = current.breakEndAt.plus(pausedDuration),
-            isPaused = false,
-            pauseAt = null
+        val delayMinutes = durationToScheduleDelayMinutes(
+            Duration.between(pauseAt, now)
         )
+
+        val scheduleDelay = Duration.ofMinutes(delayMinutes)
+
+        val resumedState = when (current.phase) {
+            PomodoroRunPhase.WAITING_TO_START -> {
+                // اگر قبل از شروع Pause شده، کل کارت فعلی هم عقب می‌رود
+                current.copy(
+                    realStartAt = current.realStartAt.plus(scheduleDelay),
+                    focusEndAt = current.focusEndAt.plus(scheduleDelay),
+                    breakEndAt = current.breakEndAt.plus(scheduleDelay),
+                    isPaused = false,
+                    pauseAt = null
+                )
+            }
+
+            PomodoroRunPhase.FOCUS,
+            PomodoroRunPhase.BREAK -> {
+                // اگر شروع شده، start دست نمی‌خورد؛ فقط پایان‌ها عقب می‌روند
+                current.copy(
+                    focusEndAt = current.focusEndAt.plus(scheduleDelay),
+                    breakEndAt = current.breakEndAt.plus(scheduleDelay),
+                    isPaused = false,
+                    pauseAt = null
+                )
+            }
+
+            PomodoroRunPhase.FINISHED -> return
+        }
 
         _runningPomodoro.value = resumedState
 
-        scheduleRunningPomodoroAlarms(resumedState)
-        startRunningPomodoroTicker(resumedState)
+        viewModelScope.launch {
+            if (delayMinutes > 0) {
+                withContext(Dispatchers.IO) {
+                    val schedule = taskScheduleRepo.getById(current.scheduleId)
+                        ?: return@withContext
+
+                    val date = schedule.dateEpochDay
+                        ?.let(LocalDate::ofEpochDay)
+                        ?: return@withContext
+
+                    val oldStart = schedule.startMinuteOfDay ?: return@withContext
+                    val oldEnd = schedule.endMinuteOfDay ?: return@withContext
+
+                    val newStart: Int
+                    val newEnd: Int
+
+                    when (current.phase) {
+                        PomodoroRunPhase.WAITING_TO_START -> {
+                            newStart = (oldStart + delayMinutes.toInt())
+                                .coerceIn(DAY_MIN, DAY_MAX)
+
+                            newEnd = (oldEnd + delayMinutes.toInt())
+                                .coerceIn(DAY_MIN, DAY_MAX)
+                        }
+
+                        PomodoroRunPhase.FOCUS,
+                        PomodoroRunPhase.BREAK -> {
+                            newStart = oldStart
+
+                            newEnd = (oldEnd + delayMinutes.toInt())
+                                .coerceIn(DAY_MIN, DAY_MAX)
+                        }
+
+                        PomodoroRunPhase.FINISHED -> return@withContext
+                    }
+
+                    movePomodoroChainForward(
+                        scheduleId = current.scheduleId,
+                        newDate = date,
+                        newStartMin = newStart,
+                        newEndMin = newEnd
+                    )
+                }
+            }
+
+            scheduleRunningPomodoroAlarms(resumedState)
+            startRunningPomodoroTicker(resumedState)
+        }
     }
 
     fun skipRunningPomodoro() {
         val current = _runningPomodoro.value ?: return
 
         if (current.phase == PomodoroRunPhase.FINISHED) return
+
+        autoSuppressedPomodoroIds += current.scheduleId
 
         runningPomodoroJob?.cancel()
         pomodoroAlarmScheduler.cancelAll()
@@ -499,6 +574,8 @@ class ScheduleScreenViewModel @Inject constructor(
     fun restartRunningPomodoro() {
         val current = _runningPomodoro.value ?: return
 
+        autoSuppressedPomodoroIds.remove(current.scheduleId)
+
         if (current.phase == PomodoroRunPhase.FINISHED) return
 
         viewModelScope.launch(Dispatchers.IO) {
@@ -572,7 +649,349 @@ class ScheduleScreenViewModel @Inject constructor(
         )
     }
 
+    private suspend fun schedulePomodoroTimelineAlarms(schedule: TaskSchedule) {
+        val scheduleId = schedule.id ?: return
+        if (schedule.mode != ScheduleMode.POMODORO) return
+        if (schedule.inPallet) return
 
+        val dateEpochDay = schedule.dateEpochDay ?: return
+        val startMin = schedule.startMinuteOfDay ?: return
+        val focus = schedule.focusMinutes ?: return
+        val shortBreak = schedule.shortBreakMinutes ?: 0
+
+        val taskTitle =
+            taskRepo.getTaskById(schedule.taskId)?.name
+                ?: schedule.title
+                ?: "Pomodoro"
+
+        val startAt = LocalDate.ofEpochDay(dateEpochDay)
+            .atStartOfDay()
+            .plusMinutes(startMin.toLong())
+
+        val focusEndAt = startAt.plusMinutes(focus.toLong())
+        val breakEndAt = focusEndAt.plusMinutes(shortBreak.toLong())
+
+        val nowMillis = System.currentTimeMillis()
+
+        fun LocalDateTime.toMillis(): Long {
+            return this.atZone(ZoneId.systemDefault())
+                .toInstant()
+                .toEpochMilli()
+        }
+
+        fun scheduleIfFuture(type: String, at: LocalDateTime) {
+            val millis = at.toMillis()
+            if (millis > nowMillis) {
+                pomodoroAlarmScheduler.schedulePomodoroEvent(
+                    scheduleId = scheduleId,
+                    title = taskTitle,
+                    type = type,
+                    triggerAtMillis = millis
+                )
+            }
+        }
+
+        // ✅ اگر کمتر از یک دقیقه مانده، هشدار را تقریباً فوراً نشان بده.
+        if (startAt.toMillis() > nowMillis) {
+            val warningAtMillis = maxOf(
+                startAt.minusMinutes(1).toMillis(),
+                nowMillis + 1_000L
+            )
+
+            pomodoroAlarmScheduler.schedulePomodoroEvent(
+                scheduleId = scheduleId,
+                title = taskTitle,
+                type = PomodoroAlarmReceiver.TYPE_START_SOON,
+                triggerAtMillis = warningAtMillis
+            )
+        }
+
+        scheduleIfFuture(PomodoroAlarmReceiver.TYPE_FOCUS_START, startAt)
+        scheduleIfFuture(PomodoroAlarmReceiver.TYPE_FOCUS_END, focusEndAt)
+
+        if (shortBreak > 0) {
+            scheduleIfFuture(PomodoroAlarmReceiver.TYPE_BREAK_END, breakEndAt)
+        }
+    }
+
+    private fun startPomodoroAutoWatcher() {
+        if (autoPomodoroWatcherJob != null) return
+
+        autoPomodoroWatcherJob = viewModelScope.launch {
+            while (true) {
+                val current = _runningPomodoro.value
+
+                // اگر تایمر دستی/اتوماتیک در حال اجراست، دخالت نکن
+                if (current == null) {
+                    val now = LocalDateTime.now()
+                    val candidate = findAutoRunnablePomodoro(
+                        items = allItems.value,
+                        now = now
+                    )
+
+                    if (candidate != null) {
+                        startRunningPomodoroFromTimelineItem(
+                            item = candidate,
+                            now = now
+                        )
+                    }
+                }
+
+                delay(1_000)
+            }
+        }
+    }
+
+    private fun findAutoRunnablePomodoro(
+        items: List<ScheduleScreenItem>,
+        now: LocalDateTime
+    ): ScheduleScreenItem? {
+        return items
+            .asSequence()
+            .filter { it.mode == ScheduleMode.POMODORO }
+            .filter { !it.inPallet }
+            .filter { it.scheduleId !in autoSuppressedPomodoroIds }
+            .filter { item ->
+                val focus = item.focusMinutes ?: 25
+                val shortBreak = item.shortBreakMinutes ?: 0
+
+                val startAt = item.start
+                val focusEndAt = startAt.plusMinutes(focus.toLong())
+                val breakEndAt = focusEndAt.plusMinutes(shortBreak.toLong())
+
+                val autoActivationAt = startAt.minusSeconds(60)
+
+                // از یک دقیقه قبل شروع تا پایان Break، تایمر قابل فعال‌سازی است
+                !now.isBefore(autoActivationAt) && now.isBefore(breakEndAt)
+            }
+            .sortedBy { it.start }
+            .firstOrNull()
+    }
+
+    private fun startRunningPomodoroFromTimelineItem(
+        item: ScheduleScreenItem,
+        now: LocalDateTime
+    ) {
+        val focus = item.focusMinutes ?: 25
+        val shortBreak = item.shortBreakMinutes ?: 0
+
+        val realStartAt = item.start
+        val focusEndAt = realStartAt.plusMinutes(focus.toLong())
+        val breakEndAt = focusEndAt.plusMinutes(shortBreak.toLong())
+
+        val phase = when {
+            now.isBefore(realStartAt) -> PomodoroRunPhase.WAITING_TO_START
+            now.isBefore(focusEndAt) -> PomodoroRunPhase.FOCUS
+            now.isBefore(breakEndAt) -> PomodoroRunPhase.BREAK
+            else -> PomodoroRunPhase.FINISHED
+        }
+
+        if (phase == PomodoroRunPhase.FINISHED) return
+
+        val waitingSeconds =
+            if (now.isBefore(realStartAt)) {
+                Duration.between(now, realStartAt).seconds.coerceAtLeast(0)
+            } else {
+                0
+            }
+
+        val focusTotalSeconds = Duration
+            .between(realStartAt, focusEndAt)
+            .seconds
+            .coerceAtLeast(0)
+
+        val breakTotalSeconds = Duration
+            .between(focusEndAt, breakEndAt)
+            .seconds
+            .coerceAtLeast(0)
+
+        val focusElapsed = Duration
+            .between(realStartAt, now)
+            .seconds
+            .coerceIn(0, focusTotalSeconds)
+
+        val breakElapsed = Duration
+            .between(focusEndAt, now)
+            .seconds
+            .coerceIn(0, breakTotalSeconds)
+
+        val initialState = RunningPomodoroUiState(
+            scheduleId = item.scheduleId,
+            taskId = item.taskId,
+            title = item.title,
+            clickedAt = now,
+            realStartAt = realStartAt,
+            focusEndAt = focusEndAt,
+            breakEndAt = breakEndAt,
+            phase = phase,
+            waitingSeconds = waitingSeconds,
+            focusElapsedSeconds = focusElapsed,
+            breakElapsedSeconds = breakElapsed,
+            focusDoneApplied = false,
+            isPaused = false,
+            pauseAt = null
+        )
+
+        _runningPomodoro.value = initialState
+        cancelStartSoonForForwardChainChildren(initialState.scheduleId)
+        startRunningPomodoroTicker(initialState)
+    }
+
+    private data class PomodoroChainNode(
+        val scheduleId: Int,
+        val date: LocalDate,
+        val startMin: Int,
+        val endMin: Int
+    ) {
+        val durationMin: Int
+            get() = (endMin - startMin).coerceAtLeast(1)
+    }
+
+    private fun minuteOfDay(dateTime: LocalDateTime): Int {
+        val t = dateTime.toLocalTime()
+        return t.hour * 60 + t.minute
+    }
+
+    private fun findForwardPomodoroChain(scheduleId: Int): List<PomodoroChainNode> {
+        val items = allItems.value
+
+        val current = items.firstOrNull {
+            it.scheduleId == scheduleId &&
+                    it.scheduleId > 0 &&
+                    it.mode == ScheduleMode.POMODORO &&
+                    !it.inPallet
+        } ?: return emptyList()
+
+        val date = current.start.toLocalDate()
+
+        val sameDayPomodoros = items
+            .filter {
+                it.scheduleId > 0 &&
+                        it.mode == ScheduleMode.POMODORO &&
+                        !it.inPallet &&
+                        it.start.toLocalDate() == date
+            }
+            .sortedWith(
+                compareBy<ScheduleScreenItem> { minuteOfDay(it.start) }
+                    .thenBy { minuteOfDay(it.end) }
+                    .thenBy { it.scheduleId }
+            )
+
+        fun toNode(item: ScheduleScreenItem): PomodoroChainNode {
+            return PomodoroChainNode(
+                scheduleId = item.scheduleId,
+                date = item.start.toLocalDate(),
+                startMin = minuteOfDay(item.start),
+                endMin = minuteOfDay(item.end)
+            )
+        }
+
+        val result = mutableListOf<PomodoroChainNode>()
+        val usedIds = mutableSetOf<Int>()
+
+        var cursor = current
+        while (true) {
+            val node = toNode(cursor)
+            result += node
+            usedIds += cursor.scheduleId
+
+            val cursorEnd = minuteOfDay(cursor.end)
+
+            val next = sameDayPomodoros.firstOrNull {
+                it.scheduleId !in usedIds &&
+                        minuteOfDay(it.start) == cursorEnd
+            } ?: break
+
+            cursor = next
+        }
+
+        return result
+    }
+
+    private suspend fun movePomodoroChainForward(
+        scheduleId: Int,
+        newDate: LocalDate,
+        newStartMin: Int,
+        newEndMin: Int
+    ) {
+        val chain = findForwardPomodoroChain(scheduleId)
+
+        if (chain.isEmpty()) {
+            taskScheduleRepo.updatePomodoroTimeRange(
+                scheduleId = scheduleId,
+                date = newDate,
+                startMin = newStartMin,
+                endMin = newEndMin
+            )
+            return
+        }
+
+        var cursorStart = newStartMin
+        var cursorEnd = newEndMin
+
+        chain.forEachIndexed { index, node ->
+            if (index == 0) {
+                cursorStart = newStartMin
+                cursorEnd = newEndMin
+            } else {
+                cursorStart = cursorEnd
+                cursorEnd = cursorStart + node.durationMin
+            }
+
+            if (cursorEnd > 24 * 60) {
+                // فعلاً اگر زنجیره از انتهای روز بیرون زد، ادامه را جابه‌جا نمی‌کنیم.
+                return@forEachIndexed
+            }
+
+            taskScheduleRepo.updatePomodoroTimeRange(
+                scheduleId = node.scheduleId,
+                date = newDate,
+                startMin = cursorStart,
+                endMin = cursorEnd
+            )
+
+            pomodoroAlarmScheduler.cancelPomodoroEvents(node.scheduleId)
+
+            val updated = taskScheduleRepo.getById(node.scheduleId)
+            if (updated != null) {
+                schedulePomodoroTimelineAlarms(updated)
+            }
+        }
+    }
+
+    private fun durationToScheduleDelayMinutes(duration: Duration): Long {
+        val seconds = duration.seconds.coerceAtLeast(0)
+
+        if (seconds <= 0) return 0L
+
+        // ceil(seconds / 60)
+        return ((seconds + 59) / 60)
+    }
+
+    private fun cancelForwardPomodoroChainAlarms(scheduleId: Int) {
+        val chain = findForwardPomodoroChain(scheduleId)
+
+        if (chain.isEmpty()) {
+            pomodoroAlarmScheduler.cancelPomodoroEvents(scheduleId)
+            return
+        }
+
+        chain.forEach { node ->
+            pomodoroAlarmScheduler.cancelPomodoroEvents(node.scheduleId)
+        }
+    }
+
+    private fun cancelStartSoonForForwardChainChildren(scheduleId: Int) {
+        val chain = findForwardPomodoroChain(scheduleId)
+
+        // خود پومودوروی در حال اجرا را نگه می‌داریم؛ فقط بچه‌های بعدی
+        chain.drop(1).forEach { node ->
+            pomodoroAlarmScheduler.cancelPomodoroEvent(
+                scheduleId = node.scheduleId,
+                type = PomodoroAlarmReceiver.TYPE_START_SOON
+            )
+        }
+    }
 
 
     //only Schedule TIME_RANGE
@@ -618,6 +1037,9 @@ class ScheduleScreenViewModel @Inject constructor(
     }
     fun moveScheduleFromTimeLineToPallet(scheduleId: Int) {
         viewModelScope.launch(Dispatchers.IO) {
+
+            pomodoroAlarmScheduler.cancelPomodoroEvents(scheduleId)
+
             val reminders = reminderRepo.getByScheduleId(scheduleId)
             reminders.forEach { rUi ->
                 try {
@@ -676,6 +1098,11 @@ class ScheduleScreenViewModel @Inject constructor(
 
         val newScheduleChildId = childSchedule?.let { taskScheduleRepo.insert(it) }
 
+        if (newScheduleChildId != null && childSchedule != null) {
+            schedulePomodoroTimelineAlarms(
+                childSchedule.copy(id = newScheduleChildId)
+            )
+        }
 
         val reminders = reminderRepo.getByScheduleId(scheduleId)
         reminders.forEach { rUi ->
@@ -693,19 +1120,19 @@ class ScheduleScreenViewModel @Inject constructor(
         return newScheduleChildId
     }
 
-    fun movePomodoroSchedule(scheduleId: Int, newDate: LocalDate, newStart: Int, newEnd: Int) {
+    fun movePomodoroSchedule(
+        scheduleId: Int,
+        newDate: LocalDate,
+        newStart: Int,
+        newEnd: Int
+    ) {
         viewModelScope.launch(Dispatchers.IO) {
-
-            taskScheduleRepo.updatePomodoroTimeRange(scheduleId, newDate, newStart, newEnd)
-
-            val reminders = reminderRepo.getByScheduleId(scheduleId)
-            reminders.forEach { rUi ->
-                try {
-                    Log.i("TEST3","in movePomodoroSchedule}")
-                    reminderScheduler.reschedule(rUi.id)
-                } catch (_: Throwable) {}
-            }
-
+            movePomodoroChainForward(
+                scheduleId = scheduleId,
+                newDate = newDate,
+                newStartMin = newStart,
+                newEndMin = newEnd
+            )
         }
     }
 
