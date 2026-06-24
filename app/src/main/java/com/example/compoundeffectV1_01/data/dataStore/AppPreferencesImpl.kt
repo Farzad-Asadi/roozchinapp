@@ -15,8 +15,10 @@ class AppPreferencesImpl @Inject constructor(
     @ApplicationContext private val context: Context
 ) : AppPreferences {
 
+
     private object Keys {
         val SEED_DONE = booleanPreferencesKey("seed_done")
+        val ASKED_SCHEDULE_PERMISSIONS = booleanPreferencesKey("asked_schedule_permissions")
     }
 
     override val isSeedDone: Flow<Boolean> =
@@ -24,5 +26,14 @@ class AppPreferencesImpl @Inject constructor(
 
     override suspend fun setSeedDone(value: Boolean) {
         context.dataStore.edit { it[Keys.SEED_DONE] = value }
+    }
+
+    override val hasAskedSchedulePermissions: Flow<Boolean> =
+        context.dataStore.data.map { it[Keys.ASKED_SCHEDULE_PERMISSIONS] ?: false }
+
+    override suspend fun setHasAskedSchedulePermissions(value: Boolean) {
+        context.dataStore.edit {
+            it[Keys.ASKED_SCHEDULE_PERMISSIONS] = value
+        }
     }
 }

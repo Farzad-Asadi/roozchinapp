@@ -20,13 +20,16 @@ class PomodoroAlarmReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
 
-        Log.d("POMODORO_TEST", "RECEIVER FIRED")
+        Log.e("POMODORO", "🔥 RECEIVER FIRED ACTION=${intent.action}")
+
         PomodoroEngine.onAlarmTriggered()
-        Log.d("POMODORO_TEST", "ENGINE CALLED")
+
+        Log.e("POMODORO", "ENGINE CALLED")
+
         PomodoroNotifications.show(
             context,
-            title = "Pomodoro",
-            message = "Session changed"
+            "Pomodoro",
+            "Session changed"
         )
     }
 

@@ -38,9 +38,11 @@ class PomodoroAlarmScheduler @Inject constructor(
 
 
 
-        val intent = Intent(context, PomodoroAlarmReceiver::class.java)
+        val intent = Intent(context, PomodoroAlarmReceiver::class.java).apply {
+            action = "com.example.compoundeffect.POMODORO_ALARM"
+        }
 
-        val requestCode = triggerAtMillis.toInt()
+        val requestCode = (triggerAtMillis % Int.MAX_VALUE).toInt()
 
         val pendingIntent = PendingIntent.getBroadcast(
             context,

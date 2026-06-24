@@ -1,6 +1,7 @@
 package com.example.compoundeffectV1_01.ui.scheduleScreen
 
 import android.Manifest
+import android.app.Activity
 import android.app.AlarmManager
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -72,6 +73,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -103,8 +105,11 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
@@ -112,9 +117,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.RepeatUnit
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.ScheduleMode
+import com.example.compoundeffectV1_01.data.dataStore.AppPreferences
 import com.example.compoundeffectV1_01.ui.navigation.AppRoutes
 import com.example.compoundeffectV1_01.utils.convertToPersianDatePretty
 import com.example.compoundeffectV1_01.utils.iconFromKey
+import com.example.compoundeffectV1_01.utils.requestExactAlarmPermission
 import com.example.compoundeffectV1_01.utils.scheduleModeColor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -136,6 +143,7 @@ fun ScheduleScreen(
     val allItems by viewModel.allItems.collectAsState()
 
     val runningPomodoro by viewModel.runningPomodoro.collectAsState()
+
 
     val timelineItemsReal = remember(allItems) { allItems.filter { !it.inPallet } }
 
@@ -447,22 +455,54 @@ fun ScheduleScreen(
     }
     val context = LocalContext.current
 
+    val activity = context as Activity
+
+    val hasAskedSchedulePermissions by viewModel.hasAskedSchedulePermissions.collectAsState()
+
+    var showPermissionDialog by rememberSaveable { mutableStateOf(false) }
+
+    val alarmManager = remember(context) {
+        context.getSystemService(AlarmManager::class.java)
+    }
+
+    fun hasNotificationPermission(): Boolean {
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) == PackageManager.PERMISSION_GRANTED
+    }
+
+    fun hasExactAlarmPermission(): Boolean {
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+                alarmManager.canScheduleExactAlarms()
+    }
+
+    val openExactAlarmSettings = {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
+            activity.requestExactAlarmPermission()
+        }
+    }
+
     val notificationPermissionLauncher =
         rememberLauncherForActivityResult(
             contract = ActivityResultContracts.RequestPermission()
-        ) { }
-
-    LaunchedEffect(Unit) {
-        if (
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.POST_NOTIFICATIONS
-            ) != PackageManager.PERMISSION_GRANTED
         ) {
-            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            openExactAlarmSettings()
+        }
+
+    LaunchedEffect(hasAskedSchedulePermissions) {
+        val asked = hasAskedSchedulePermissions ?: return@LaunchedEffect
+
+        val needsSomething =
+            !hasNotificationPermission() || !hasExactAlarmPermission()
+
+        if (!asked && needsSomething) {
+            showPermissionDialog = true
         }
     }
+
+
 
     LaunchedEffect(isAutoScrollingActive) {
         while (isAutoScrollingActive) {
@@ -552,6 +592,7 @@ fun ScheduleScreen(
             pendingScrollByPx = 0f
         }
     }
+
 
 
 
@@ -1245,7 +1286,63 @@ fun ScheduleScreen(
 
 
         }
+        if (showPermissionDialog) {
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                AlertDialog(
+                    onDismissRequest = {
+                        viewModel.markSchedulePermissionsAsked()
+                        showPermissionDialog = false
+                    },
+                    title = {
+                        Text(
+                            text = "فعال‌سازی یادآورها",
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.Right
+                        )
+                    },
+                    text = {
+                        Text(
+                            text = "برای اینکه تایمر پومودورو و یادآورها دقیق‌تر اجرا شوند، لازم است اجازه نوتیفیکیشن و در صورت نیاز اجازه Alarms & reminders را فعال کنید.\n\nاین پیام فقط یک بار نمایش داده می‌شود.",
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.Right,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                viewModel.markSchedulePermissionsAsked()
+                                showPermissionDialog = false
 
+                                if (
+                                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                                    ContextCompat.checkSelfPermission(
+                                        context,
+                                        Manifest.permission.POST_NOTIFICATIONS
+                                    ) != PackageManager.PERMISSION_GRANTED
+                                ) {
+                                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                } else {
+                                    openExactAlarmSettings()
+                                }
+                            }
+                        ) {
+                            Text("ادامه")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(
+                            onClick = {
+                                viewModel.markSchedulePermissionsAsked()
+                                showPermissionDialog = false
+                            }
+                        ) {
+                            Text("بعداً")
+                        }
+                    }
+                )
+            }
+        }
 
     }
 }
@@ -2034,6 +2131,8 @@ private fun TimelineItemBox(
                 }
             )
         }
+
+
     }
 }
 

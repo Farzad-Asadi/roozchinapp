@@ -11,6 +11,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import androidx.work.Configuration
+import com.example.compoundeffectV1_01.data.notification.PomodoroNotifications
 import javax.inject.Inject
 
 
@@ -19,8 +20,13 @@ class CompoundEffectApplication : Application() {
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+
+
     override fun onCreate() {
         super.onCreate()
+
+        ReminderNotifications.ensureChannel(this)
+        PomodoroNotifications.ensureChannel(this)
 
         ReminderNotifications.ensureChannel(this)
 

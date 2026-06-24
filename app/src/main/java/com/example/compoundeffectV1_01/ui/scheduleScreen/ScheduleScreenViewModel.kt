@@ -13,6 +13,7 @@ import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.Rep
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.ScheduleMode
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.TaskSchedule
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.TaskScheduleRepository
+import com.example.compoundeffectV1_01.data.dataStore.AppPreferences
 import com.example.compoundeffectV1_01.data.workManager.ReminderScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -37,9 +38,20 @@ class ScheduleScreenViewModel @Inject constructor(
     private val reminderScheduler: ReminderScheduler,
     private val reminderRepo: TaskReminderRepository,
     private val pomodoroAlarmScheduler: PomodoroAlarmScheduler,
+    private val appPreferences: AppPreferences
 ) : ViewModel() {
 
     private var runningPomodoroJob: Job? = null
+    val hasAskedSchedulePermissions =
+        appPreferences.hasAskedSchedulePermissions
+            .map<Boolean, Boolean?> { it }
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5_000),
+                null
+            )
+
+
 
     private val _runningPomodoro = MutableStateFlow<RunningPomodoroUiState?>(null)
     val runningPomodoro = _runningPomodoro.asStateFlow()
@@ -267,6 +279,12 @@ class ScheduleScreenViewModel @Inject constructor(
 
                 delay(1_000)
             }
+        }
+    }
+
+    fun markSchedulePermissionsAsked() {
+        viewModelScope.launch {
+            appPreferences.setHasAskedSchedulePermissions(true)
         }
     }
 
