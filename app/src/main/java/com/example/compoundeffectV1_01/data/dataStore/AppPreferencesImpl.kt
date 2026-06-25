@@ -3,6 +3,7 @@ package com.example.compoundeffectV1_01.data.dataStore
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
@@ -19,6 +20,7 @@ class AppPreferencesImpl @Inject constructor(
     private object Keys {
         val SEED_DONE = booleanPreferencesKey("seed_done")
         val ASKED_SCHEDULE_PERMISSIONS = booleanPreferencesKey("asked_schedule_permissions")
+        val SCHEDULE_VERTICAL_ZOOM = floatPreferencesKey("schedule_vertical_zoom")
     }
 
     override val isSeedDone: Flow<Boolean> =
@@ -34,6 +36,17 @@ class AppPreferencesImpl @Inject constructor(
     override suspend fun setHasAskedSchedulePermissions(value: Boolean) {
         context.dataStore.edit {
             it[Keys.ASKED_SCHEDULE_PERMISSIONS] = value
+        }
+    }
+
+    override val scheduleVerticalZoom: Flow<Float> =
+        context.dataStore.data.map { prefs ->
+            prefs[Keys.SCHEDULE_VERTICAL_ZOOM] ?: 1f
+        }
+
+    override suspend fun setScheduleVerticalZoom(value: Float) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.SCHEDULE_VERTICAL_ZOOM] = value
         }
     }
 }

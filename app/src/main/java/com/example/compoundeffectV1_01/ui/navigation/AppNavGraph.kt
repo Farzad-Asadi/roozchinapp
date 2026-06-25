@@ -12,6 +12,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import androidx.navigation.navigation
+import com.example.compoundeffectV1_01.ui.backupRestore.CompoundBackupRestoreScreen
 import com.example.compoundeffectV1_01.ui.categoryScreen.CategoryScreen
 import com.example.compoundeffectV1_01.ui.scheduleScreen.ScheduleScreen
 import com.example.compoundeffectV1_01.ui.taskScreen.TaskScreen
@@ -55,6 +56,11 @@ fun AppNavGraph(
                     onClickBack = { navController.popBackStack() }
                 )
             }
+            composable(AppRoutes.BACKUP_RESTORE) {
+                CompoundBackupRestoreScreen(
+                    onClose = { navController.popBackStack() }
+                )
+            }
         }
     }
 }
@@ -74,6 +80,7 @@ object AppRoutes {
 
     const val ARG_CATEGORY_ID = "categoryId"
     const val ARG_TASK_ID = "taskId"
+    const val BACKUP_RESTORE = "backup_restore"
 
     // route template
     const val TASK_ROUTE = "task?$ARG_CATEGORY_ID={$ARG_CATEGORY_ID}&$ARG_TASK_ID={$ARG_TASK_ID}"

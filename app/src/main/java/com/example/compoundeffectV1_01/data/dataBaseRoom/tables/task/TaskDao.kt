@@ -143,4 +143,19 @@ interface TaskDao {
     WHERE id = :taskId
 """)
     suspend fun incrementPomodoroDoneUnits(taskId: Int)
+
+
+
+    //region Backup / Restore
+
+    @Query("SELECT * FROM task")
+    suspend fun getAllTasksForBackup(): List<Task>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertTasksForRestore(tasks: List<Task>)
+
+    @Query("DELETE FROM task")
+    suspend fun deleteAllTasksForRestore()
+
+//endregion
 }

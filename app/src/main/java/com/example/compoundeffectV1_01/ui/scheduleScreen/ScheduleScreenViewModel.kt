@@ -57,6 +57,15 @@ class ScheduleScreenViewModel @Inject constructor(
                 null
             )
 
+    val scheduleVerticalZoom =
+        appPreferences.scheduleVerticalZoom
+            .map<Float, Float?> { it }
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5_000),
+                null
+            )
+
     private var autoPomodoroWatcherJob: Job? = null
     private val autoSuppressedPomodoroIds = mutableSetOf<Int>()
 
@@ -989,6 +998,14 @@ class ScheduleScreenViewModel @Inject constructor(
             pomodoroAlarmScheduler.cancelPomodoroEvent(
                 scheduleId = node.scheduleId,
                 type = PomodoroAlarmReceiver.TYPE_START_SOON
+            )
+        }
+    }
+
+    fun setScheduleVerticalZoom(value: Float) {
+        viewModelScope.launch {
+            appPreferences.setScheduleVerticalZoom(
+                value.coerceIn(0.6f, 10.0f)
             )
         }
     }

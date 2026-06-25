@@ -21,4 +21,15 @@ interface SystemDao {
     @Query("SELECT * FROM app_system_info ")
     suspend fun getAllAppSystemInfo(): List<AppSystemInfo>
 
+
+
+    //region Backup / Restore
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSystemInfosForRestore(systemInfos: List<AppSystemInfo>)
+
+    @Query("DELETE FROM app_system_info")
+    suspend fun deleteAllSystemInfosForRestore()
+
+//endregion
 }

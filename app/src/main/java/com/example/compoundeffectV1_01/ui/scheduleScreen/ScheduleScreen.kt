@@ -154,6 +154,8 @@ fun ScheduleScreen(
 
     val runningPomodoro by viewModel.runningPomodoro.collectAsState()
 
+    val savedScheduleVerticalZoom by viewModel.scheduleVerticalZoom.collectAsState()
+
 
     val timelineItemsReal = remember(allItems) { allItems.filter { !it.inPallet } }
 
@@ -297,17 +299,39 @@ fun ScheduleScreen(
             .sortedBy { it.taskName }
     }
 
-    // مقدار ذخیره‌شونده برای اینکه بعد rotate/process-death هم برگرده
+    var hasAppliedSavedVerticalZoom by rememberSaveable { mutableStateOf(false) }
+
+// مقدار ذخیره‌شونده محلی
     var verticalZoomSaved by rememberSaveable { mutableFloatStateOf(1f) }
 
-    // زوم واقعیِ در حال pinch (پیوسته)
+// زوم واقعیِ در حال pinch
     var verticalZoomRaw by remember { mutableFloatStateOf(verticalZoomSaved) }
 
-    // زوم نمایشی (پله‌ای ولی نرم)
-    val verticalZoomAnim = remember { androidx.compose.animation.core.Animatable(verticalZoomSaved) }
+// زوم نمایشی
+    val verticalZoomAnim = remember {
+        androidx.compose.animation.core.Animatable(verticalZoomSaved)
+    }
 
-    // مقدار نهایی که بقیه‌ی UI باید ببینه
+// مقدار نهایی که بقیه‌ی UI باید ببینه
     val verticalZoom = verticalZoomAnim.value
+
+    LaunchedEffect(savedScheduleVerticalZoom) {
+        val saved = savedScheduleVerticalZoom ?: return@LaunchedEffect
+
+        if (!hasAppliedSavedVerticalZoom) {
+            val cleanZoom = snapZoom(
+                saved.coerceIn(ZOOM_MIN, ZOOM_MAX)
+            )
+
+            verticalZoomSaved = cleanZoom
+            verticalZoomRaw = cleanZoom
+            verticalZoomAnim.snapTo(cleanZoom)
+
+            hasAppliedSavedVerticalZoom = true
+        }
+    }
+
+
     var isPinchZooming by remember { mutableStateOf(false) }
     val horizontalZoom by rememberSaveable { mutableFloatStateOf(1f) }
 
@@ -619,7 +643,10 @@ fun ScheduleScreen(
         topBar = {
             CompactTopBar(
                 title = "Schedule",
-                onPomodoroNotificationSettingsClick = openPomodoroNotificationSettings
+                onPomodoroNotificationSettingsClick = openPomodoroNotificationSettings,
+                onBackupRestoreClick = {
+                    navController.navigate(AppRoutes.BACKUP_RESTORE)
+                }
             )
         }
     ) { padding ->
@@ -714,6 +741,7 @@ fun ScheduleScreen(
                                             if (targetStep != lastStepTarget) {
                                                 lastStepTarget = targetStep
                                                 verticalZoomSaved = targetStep
+                                                viewModel.setScheduleVerticalZoom(targetStep)
 
                                                 animJob?.cancel()
                                                 animJob = scope.launch {
@@ -2459,7 +2487,8 @@ private fun CategoryIconWithPlate(
 @Composable
 fun CompactTopBar(
     title: String,
-    onPomodoroNotificationSettingsClick: () -> Unit
+    onPomodoroNotificationSettingsClick: () -> Unit,
+    onBackupRestoreClick: () -> Unit
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
 
@@ -2501,6 +2530,13 @@ fun CompactTopBar(
                     onClick = {
                         menuExpanded = false
                         onPomodoroNotificationSettingsClick()
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("بکاپ و بازیابی اطلاعات") },
+                    onClick = {
+                        menuExpanded = false
+                        onBackupRestoreClick()
                     }
                 )
             }

@@ -8,4 +8,7 @@ interface AppPreferences {
 
     val hasAskedSchedulePermissions: Flow<Boolean>
     suspend fun setHasAskedSchedulePermissions(value: Boolean)
+
+    val scheduleVerticalZoom: Flow<Float>
+    suspend fun setScheduleVerticalZoom(value: Float)
 }

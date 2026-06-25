@@ -48,5 +48,18 @@ interface CategoryDao {
     suspend fun count(): Int
 
 
+    //region Backup / Restore
+
+    @Query("SELECT * FROM category")
+    suspend fun getAllCategoriesForBackup(): List<CategoryEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertCategoriesForRestore(categories: List<CategoryEntity>)
+
+    @Query("DELETE FROM category")
+    suspend fun deleteAllCategoriesForRestore()
+
+//endregion
+
 
 }

@@ -44,4 +44,19 @@ interface TaskReminderDao {
 
     @Query("DELETE FROM task_reminder WHERE scheduleId = :scheduleId")
     suspend fun deleteByScheduleId(scheduleId: Int)
+
+
+
+    //region Backup / Restore
+
+    @Query("SELECT * FROM task_reminder")
+    suspend fun getAllRemindersForBackup(): List<TaskReminderEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertRemindersForRestore(reminders: List<TaskReminderEntity>)
+
+    @Query("DELETE FROM task_reminder")
+    suspend fun deleteAllRemindersForRestore()
+
+//endregion
 }

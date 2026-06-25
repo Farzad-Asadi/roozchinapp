@@ -220,4 +220,18 @@ WHERE id = :scheduleId
     @Query("SELECT * FROM task_schedule WHERE pomodoroParentId = :pomodoroParentId")
     suspend fun getAllScheduleByPomodoroParentId(pomodoroParentId : Int) : List<TaskSchedule>
 
+
+    //region Backup / Restore
+
+    @Query("SELECT * FROM task_schedule")
+    suspend fun getAllSchedulesForBackup(): List<TaskSchedule>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSchedulesForRestore(schedules: List<TaskSchedule>)
+
+    @Query("DELETE FROM task_schedule")
+    suspend fun deleteAllSchedulesForRestore()
+
+//endregion
+
 }
