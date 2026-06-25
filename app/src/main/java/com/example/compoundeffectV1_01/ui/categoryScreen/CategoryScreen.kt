@@ -87,6 +87,7 @@ import androidx.compose.material.icons.filled.Today
 import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -485,49 +486,55 @@ fun CategoryScreen(
 
 
 
-            LazyColumn(
-                state = reorderState.listState,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .reorderable(reorderState)
-            ) {
-                items(
-                    items = listState.value,
-                    key = { it.category.categoryId ?: it.hashCode() }
-                ) { item ->
-                    val id = item.category.categoryId ?: return@items
-                    ReorderableItem(reorderState, key = id) { _ ->
-                        androidx.compose.animation.AnimatedVisibility(
-                            visible = item.isVisible,
-                            enter = fadeIn() + expandVertically(),
-                            exit = fadeOut() + shrinkVertically()
-                        ) {
-                            val rowDragModifier = Modifier
-                                .pointerInput(id, draggingKey.value) {
-                                    awaitPointerEventScope {
-                                        while (true) {
-                                            val event = awaitPointerEvent()
-                                            val change = event.changes.firstOrNull() ?: continue
+            if (listState.value.isEmpty()) {
+                EmptyCategoryState(
+                    onAddCategoryClick = {
+                        showAddCategory = true
+                    }
+                )
+            } else {
+                LazyColumn(
+                    state = reorderState.listState,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .reorderable(reorderState)
+                ) {
+                    items(
+                        items = listState.value,
+                        key = { it.category.categoryId ?: it.hashCode() }
+                    ) { item ->
+                        val id = item.category.categoryId ?: return@items
+                        ReorderableItem(reorderState, key = id) { _ ->
+                            androidx.compose.animation.AnimatedVisibility(
+                                visible = item.isVisible,
+                                enter = fadeIn() + expandVertically(),
+                                exit = fadeOut() + shrinkVertically()
+                            ) {
+                                val rowDragModifier = Modifier
+                                    .pointerInput(id, draggingKey.value) {
+                                        awaitPointerEventScope {
+                                            while (true) {
+                                                val event = awaitPointerEvent()
+                                                val change = event.changes.firstOrNull() ?: continue
 
-                                            // فقط وقتی خود این آیتم در حال drag واقعی است
-                                            if (draggingKey.value != id) continue
-                                            if (!change.pressed) continue
+                                                if (draggingKey.value != id) continue
+                                                if (!change.pressed) continue
 
-                                            val dx = change.positionChange().x
-                                            if (dx != 0f) onHorizontalReparentHint(id, dx)
+                                                val dx = change.positionChange().x
+                                                if (dx != 0f) onHorizontalReparentHint(id, dx)
+                                            }
                                         }
                                     }
-                                }
-                                .detectReorderAfterLongPress(reorderState) // ✅ کل ردیف draggable
+                                    .detectReorderAfterLongPress(reorderState)
 
-                            CategoryRow(
-                                item = item,
-                                computedLevel = effectiveLevel(id),
-                                onToggleExpand = viewModel::toggleExpand,
-                                modifier = rowDragModifier,
-                                onOpenMenu = { id -> viewModel.setMenuCategoryId(id) }
-                            )
-
+                                CategoryRow(
+                                    item = item,
+                                    computedLevel = effectiveLevel(id),
+                                    onToggleExpand = viewModel::toggleExpand,
+                                    modifier = rowDragModifier,
+                                    onOpenMenu = { id -> viewModel.setMenuCategoryId(id) }
+                                )
+                            }
                         }
                     }
                 }
@@ -2231,95 +2238,141 @@ private fun ChooseColorDialog(
     onDismiss: () -> Unit,
     onConfirm: (hex: String) -> Unit
 ) {
-    val options = remember { buildColorOptions() }
-    var selectedHex by remember { mutableStateOf(initialHex.ifBlank { options.first().hex }) }
+    val colorColumns = remember { buildCategoryColorMatrix() }
+
+    val defaultHex = colorColumns.firstOrNull()
+        ?.main
+        ?.hex
+        ?: "#F44336"
+
+    var selectedHex by remember {
+        mutableStateOf(initialHex.ifBlank { defaultHex })
+    }
 
     DimmedDialog(
         onDismiss = onDismiss,
         modifier = Modifier
-            .fillMaxWidth(0.92f)
-            .fillMaxHeight(0.62f)
-            .background(MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.extraLarge),
+            .fillMaxWidth(0.94f)
+            .fillMaxHeight(0.84f)
+            .background(
+                MaterialTheme.colorScheme.surface,
+                shape = MaterialTheme.shapes.extraLarge
+            ),
         dimAlpha = 0.6f,
         dismissOnBackdropClick = true
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
 
-            Text(
-                text = "Choose color",
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.padding(16.dp)
+            AddEditeDialogTopBar(
+                title = "Choose color",
+                onNavigationClick = onDismiss,
+                actions = {
+                    IconButton(
+                        onClick = { onConfirm(selectedHex) }
+                    ) {
+                        Icon(Icons.Filled.Check, contentDescription = "Confirm color")
+                    }
+                }
             )
-
-            HorizontalDivider()
-
-            Spacer(Modifier.height(18.dp))
-
-            // Grid ساده: 6 ستون * چند ردیف
-            val cols = 6
-            val rows = (options.size + cols - 1) / cols
 
             Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 14.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 12.dp, vertical = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                repeat(rows) { r ->
+                Text(
+                    text = "رنگ اصلی را از ردیف بالا انتخاب کن؛ طیف‌های همان رنگ در همان ستون پایین آمده‌اند.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Right
+                )
+
+                Spacer(Modifier.height(2.dp))
+
+                // ردیف اول: رنگ‌های اصلی
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    colorColumns.forEach { column ->
+                        CategoryColorDot(
+                            cell = column.main,
+                            selected = column.main.hex.equals(selectedHex, ignoreCase = true),
+                            size = 44,
+                            onClick = { selectedHex = column.main.hex }
+                        )
+                    }
+                }
+
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 6.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)
+                )
+
+                // ده ردیف طیف‌ها
+                repeat(10) { shadeIndex ->
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        for (c in 0 until cols) {
-                            val idx = r * cols + c
-                            if (idx < options.size) {
-                                val opt = options[idx]
-                                val selected = opt.hex.equals(selectedHex, ignoreCase = true)
+                        colorColumns.forEach { column ->
+                            val cell = column.shades[shadeIndex]
 
-                                Box(
-                                    modifier = Modifier
-                                        .size(42.dp)
-                                        .border(
-                                            width = if (selected) 4.dp else 0.dp,
-                                            color = if (selected) Color.Black else Color.Transparent,
-                                            shape = CircleShape
-                                        )
-                                        .padding(if (selected) 4.dp else 0.dp)
-                                        .border(
-                                            width = 1.dp,
-                                            color = Color.Black.copy(alpha = 0.08f),
-                                            shape = CircleShape
-                                        )
-                                        .clickable { selectedHex = opt.hex },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .border(0.dp, Color.Transparent, CircleShape)
-                                            .background(opt.color, CircleShape)
-                                    )
-                                }
-                            } else {
-                                Spacer(Modifier.size(42.dp))
-                            }
+                            CategoryColorDot(
+                                cell = cell,
+                                selected = cell.hex.equals(selectedHex, ignoreCase = true),
+                                size = 38,
+                                onClick = { selectedHex = cell.hex }
+                            )
                         }
                     }
                 }
             }
 
-            Spacer(Modifier.weight(1f))
+            HorizontalDivider()
 
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(12.dp),
-                horizontalArrangement = Arrangement.End
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                TextButton(onClick = onDismiss) { Text("CANCEL") }
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .border(
+                            width = 1.dp,
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f),
+                            shape = CircleShape
+                        )
+                        .background(colorFromHex(selectedHex), CircleShape)
+                )
+
+                Spacer(Modifier.width(10.dp))
+
+                Text(
+                    text = selectedHex.uppercase(),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(Modifier.weight(1f))
+
+                TextButton(onClick = onDismiss) {
+                    Text("CANCEL")
+                }
+
                 Spacer(Modifier.width(8.dp))
-                TextButton(onClick = { onConfirm(selectedHex) }) { Text("OK") }
+
+                TextButton(onClick = { onConfirm(selectedHex) }) {
+                    Text("OK")
+                }
             }
         }
     }
@@ -2633,8 +2686,208 @@ private fun SheetActionRow(
     HorizontalDivider(thickness = 0.5.dp, modifier = Modifier.padding(start = 48.dp))
 }
 
+@Composable
+private fun EmptyCategoryState(
+    onAddCategoryClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(24.dp),
+            tonalElevation = 3.dp,
+            color = MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(22.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Task,
+                    contentDescription = null,
+                    modifier = Modifier.size(48.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+
+                Text(
+                    text = "هنوز دسته‌ای ساخته نشده",
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.titleMedium
+                )
+
+                Text(
+                    text = "برای ساخت تسک، اول باید یک دسته‌بندی بسازی. تسک‌ها در CompoundEffect بدون دسته‌بندی ساخته نمی‌شوند.",
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Button(
+                    onClick = onAddCategoryClick,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("ساخت اولین دسته")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CategoryColorDot(
+    cell: CategoryColorCell,
+    selected: Boolean,
+    size: Int,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .size(size.dp)
+            .border(
+                width = if (selected) 3.dp else 1.dp,
+                color = if (selected) {
+                    MaterialTheme.colorScheme.onSurface
+                } else {
+                    MaterialTheme.colorScheme.outline.copy(alpha = 0.28f)
+                },
+                shape = CircleShape
+            )
+            .padding(if (selected) 4.dp else 2.dp)
+            .background(cell.color, CircleShape)
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        if (selected) {
+            Icon(
+                imageVector = Icons.Filled.Check,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size((size * 0.46f).dp)
+            )
+        }
+    }
+}
 
 
+private fun buildCategoryColorMatrix(): List<CategoryColorColumn> {
+    fun cell(hex: String): CategoryColorCell {
+        return CategoryColorCell(
+            hex = hex,
+            color = Color(android.graphics.Color.parseColor(hex))
+        )
+    }
+
+    return listOf(
+        // Red
+        CategoryColorColumn(
+            main = cell("#F44336"),
+            shades = listOf(
+                cell("#FFEBEE"),
+                cell("#FFCDD2"),
+                cell("#EF9A9A"),
+                cell("#E57373"),
+                cell("#EF5350"),
+                cell("#E53935"),
+                cell("#D32F2F"),
+                cell("#C62828"),
+                cell("#B71C1C"),
+                cell("#7F0000")
+            )
+        ),
+
+        // Orange
+        CategoryColorColumn(
+            main = cell("#FF9800"),
+            shades = listOf(
+                cell("#FFF3E0"),
+                cell("#FFE0B2"),
+                cell("#FFCC80"),
+                cell("#FFB74D"),
+                cell("#FFA726"),
+                cell("#FB8C00"),
+                cell("#F57C00"),
+                cell("#EF6C00"),
+                cell("#E65100"),
+                cell("#993800")
+            )
+        ),
+
+        // Yellow / Amber
+        CategoryColorColumn(
+            main = cell("#FFC107"),
+            shades = listOf(
+                cell("#FFF8E1"),
+                cell("#FFECB3"),
+                cell("#FFE082"),
+                cell("#FFD54F"),
+                cell("#FFCA28"),
+                cell("#FFB300"),
+                cell("#FFA000"),
+                cell("#FF8F00"),
+                cell("#FF6F00"),
+                cell("#9E4500")
+            )
+        ),
+
+        // Green
+        CategoryColorColumn(
+            main = cell("#4CAF50"),
+            shades = listOf(
+                cell("#E8F5E9"),
+                cell("#C8E6C9"),
+                cell("#A5D6A7"),
+                cell("#81C784"),
+                cell("#66BB6A"),
+                cell("#43A047"),
+                cell("#388E3C"),
+                cell("#2E7D32"),
+                cell("#1B5E20"),
+                cell("#003D12")
+            )
+        ),
+
+        // Blue
+        CategoryColorColumn(
+            main = cell("#2196F3"),
+            shades = listOf(
+                cell("#E3F2FD"),
+                cell("#BBDEFB"),
+                cell("#90CAF9"),
+                cell("#64B5F6"),
+                cell("#42A5F5"),
+                cell("#1E88E5"),
+                cell("#1976D2"),
+                cell("#1565C0"),
+                cell("#0D47A1"),
+                cell("#002F6C")
+            )
+        ),
+
+        // Purple
+        CategoryColorColumn(
+            main = cell("#9C27B0"),
+            shades = listOf(
+                cell("#F3E5F5"),
+                cell("#E1BEE7"),
+                cell("#CE93D8"),
+                cell("#BA68C8"),
+                cell("#AB47BC"),
+                cell("#8E24AA"),
+                cell("#7B1FA2"),
+                cell("#6A1B9A"),
+                cell("#4A148C"),
+                cell("#2D004D")
+            )
+        )
+    )
+}
 
 
 //>>>>>>>>>>>>>>>> Utils <<<<<<<<<<<<<<<<<<
@@ -2642,7 +2895,15 @@ private fun SheetActionRow(
 private enum class CategorySheetMode { OVERVIEW, TASKS }
 enum class ConfirmAction { SAVE_AND_CLOSE, SAVE_AND_CONTINUE }
 enum class TaskSortMode { NONE, BY_NAME, BY_PRIORITY, BY_COMPLETED }
+private data class CategoryColorColumn(
+    val main: CategoryColorCell,
+    val shades: List<CategoryColorCell>
+)
 
+private data class CategoryColorCell(
+    val hex: String,
+    val color: Color
+)
 const val ROOT = -1
 
 

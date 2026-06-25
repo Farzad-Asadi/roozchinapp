@@ -142,8 +142,10 @@ import kotlin.math.round
 import kotlin.math.roundToInt
 import android.content.Context
 import android.net.Uri
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material.icons.filled.Settings as SettingsIcon
 import com.example.compoundeffectV1_01.data.notification.PomodoroNotifications
+import com.example.compoundeffectV1_01.utils.colorFromHex
 
 @Composable
 fun ScheduleScreen(
@@ -274,8 +276,8 @@ fun ScheduleScreen(
                 val expected = rules.sumOf { (it.pomodoroUnitsPerDay ?: 1).coerceAtLeast(1) }
                 val scheduled = todayTimelinePomodoros.count { it.taskId == taskId }
 
-                val remaining = (expected - scheduled).coerceAtLeast(0)
-                if (remaining == 0) return@mapNotNull null
+                // اجازه می‌دهیم نهایتاً یک پومودوروی اضافه‌تر از هدف روزانه ساخته شود.
+                val addableToday = (expected + 1 - scheduled).coerceAtLeast(0)
 
                 PomodoroPalletCardItem(
                     taskId = taskId,
@@ -292,8 +294,10 @@ fun ScheduleScreen(
                     shortBreak = any.shortBreakMinutes ?: 5,
                     longBreak = any.longBreakMinutes ?: 15,
                     longBreakEvery = any.longBreakEvery ?: 4,
+                    categoryColor = any.categoryColor,
+                    categoryIconName = any.categoryIconName,
 
-                    remainingToday = remaining
+                    remainingToday = addableToday
                 )
             }
             .sortedBy { it.taskName }
@@ -1271,8 +1275,15 @@ fun ScheduleScreen(
                             y = (dragY - overlayLayerOriginInRoot.y).coerceAtLeast(0f)
                         )
 
-                        // remainingToday: این مقدار را از خود pomo داریم
-                        val maxAllowed = pomo.remainingToday.coerceAtLeast(1)
+                        // remainingToday اینجا یعنی چند پومودوروی دیگر مجاز است اضافه شود.
+                        // بعد از رسیدن به هدف روزانه، فقط یکی اضافه مجاز است.
+                        val maxAllowed = pomo.remainingToday
+
+                        if (maxAllowed <= 0) {
+                            draggingFromPallet = null
+                            draggingPomodoro = null
+                            return@RightPallet
+                        }
 
                         // ✅ یک عدد بساز و id بگیر
                         scope.launch {
@@ -2303,22 +2314,15 @@ private fun PomodoroPalletCard(
 ) {
     var coords by remember { mutableStateOf<LayoutCoordinates?>(null) }
 
-    val progress = remember(item.expectedToday, item.scheduledToday) {
-        if (item.expectedToday <= 0) 0f
-        else (item.scheduledToday.toFloat() / item.expectedToday.toFloat())
-            .coerceIn(0f, 1f)
-    }
+    val canAddMoreToday = item.remainingToday > 0
 
     val pomoColor = scheduleModeColor(ScheduleMode.POMODORO)
+    val categoryBorderColor = colorFromHex(item.categoryColor ?: "#9E9E9E")
     val shape = RoundedCornerShape(18.dp)
 
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(102.dp)
-            .padding(vertical = 6.dp)
-            .onGloballyPositioned { coords = it }
-            .pointerInput(item.taskId) {
+    val dragModifier =
+        if (canAddMoreToday) {
+            Modifier.pointerInput(item.taskId, item.remainingToday) {
                 detectDragGesturesAfterLongPress(
                     onDragStart = { downPos ->
                         val c = coords ?: return@detectDragGesturesAfterLongPress
@@ -2332,9 +2336,28 @@ private fun PomodoroPalletCard(
                     onDragEnd = onDragEnd,
                     onDragCancel = onDragCancel
                 )
-            },
+            }
+        } else {
+            Modifier
+        }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(112.dp)
+            .padding(vertical = 2.dp)
+            .border(
+                width = 2.dp,
+                color = categoryBorderColor,
+                shape = shape
+            )
+            .graphicsLayer {
+                alpha = if (canAddMoreToday) 1f else 0.72f
+            }
+            .onGloballyPositioned { coords = it }
+            .then(dragModifier),
         shape = shape,
-        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 5.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
         )
@@ -2343,69 +2366,66 @@ private fun PomodoroPalletCard(
             modifier = Modifier
                 .fillMaxSize()
                 .clip(shape)
+                .background(pomoColor.copy(alpha = 0.10f))
+                .padding(horizontal = 10.dp, vertical = 8.dp)
         ) {
-            // رنگ پایه کارت
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(pomoColor.copy(alpha = 0.18f))
-            )
-
-            // مقدار انجام‌شده امروز بر اساس E/D
-            Box(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .fillMaxWidth(progress)
-                    .background(pomoColor.copy(alpha = 0.55f))
-                    .align(Alignment.CenterStart)
-            )
-
             Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(10.dp)
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
+                Text(
+                    text = "pomodoro",
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
                 Row(
-                    Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            item.taskName,
-                            maxLines = 1,
-                            style = MaterialTheme.typography.labelLarge
-                        )
-                        Text(
-                            "Pomodoro",
-                            maxLines = 1,
-                            style = MaterialTheme.typography.labelSmall
-                        )
-                    }
+
+                    Icon(
+                        imageVector = iconFromKey(item.categoryIconName ?: "Category"),
+                        contentDescription = null,
+                        tint = categoryBorderColor,
+                        modifier = Modifier.size(16.dp)
+                    )
+
+                    Spacer(Modifier.width(6.dp))
 
                     Text(
-                        "T/D : ${item.totalTarget}/${item.totalDone.toString().padStart(2, '0')}",
-                        style = MaterialTheme.typography.labelMedium
+                        text = item.taskName,
+                        modifier = Modifier.weight(1f),
+                        textAlign = TextAlign.Right,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
 
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(2.dp))
 
-                Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        "E/D : ${item.expectedToday}/${item.scheduledToday.toString().padStart(2, '0')}",
-                        style = MaterialTheme.typography.labelMedium
-                    )
+                Text(
+                    text = "total/done  ${item.totalTarget}/${item.totalDone.toString().padStart(2, '0')}",
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Left,
+                    maxLines = 1,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
 
-                    Spacer(Modifier.weight(1f))
-
-                    Text(
-                        "${(progress * 100).roundToInt()}%",
-                        style = MaterialTheme.typography.labelSmall
-                    )
-                }
+                Text(
+                    text = "p.p.d/done  ${item.expectedToday}/${item.scheduledToday.toString().padStart(2, '0')}",
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Left,
+                    maxLines = 1,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
             }
         }
     }

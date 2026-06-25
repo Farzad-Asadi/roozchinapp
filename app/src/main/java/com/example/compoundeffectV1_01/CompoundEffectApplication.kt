@@ -18,9 +18,6 @@ import javax.inject.Inject
 @HiltAndroidApp
 class CompoundEffectApplication : Application() {
 
-    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-
-
 
     override fun onCreate() {
         super.onCreate()
@@ -28,17 +25,5 @@ class CompoundEffectApplication : Application() {
         ReminderNotifications.ensureChannel(this)
         PomodoroNotifications.ensureChannel(this)
 
-        ReminderNotifications.ensureChannel(this)
-
-        val entryPoint = EntryPointAccessors.fromApplication(
-            this,
-            SeederEntryPoint::class.java
-        )
-
-        val seeder = entryPoint.seeder()
-
-        appScope.launch {
-            seeder.seedIfNeeded()
-        }
     }
 }

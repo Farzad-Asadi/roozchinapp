@@ -1272,6 +1272,8 @@ data class PomodoroPalletCardItem(
     val shortBreak: Int,
     val longBreak: Int,
     val longBreakEvery: Int,
+    val categoryColor: String?,
+    val categoryIconName: String?,
 
     val remainingToday: Int
 )
