@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
@@ -21,6 +22,7 @@ class AppPreferencesImpl @Inject constructor(
         val SEED_DONE = booleanPreferencesKey("seed_done")
         val ASKED_SCHEDULE_PERMISSIONS = booleanPreferencesKey("asked_schedule_permissions")
         val SCHEDULE_VERTICAL_ZOOM = floatPreferencesKey("schedule_vertical_zoom")
+        val DEFAULT_START_DESTINATION = stringPreferencesKey("default_start_destination")
     }
 
     override val isSeedDone: Flow<Boolean> =
@@ -47,6 +49,17 @@ class AppPreferencesImpl @Inject constructor(
     override suspend fun setScheduleVerticalZoom(value: Float) {
         context.dataStore.edit { prefs ->
             prefs[Keys.SCHEDULE_VERTICAL_ZOOM] = value
+        }
+    }
+
+    override val defaultStartDestination: Flow<String> =
+        context.dataStore.data.map { prefs ->
+            prefs[Keys.DEFAULT_START_DESTINATION] ?: "category"
+        }
+
+    override suspend fun setDefaultStartDestination(route: String) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.DEFAULT_START_DESTINATION] = route
         }
     }
 }

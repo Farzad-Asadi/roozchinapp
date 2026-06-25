@@ -288,7 +288,12 @@ fun CategoryScreen(
 
             var dragging by remember { mutableStateOf(false) }
 
-            val listState = remember { mutableStateOf(state.renderItems) }
+            val listState = remember {
+                mutableStateOf<List<CategoryRenderItem>>(emptyList())
+            }
+
+            val visibleCategoryItems =
+                if (dragging) listState.value else state.renderItems
 
             // parent قبلی و parent موقت جدید
             val fromParentId = remember { mutableStateOf<Int?>(null) }
@@ -334,8 +339,10 @@ fun CategoryScreen(
 
 
             // وقتی درگ نداریم، با state.sync شو
-            LaunchedEffect(state.renderItems) {
-                if (!dragging) listState.value = state.renderItems
+            LaunchedEffect(state.renderItems, dragging) {
+                if (!dragging) {
+                    listState.value = state.renderItems
+                }
             }
 
             val reorderState = rememberReorderableLazyListState(
@@ -486,54 +493,68 @@ fun CategoryScreen(
 
 
 
-            if (listState.value.isEmpty()) {
-                EmptyCategoryState(
-                    onAddCategoryClick = {
-                        showAddCategory = true
+            when {
+                state.isLoading -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        // عمداً چیزی نشان نمی‌دهیم تا Empty State چشمک نزند.
+                        // اگر خواستی می‌توانیم بعداً Progress هم بگذاریم.
                     }
-                )
-            } else {
-                LazyColumn(
-                    state = reorderState.listState,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .reorderable(reorderState)
-                ) {
-                    items(
-                        items = listState.value,
-                        key = { it.category.categoryId ?: it.hashCode() }
-                    ) { item ->
-                        val id = item.category.categoryId ?: return@items
-                        ReorderableItem(reorderState, key = id) { _ ->
-                            androidx.compose.animation.AnimatedVisibility(
-                                visible = item.isVisible,
-                                enter = fadeIn() + expandVertically(),
-                                exit = fadeOut() + shrinkVertically()
-                            ) {
-                                val rowDragModifier = Modifier
-                                    .pointerInput(id, draggingKey.value) {
-                                        awaitPointerEventScope {
-                                            while (true) {
-                                                val event = awaitPointerEvent()
-                                                val change = event.changes.firstOrNull() ?: continue
+                }
 
-                                                if (draggingKey.value != id) continue
-                                                if (!change.pressed) continue
+                visibleCategoryItems.isEmpty() -> {
+                    EmptyCategoryState(
+                        onAddCategoryClick = {
+                            showAddCategory = true
+                        }
+                    )
+                }
 
-                                                val dx = change.positionChange().x
-                                                if (dx != 0f) onHorizontalReparentHint(id, dx)
+                else -> {
+                    LazyColumn(
+                        state = reorderState.listState,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .reorderable(reorderState)
+                    ) {
+                        items(
+                            items = visibleCategoryItems,
+                            key = { it.category.categoryId ?: it.hashCode() }
+                        ) { item ->
+                            val id = item.category.categoryId ?: return@items
+                            ReorderableItem(reorderState, key = id) { _ ->
+                                androidx.compose.animation.AnimatedVisibility(
+                                    visible = item.isVisible,
+                                    enter = fadeIn() + expandVertically(),
+                                    exit = fadeOut() + shrinkVertically()
+                                ) {
+                                    val rowDragModifier = Modifier
+                                        .pointerInput(id, draggingKey.value) {
+                                            awaitPointerEventScope {
+                                                while (true) {
+                                                    val event = awaitPointerEvent()
+                                                    val change = event.changes.firstOrNull() ?: continue
+
+                                                    if (draggingKey.value != id) continue
+                                                    if (!change.pressed) continue
+
+                                                    val dx = change.positionChange().x
+                                                    if (dx != 0f) onHorizontalReparentHint(id, dx)
+                                                }
                                             }
                                         }
-                                    }
-                                    .detectReorderAfterLongPress(reorderState)
+                                        .detectReorderAfterLongPress(reorderState)
 
-                                CategoryRow(
-                                    item = item,
-                                    computedLevel = effectiveLevel(id),
-                                    onToggleExpand = viewModel::toggleExpand,
-                                    modifier = rowDragModifier,
-                                    onOpenMenu = { id -> viewModel.setMenuCategoryId(id) }
-                                )
+                                    CategoryRow(
+                                        item = item,
+                                        computedLevel = effectiveLevel(id),
+                                        onToggleExpand = viewModel::toggleExpand,
+                                        modifier = rowDragModifier,
+                                        onOpenMenu = { id -> viewModel.setMenuCategoryId(id) }
+                                    )
+                                }
                             }
                         }
                     }

@@ -118,6 +118,7 @@ class ScheduleScreenViewModel @Inject constructor(
                         pomodoroUnitsPerDay = r.s_pomodoroUnitsPerDay,
                         parentRuleScheduleId = r.s_parentRuleScheduleId,
                         occurrenceDateEpochDay = r.s_occurrenceDateEpochDay,
+                        pomodoroFocusDoneApplied = r.s_pomodoroFocusDoneApplied,
                     )
                 }
             }
@@ -254,6 +255,7 @@ class ScheduleScreenViewModel @Inject constructor(
 
         _runningPomodoro.value = initialState
         cancelStartSoonForForwardChainChildren(initialState.scheduleId)
+        scheduleRunningPomodoroAlarms(initialState)
         startRunningPomodoroTicker(initialState)
     }
 
@@ -322,7 +324,15 @@ class ScheduleScreenViewModel @Inject constructor(
 
                 if (shouldApplyDone) {
                     withContext(Dispatchers.IO) {
-                        taskRepo.incrementPomodoroDoneUnits(currentStateBeforeUpdate.taskId)
+                        val marked = taskScheduleRepo.markPomodoroFocusDoneIfNeeded(
+                            currentStateBeforeUpdate.scheduleId
+                        )
+
+                        if (marked) {
+                            taskRepo.incrementPomodoroDoneUnits(
+                                currentStateBeforeUpdate.taskId
+                            )
+                        }
                     }
                 }
 
@@ -843,6 +853,7 @@ class ScheduleScreenViewModel @Inject constructor(
 
         _runningPomodoro.value = initialState
         cancelStartSoonForForwardChainChildren(initialState.scheduleId)
+        scheduleRunningPomodoroAlarms(initialState)
         startRunningPomodoroTicker(initialState)
     }
 
@@ -1110,6 +1121,7 @@ class ScheduleScreenViewModel @Inject constructor(
             endMinuteOfDay = end,
             focusMinutes = focus,
             shortBreakMinutes = shortBreak,
+            pomodoroFocusDoneApplied = false,
             pomodoroParentId = scheduleId
         )
 
@@ -1195,6 +1207,7 @@ data class ScheduleScreenItem(
     val longBreakMinutes: Int?,
     val longBreakEvery: Int?,
     val pomodoroUnitsPerDay: Int?,
+    val pomodoroFocusDoneApplied: Boolean,
 
     val parentRuleScheduleId: Int?,
     val occurrenceDateEpochDay: Long?,
@@ -1229,6 +1242,7 @@ data class ScheduleItemsRow(
 
     val s_parentRuleScheduleId: Int?,
     val s_occurrenceDateEpochDay: Long?,
+    val s_pomodoroFocusDoneApplied: Boolean,
 
     val t_taskMode: TaskMode,
     val t_pomodoroTargetUnits: Int?,
@@ -1267,6 +1281,7 @@ data class PomodoroPalletCardItem(
 
     val expectedToday: Int,   // E
     val scheduledToday: Int,  // D (در پالت یعنی Scheduled)
+    val doneToday: Int,
 
     val focus: Int,
     val shortBreak: Int,

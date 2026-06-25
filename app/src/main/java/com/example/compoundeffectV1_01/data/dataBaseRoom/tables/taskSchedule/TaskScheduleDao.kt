@@ -112,6 +112,7 @@ SELECT
   s.longBreakMinutes  AS s_longBreakMinutes,
   s.longBreakEvery    AS s_longBreakEvery,
   s.pomodoroUnitsPerDay AS s_pomodoroUnitsPerDay,
+  s.pomodoroFocusDoneApplied AS s_pomodoroFocusDoneApplied,
   
   s.parentRuleScheduleId      AS s_parentRuleScheduleId,
   s.occurrenceDateEpochDay    AS s_occurrenceDateEpochDay,
@@ -164,7 +165,8 @@ LEFT JOIN category c ON c.categoryId = t.categoryId
             dateEpochDay = :dateEpochDay,
             startMinuteOfDay = :startMin,
             endMinuteOfDay = :endMin,
-            mode = :mode
+            mode = :mode,
+            pomodoroFocusDoneApplied = 0
         WHERE id = :scheduleId
     """)
     suspend fun dropFromPalletToTimeline(
@@ -231,6 +233,14 @@ WHERE id = :scheduleId
 
     @Query("DELETE FROM task_schedule")
     suspend fun deleteAllSchedulesForRestore()
+
+    @Query("""
+    UPDATE task_schedule
+    SET pomodoroFocusDoneApplied = 1
+    WHERE id = :scheduleId
+      AND pomodoroFocusDoneApplied = 0
+""")
+    suspend fun markPomodoroFocusDoneIfNeeded(scheduleId: Int): Int
 
 //endregion
 

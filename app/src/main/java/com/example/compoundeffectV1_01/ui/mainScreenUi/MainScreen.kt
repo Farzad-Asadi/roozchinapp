@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -31,8 +32,13 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -56,10 +62,23 @@ import com.example.compoundeffectV1_01.ui.navigation.bottomBarDestinations
 @SuppressLint("UnrememberedGetBackStackEntry")
 @Composable
 fun MainScreen(
-    navController: NavHostController = rememberNavController()
+    navController: NavHostController = rememberNavController(),
+    mainViewModel: MainScreenViewModel = hiltViewModel()
 ) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
+
+    val savedDefaultStartDestination by mainViewModel.defaultStartDestination.collectAsState()
+
+    var initialStartDestination by rememberSaveable {
+        mutableStateOf<String?>(null)
+    }
+
+    LaunchedEffect(savedDefaultStartDestination) {
+        if (initialStartDestination == null && savedDefaultStartDestination != null) {
+            initialStartDestination = savedDefaultStartDestination
+        }
+    }
 
     // ✅ فقط وقتی graph واقعاً حاضر شد
     val rootEntry = remember(navBackStackEntry) {
@@ -102,10 +121,21 @@ fun MainScreen(
             )
         }
     ) { padding ->
-        AppNavGraph(
-            navController = navController,
-            modifier = Modifier.padding(padding)
-        )
+        val startDestination = initialStartDestination
+
+        if (startDestination == null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+            )
+        } else {
+            AppNavGraph(
+                navController = navController,
+                modifier = Modifier.padding(padding),
+                startDestination = startDestination
+            )
+        }
     }
 }
 

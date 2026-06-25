@@ -41,4 +41,6 @@ interface TaskScheduleRepository {
 
     suspend fun getAllScheduleByPomodoroParentId(pomodoroParentId : Int) : List<TaskSchedule>
 
+    suspend fun markPomodoroFocusDoneIfNeeded(scheduleId: Int): Boolean
+
 }

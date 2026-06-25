@@ -1,4 +1,4 @@
-package com.example.compoundeffectV1_01.ui.mainScreenUi
+package com.example.compoundeffectV1_01.ui.settingsScreen
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -8,11 +8,12 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
-class MainScreenViewModel @Inject constructor(
-    appPreferences: AppPreferences
+class SettingsViewModel @Inject constructor(
+    private val appPreferences: AppPreferences
 ) : ViewModel() {
 
     val defaultStartDestination =
@@ -27,6 +28,18 @@ class MainScreenViewModel @Inject constructor(
             .stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(5_000),
-                initialValue = null
+                initialValue = AppRoutes.CATEGORY
             )
+
+    fun setDefaultStartDestination(route: String) {
+        val cleanRoute = when (route) {
+            AppRoutes.CATEGORY -> AppRoutes.CATEGORY
+            AppRoutes.SCHEDULE -> AppRoutes.SCHEDULE
+            else -> AppRoutes.CATEGORY
+        }
+
+        viewModelScope.launch {
+            appPreferences.setDefaultStartDestination(cleanRoute)
+        }
+    }
 }

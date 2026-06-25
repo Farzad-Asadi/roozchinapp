@@ -276,6 +276,10 @@ fun ScheduleScreen(
                 val expected = rules.sumOf { (it.pomodoroUnitsPerDay ?: 1).coerceAtLeast(1) }
                 val scheduled = todayTimelinePomodoros.count { it.taskId == taskId }
 
+                val doneToday = todayTimelinePomodoros.count {
+                    it.taskId == taskId && it.pomodoroFocusDoneApplied
+                }
+
                 // اجازه می‌دهیم نهایتاً یک پومودوروی اضافه‌تر از هدف روزانه ساخته شود.
                 val addableToday = (expected + 1 - scheduled).coerceAtLeast(0)
 
@@ -296,6 +300,7 @@ fun ScheduleScreen(
                     longBreakEvery = any.longBreakEvery ?: 4,
                     categoryColor = any.categoryColor,
                     categoryIconName = any.categoryIconName,
+                    doneToday = doneToday,
 
                     remainingToday = addableToday
                 )
@@ -345,7 +350,7 @@ fun ScheduleScreen(
     val vScroll = rememberScrollState()
     val hScroll = rememberScrollState()
 
-    val didAutoScroll = rememberSaveable { mutableStateOf(false) }
+    val didAutoScroll = remember { mutableStateOf(false) }
 
     var pendingScrollTo by remember { mutableStateOf<Int?>(null) }
 
@@ -494,11 +499,7 @@ fun ScheduleScreen(
     }
     val context = LocalContext.current
 
-    val openPomodoroNotificationSettings = {
-        context.openPomodoroNotificationSettings(
-            channelId = PomodoroNotifications.CHANNEL_ID
-        )
-    }
+
 
     val activity = context as Activity
 
@@ -595,29 +596,48 @@ fun ScheduleScreen(
         pendingBringDayIntoView = null
     }
 
-    LaunchedEffect(vScroll.maxValue, hourHeightDp, dayWidthDp, startDate) {
-        // صبر کن تا ScrollState اندازه‌ها رو بگیره
+    LaunchedEffect(
+        vScroll.maxValue,
+        hScroll.maxValue,
+        gridViewportHeightPx,
+        hourHeightPx,
+        dayWidthPx,
+        startDate,
+        hasAppliedSavedVerticalZoom
+    ) {
         if (didAutoScroll.value) return@LaunchedEffect
+
+        // باید زوم ذخیره‌شده اعمال شده باشد
+        if (!hasAppliedSavedVerticalZoom) return@LaunchedEffect
+
+        // باید ScrollState و اندازه واقعی viewport آماده شده باشند
         if (vScroll.maxValue <= 0) return@LaunchedEffect
+        if (gridViewportHeightPx <= 0f) return@LaunchedEffect
 
         val now = LocalDateTime.now()
         val minutesNow = now.hour * 60 + now.minute
 
-        // y موقعیت خط زمان (px)
-        val yPx = (hourHeightPx * (minutesNow / 60f))
+        // موقعیت خط زمان داخل محتوای ۲۴ ساعته
+        val yPx = hourHeightPx * (minutesNow / 60f)
 
-        // می‌خوای خط زمان نزدیک بالا باشه ولی نچسبه:
-        // مثلاً 1.5 ساعت فاصله از بالا
-        val topMarginPx = hourHeightPx * 1.5f
+        // هدف: خط زمان وسط viewport باشد
+        val viewportCenterPx = gridViewportHeightPx / 2f
 
-        val targetY = (yPx - topMarginPx).coerceIn(0f, vScroll.maxValue.toFloat())
+        val targetY = (yPx - viewportCenterPx)
+            .coerceIn(0f, vScroll.maxValue.toFloat())
+
         vScroll.scrollTo(targetY.toInt())
 
-        // (اختیاری) اگر امروز داخل بازه‌ی 5 روزه هست، افقی هم بیار تو دید
-        val dayIndex = ChronoUnit.DAYS.between(startDate, now.toLocalDate()).toInt()
-        if (dayIndex in 0 until numDays) {
+        // اگر امروز داخل بازه‌ی چندروزه است، افقی هم امروز را بیاور داخل دید
+        val dayIndex = ChronoUnit.DAYS.between(
+            startDate,
+            now.toLocalDate()
+        ).toInt()
+
+        if (dayIndex in 0 until numDays && hScroll.maxValue > 0) {
             val targetX = (dayIndex * dayWidthPx - dayWidthPx * 0.2f)
                 .coerceIn(0f, hScroll.maxValue.toFloat())
+
             hScroll.scrollTo(targetX.toInt())
         }
 
@@ -646,11 +666,7 @@ fun ScheduleScreen(
         modifier = Modifier,
         topBar = {
             CompactTopBar(
-                title = "Schedule",
-                onPomodoroNotificationSettingsClick = openPomodoroNotificationSettings,
-                onBackupRestoreClick = {
-                    navController.navigate(AppRoutes.BACKUP_RESTORE)
-                }
+                title = "Schedule"
             )
         }
     ) { padding ->
@@ -2320,6 +2336,12 @@ private fun PomodoroPalletCard(
     val categoryBorderColor = colorFromHex(item.categoryColor ?: "#9E9E9E")
     val shape = RoundedCornerShape(18.dp)
 
+    val doneProgress = remember(item.expectedToday, item.doneToday) {
+        if (item.expectedToday <= 0) 0f
+        else (item.doneToday.toFloat() / item.expectedToday.toFloat())
+            .coerceIn(0f, 1f)
+    }
+
     val dragModifier =
         if (canAddMoreToday) {
             Modifier.pointerInput(item.taskId, item.remainingToday) {
@@ -2366,11 +2388,20 @@ private fun PomodoroPalletCard(
             modifier = Modifier
                 .fillMaxSize()
                 .clip(shape)
-                .background(pomoColor.copy(alpha = 0.10f))
-                .padding(horizontal = 10.dp, vertical = 8.dp)
+                .background(pomoColor.copy(alpha = 0.08f))
         ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .fillMaxWidth(doneProgress)
+                    .background(categoryBorderColor.copy(alpha = 0.22f))
+                    .align(Alignment.CenterStart)
+            )
+
             Column(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 Text(
@@ -2419,7 +2450,7 @@ private fun PomodoroPalletCard(
                 )
 
                 Text(
-                    text = "p.p.d/done  ${item.expectedToday}/${item.scheduledToday.toString().padStart(2, '0')}",
+                    text = "p.p.d/done  ${item.expectedToday}/${item.doneToday.toString().padStart(2, '0')}",
                     modifier = Modifier.fillMaxWidth(),
                     textAlign = TextAlign.Left,
                     maxLines = 1,
@@ -2506,12 +2537,8 @@ private fun CategoryIconWithPlate(
 
 @Composable
 fun CompactTopBar(
-    title: String,
-    onPomodoroNotificationSettingsClick: () -> Unit,
-    onBackupRestoreClick: () -> Unit
+    title: String
 ) {
-    var menuExpanded by remember { mutableStateOf(false) }
-
     Box(
         Modifier
             .fillMaxWidth()
@@ -2525,42 +2552,6 @@ fun CompactTopBar(
                 .padding(horizontal = 12.dp),
             style = MaterialTheme.typography.titleSmall
         )
-
-        Box(
-            modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .padding(end = 6.dp)
-        ) {
-            IconButton(
-                onClick = { menuExpanded = true },
-                modifier = Modifier.size(40.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.SettingsIcon,
-                    contentDescription = "Schedule settings"
-                )
-            }
-
-            DropdownMenu(
-                expanded = menuExpanded,
-                onDismissRequest = { menuExpanded = false }
-            ) {
-                DropdownMenuItem(
-                    text = { Text("تغییر صدای نوتیفیکیشن پومودورو") },
-                    onClick = {
-                        menuExpanded = false
-                        onPomodoroNotificationSettingsClick()
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text("بکاپ و بازیابی اطلاعات") },
-                    onClick = {
-                        menuExpanded = false
-                        onBackupRestoreClick()
-                    }
-                )
-            }
-        }
     }
 }
 
@@ -3039,17 +3030,3 @@ private fun formatSeconds(totalSeconds: Long): String {
     return "%02d:%02d".format(m, s)
 }
 
-private fun Context.openPomodoroNotificationSettings(channelId: String) {
-    val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).apply {
-            putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
-            putExtra(Settings.EXTRA_CHANNEL_ID, channelId)
-        }
-    } else {
-        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-            data = Uri.parse("package:$packageName")
-        }
-    }
-
-    startActivity(intent)
-}

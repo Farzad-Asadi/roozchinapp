@@ -174,5 +174,9 @@ class TaskScheduleRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun markPomodoroFocusDoneIfNeeded(scheduleId: Int): Boolean {
+        return dao.markPomodoroFocusDoneIfNeeded(scheduleId) > 0
+    }
+
 
 }

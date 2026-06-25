@@ -3,6 +3,7 @@ package com.example.compoundeffectV1_01.ui.navigation
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -15,6 +16,7 @@ import androidx.navigation.navigation
 import com.example.compoundeffectV1_01.ui.backupRestore.CompoundBackupRestoreScreen
 import com.example.compoundeffectV1_01.ui.categoryScreen.CategoryScreen
 import com.example.compoundeffectV1_01.ui.scheduleScreen.ScheduleScreen
+import com.example.compoundeffectV1_01.ui.settingsScreen.SettingsScreen
 import com.example.compoundeffectV1_01.ui.taskScreen.TaskScreen
 
 
@@ -61,6 +63,13 @@ fun AppNavGraph(
                     onClose = { navController.popBackStack() }
                 )
             }
+            composable(AppRoutes.SETTINGS) {
+                SettingsScreen(
+                    onOpenBackupRestore = {
+                        navController.navigate(AppRoutes.BACKUP_RESTORE)
+                    }
+                )
+            }
         }
     }
 }
@@ -81,6 +90,8 @@ object AppRoutes {
     const val ARG_CATEGORY_ID = "categoryId"
     const val ARG_TASK_ID = "taskId"
     const val BACKUP_RESTORE = "backup_restore"
+
+    const val SETTINGS = "settings"
 
     // route template
     const val TASK_ROUTE = "task?$ARG_CATEGORY_ID={$ARG_CATEGORY_ID}&$ARG_TASK_ID={$ARG_TASK_ID}"
@@ -118,5 +129,10 @@ val bottomBarDestinations = listOf(
         label = "Category",
         icon = Icons.Filled.Category
     ),
+    AppBottomBarDestination(
+        route = AppRoutes.SETTINGS,
+        label = "Settings",
+        icon = Icons.Filled.Settings
+    )
 
 )

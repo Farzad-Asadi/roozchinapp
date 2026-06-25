@@ -11,4 +11,7 @@ interface AppPreferences {
 
     val scheduleVerticalZoom: Flow<Float>
     suspend fun setScheduleVerticalZoom(value: Float)
+
+    val defaultStartDestination: Flow<String>
+    suspend fun setDefaultStartDestination(route: String)
 }

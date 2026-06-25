@@ -42,6 +42,7 @@ data class TaskSchedule(
     val isLongBreak: Boolean = false,
     val pomodoroUnitsPerDay: Int? = null,
     val pomodoroParentId: Int? = null,
+    val pomodoroFocusDoneApplied: Boolean = false,
 
 
     // common
