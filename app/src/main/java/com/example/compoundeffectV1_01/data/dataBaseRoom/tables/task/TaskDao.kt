@@ -144,6 +144,83 @@ interface TaskDao {
 """)
     suspend fun incrementPomodoroDoneUnits(taskId: Int)
 
+    @Query("""
+    SELECT * FROM pomodoro_daily_adjustment
+""")
+    fun observePomodoroDailyAdjustments(): Flow<List<PomodoroDailyAdjustmentEntity>>
+
+    @Query("""
+    SELECT delta FROM pomodoro_daily_adjustment
+    WHERE taskId = :taskId AND dateEpochDay = :dateEpochDay
+    LIMIT 1
+""")
+    suspend fun getPomodoroDailyAdjustmentDelta(
+        taskId: Int,
+        dateEpochDay: Long
+    ): Int?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertPomodoroDailyAdjustment(
+        entity: PomodoroDailyAdjustmentEntity
+    )
+
+    @Query("""
+    DELETE FROM pomodoro_daily_adjustment
+    WHERE taskId = :taskId AND dateEpochDay = :dateEpochDay
+""")
+    suspend fun deletePomodoroDailyAdjustment(
+        taskId: Int,
+        dateEpochDay: Long
+    )
+
+    @Query("""
+    UPDATE task
+    SET pomodoroDoneUnits =
+        CASE
+            WHEN pomodoroDoneUnits + :delta < 0 THEN 0
+            ELSE pomodoroDoneUnits + :delta
+        END
+    WHERE id = :taskId
+""")
+    suspend fun adjustPomodoroDoneUnitsByDelta(
+        taskId: Int,
+        delta: Int
+    )
+
+    @Transaction
+    suspend fun adjustManualPomodoroDone(
+        taskId: Int,
+        dateEpochDay: Long,
+        delta: Int
+    ) {
+        val currentDelta = getPomodoroDailyAdjustmentDelta(
+            taskId = taskId,
+            dateEpochDay = dateEpochDay
+        ) ?: 0
+
+        val newDelta = currentDelta + delta
+
+        if (newDelta == 0) {
+            deletePomodoroDailyAdjustment(
+                taskId = taskId,
+                dateEpochDay = dateEpochDay
+            )
+        } else {
+            upsertPomodoroDailyAdjustment(
+                PomodoroDailyAdjustmentEntity(
+                    taskId = taskId,
+                    dateEpochDay = dateEpochDay,
+                    delta = newDelta
+                )
+            )
+        }
+
+        adjustPomodoroDoneUnitsByDelta(
+            taskId = taskId,
+            delta = delta
+        )
+    }
+
 
 
     //region Backup / Restore

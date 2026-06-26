@@ -59,4 +59,12 @@ interface TaskRepository {
     suspend fun deleteAllInCategory(categoryId: Int)
 
     suspend fun incrementPomodoroDoneUnits(taskId: Int)
+
+    fun observePomodoroDailyAdjustments(): Flow<List<PomodoroDailyAdjustmentEntity>>
+
+    suspend fun adjustManualPomodoroDone(
+        taskId: Int,
+        dateEpochDay: Long,
+        delta: Int
+    )
 }

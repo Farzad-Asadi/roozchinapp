@@ -11,6 +11,7 @@ import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.category.Categor
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.category.CategoryDao
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.TaskReminderDao
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.TaskReminderEntity
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.PomodoroDailyAdjustmentEntity
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskDao
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.Task
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.TaskSchedule
@@ -27,6 +28,7 @@ import com.example.compoundeffectV1_01.data.dataBaseRoom.typeConvertor.TypeConve
         AppSystemInfo::class,
         TaskSchedule::class,
         TaskReminderEntity::class,
+        PomodoroDailyAdjustmentEntity::class
 
     ],
 

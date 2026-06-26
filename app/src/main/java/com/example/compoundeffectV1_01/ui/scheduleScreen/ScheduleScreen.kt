@@ -143,6 +143,7 @@ import kotlin.math.roundToInt
 import android.content.Context
 import android.net.Uri
 import androidx.compose.foundation.ScrollState
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material.icons.filled.Settings as SettingsIcon
 import com.example.compoundeffectV1_01.data.notification.PomodoroNotifications
@@ -158,6 +159,8 @@ fun ScheduleScreen(
     val runningPomodoro by viewModel.runningPomodoro.collectAsState()
 
     val savedScheduleVerticalZoom by viewModel.scheduleVerticalZoom.collectAsState()
+
+    val pomodoroDailyAdjustments by viewModel.pomodoroDailyAdjustments.collectAsState()
 
 
     val timelineItemsReal = remember(allItems) { allItems.filter { !it.inPallet } }
@@ -267,8 +270,26 @@ fun ScheduleScreen(
             .filter { it.start.toLocalDate() == today }
     }
 
+    val todayEpochDay = remember(today) {
+        today.toEpochDay()
+    }
+
+    val manualDoneTodayDeltaByTaskId = remember(
+        pomodoroDailyAdjustments,
+        todayEpochDay
+    ) {
+        pomodoroDailyAdjustments
+            .asSequence()
+            .filter { it.dateEpochDay == todayEpochDay }
+            .associate { it.taskId to it.delta }
+    }
+
     // ✅ کارت‌های تجمیعی پالت
-    val pomodoroPalletCards = remember(pomodoroPARENTRulesToday, todayTimelinePomodoros) {
+    val pomodoroPalletCards = remember(
+        pomodoroPARENTRulesToday,
+        todayTimelinePomodoros,
+        manualDoneTodayDeltaByTaskId.toMap()
+    ) {
         pomodoroPARENTRulesToday
             .groupBy { it.taskId }
             .mapNotNull { (taskId, rules) ->
@@ -277,12 +298,15 @@ fun ScheduleScreen(
                 val expected = rules.sumOf { (it.pomodoroUnitsPerDay ?: 1).coerceAtLeast(1) }
                 val scheduled = todayTimelinePomodoros.count { it.taskId == taskId }
 
-                val doneToday = todayTimelinePomodoros.count {
+                val realDoneToday = todayTimelinePomodoros.count {
                     it.taskId == taskId && it.pomodoroFocusDoneApplied
                 }
 
+                val manualDeltaToday = manualDoneTodayDeltaByTaskId[taskId] ?: 0
+                val doneToday = (realDoneToday + manualDeltaToday).coerceAtLeast(0)
+
                 // اجازه می‌دهیم نهایتاً یک پومودوروی اضافه‌تر از هدف روزانه ساخته شود.
-                val addableToday = (expected + 1 - scheduled).coerceAtLeast(0)
+                val addableToday = Int.MAX_VALUE
 
                 PomodoroPalletCardItem(
                     taskId = taskId,
@@ -290,7 +314,7 @@ fun ScheduleScreen(
                     taskName = any.title,
 
                     totalTarget = any.pomodoroTargetUnits ?: 0,
-                    totalDone = any.pomodoroDoneUnits,
+                    totalDone = (any.pomodoroDoneUnits + manualDeltaToday).coerceAtLeast(0),
 
                     expectedToday = expected,
                     scheduledToday = scheduled,
@@ -508,6 +532,8 @@ fun ScheduleScreen(
     var draggingPomodoro by remember { mutableStateOf<PomodoroPalletCardItem?>(null) }
 
 
+
+
     val isDraggingAnything = (draggingFromPallet != null || draggingPomodoro != null)
 
     val overlayScheduleItem = draggingFromPallet
@@ -530,6 +556,10 @@ fun ScheduleScreen(
 
     val pomodoroChainFlagsById = remember(displayTimelineItems) {
         computePomodoroChainFlags(displayTimelineItems)
+    }
+
+    val previousPomodoroEndMinById = remember(displayTimelineItems) {
+        computePreviousPomodoroEndMinById(displayTimelineItems)
     }
 
 // 2) بعد layout های همپوشانی را حساب کن (فقط داخل روز)
@@ -1018,6 +1048,8 @@ fun ScheduleScreen(
                                         selected = (selectedScheduleId == displayItem.scheduleId),
                                         pomodoroChainedWithPrevious = pomodoroChainFlagsById[displayItem.scheduleId]?.hasPrevious == true,
                                         pomodoroChainedWithNext = pomodoroChainFlagsById[displayItem.scheduleId]?.hasNext == true,
+                                        isPomodoroTimerActive = runningPomodoro?.scheduleId == displayItem.scheduleId,
+                                        previousPomodoroEndMin = previousPomodoroEndMinById[displayItem.scheduleId],
                                         onToggleSelected = {
                                             val newSelection =
                                                 if (selectedScheduleId == displayItem.scheduleId) null
@@ -1253,7 +1285,9 @@ fun ScheduleScreen(
                     max = st.maxAllowed,
                     anchorInRoot = st.anchorInRoot,
                     onInc = {
-                        if (st.ids.size >= st.maxAllowed) return@PomodoroCountStepperOverlay
+                        if (st.maxAllowed != Int.MAX_VALUE && st.ids.size >= st.maxAllowed) {
+                            return@PomodoroCountStepperOverlay
+                        }
                         val nextStart = st.startMin + (st.ids.size * (st.focus + st.shortBreak))
                         scope.launch {
                             val newId = withContext(Dispatchers.IO) {
@@ -1359,15 +1393,8 @@ fun ScheduleScreen(
                             y = (dragY - overlayLayerOriginInRoot.y).coerceAtLeast(0f)
                         )
 
-                        // remainingToday اینجا یعنی چند پومودوروی دیگر مجاز است اضافه شود.
-                        // بعد از رسیدن به هدف روزانه، فقط یکی اضافه مجاز است.
-                        val maxAllowed = pomo.remainingToday
 
-                        if (maxAllowed <= 0) {
-                            draggingFromPallet = null
-                            draggingPomodoro = null
-                            return@RightPallet
-                        }
+                        val maxAllowed = Int.MAX_VALUE
 
                         // ✅ یک عدد بساز و id بگیر
                         scope.launch {
@@ -1431,6 +1458,32 @@ fun ScheduleScreen(
                 onDragCancel = {
                     draggingFromPallet = null
                     draggingPomodoro = null
+                },
+                onEditTask = { taskId ->
+                    palletExpanded = false
+                    navController.navigate(AppRoutes.taskEdit(taskId))
+                },
+                onPomodoroDoneTodayInc = { taskId ->
+                    viewModel.adjustPomodoroDoneToday(
+                        taskId = taskId,
+                        delta = +1
+                    )
+                },
+                onPomodoroDoneTodayDec = { taskId ->
+                    val currentManualDelta = manualDoneTodayDeltaByTaskId[taskId] ?: 0
+
+                    val realDoneToday = todayTimelinePomodoros.count {
+                        it.taskId == taskId && it.pomodoroFocusDoneApplied
+                    }
+
+                    val visibleDoneToday = realDoneToday + currentManualDelta
+
+                    if (visibleDoneToday > 0) {
+                        viewModel.adjustPomodoroDoneToday(
+                            taskId = taskId,
+                            delta = -1
+                        )
+                    }
                 },
                 modifier = Modifier.align(Alignment.CenterEnd),
             )
@@ -1515,6 +1568,8 @@ private fun TimelineItemBox(
     selected: Boolean,
     pomodoroChainedWithPrevious: Boolean,
     pomodoroChainedWithNext: Boolean,
+    isPomodoroTimerActive: Boolean,
+    previousPomodoroEndMin: Int?,
     onToggleSelected: () -> Unit,
     onMoveCommit: (scheduleId: Int, newDate: LocalDate, newStartMin: Int, newEndMin: Int) -> Unit,
     onResizeEndCommit: (scheduleId: Int, newEndMin: Int) -> Unit,
@@ -1920,11 +1975,44 @@ private fun TimelineItemBox(
         categoryBorderColor
     }
 
+    val activePomodoroBorderAlpha =
+        if (isPomodoroTimerActive) {
+            val transition = rememberInfiniteTransition(label = "active_pomodoro_border")
+            val alpha by transition.animateFloat(
+                initialValue = 0.35f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(durationMillis = 650),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "active_pomodoro_border_alpha"
+            )
+            alpha
+        } else {
+            1f
+        }
+
+    val effectiveTimelineBorderColor =
+        if (isPomodoroTimerActive) {
+            timelineBorderColor.copy(alpha = activePomodoroBorderAlpha)
+        } else {
+            timelineBorderColor
+        }
+
     val timelineBorderWidth = when {
         selected -> 2.5.dp
         level > 0 -> 2.dp
         else -> 1.5.dp
     }
+
+    val effectiveTimelineBorderWidth =
+        if (isPomodoroTimerActive) {
+            3.dp
+        } else {
+            timelineBorderWidth
+        }
+
+
 
     val dashed = selected && selectionH > taskH
 
@@ -2030,8 +2118,8 @@ private fun TimelineItemBox(
                 .width(dayWidthDp - 12.dp)
                 .height(taskH)
                 .border(
-                    width = timelineBorderWidth,
-                    color = timelineBorderColor,
+                    width = effectiveTimelineBorderWidth,
+                    color = effectiveTimelineBorderColor,
                     shape = MaterialTheme.shapes.medium
                 )
                 .clip(MaterialTheme.shapes.medium) // ✅ مهم: دو رنگ داخل شکل کلیپ شوند
@@ -2126,14 +2214,14 @@ private fun TimelineItemBox(
                                 dragDy += dragAmount.y
 
                                 // ✅ محاسبه‌ی لحظه‌ای start/end برای auto-scroll
-                                val effectiveDragDy = dragDy
-                                val minDeltaNow = ((effectiveDragDy / hourHpx) * 60f).roundToInt()
-                                val moveStartRawNow =
-                                    (startMin0 + minDeltaNow).coerceIn(0, 24 * 60 - minDur)
-
-                                val desiredStart = snap(moveStartRawNow, snapStep)
-                                val desiredEnd = desiredStart + dur0
-                                val r = clampRange(desiredStart, desiredEnd)
+                                val r = calculateMovePreviewRange(
+                                    startMin0 = startMin0,
+                                    minDur = minDur,
+                                    dur0 = dur0,
+                                    dragDy = dragDy,
+                                    hourHpx = hourHpx,
+                                    snapStep = snapStep
+                                )
 
                                 movePointerYInGridViewportPx += dragAmount.y
                                 moveDragDistancePx += dragAmount.getDistance()
@@ -2167,18 +2255,17 @@ private fun TimelineItemBox(
                                 }
 
 
-                                val effectiveDragDy2 = dragDy
-                                val minDelta2 = ((effectiveDragDy2 / hourHpx) * 60f).roundToInt()
-
                                 val moveDayIndex2 = (dayIndex0 + dayDelta2).coerceIn(0, numDays - 1)
-                                val moveStartRaw2 =
-                                    (startMin0 + minDelta2).coerceIn(0, 24 * 60 - minDur)
-
                                 val finalDate = startDate.plusDays(moveDayIndex2.toLong())
 
-                                val desiredStart = snap(moveStartRaw2, snapStep)
-                                val desiredEnd = desiredStart + dur0
-                                val r = clampRange(desiredStart, desiredEnd)
+                                val r = calculateMovePreviewRange(
+                                    startMin0 = startMin0,
+                                    minDur = minDur,
+                                    dur0 = dur0,
+                                    dragDy = dragDy,
+                                    hourHpx = hourHpx,
+                                    snapStep = snapStep
+                                )
 
                                 onMoveCommit(item.scheduleId, finalDate, r.start, r.end)
                                 isMoving = false
@@ -2283,6 +2370,12 @@ private fun TimelineItemBox(
                     )
                 }
 
+                val canAttachAfterPreviousPomodoro =
+                    item.mode == ScheduleMode.POMODORO &&
+                            !isVirtual &&
+                            previousPomodoroEndMin != null &&
+                            previousPomodoroEndMin + dur0 <= DAY_MAX
+
                 DropdownMenu(
                     expanded = menuExpanded,
                     onDismissRequest = { menuExpanded = false }
@@ -2312,6 +2405,27 @@ private fun TimelineItemBox(
                                 onClick = {
                                     menuExpanded = false
                                     onStartPomodoroNow(item.scheduleId)
+                                }
+                            )
+
+                            DropdownMenuItem(
+                                text = { Text("بعد از پومودوی بالا قرار بگیر") },
+                                leadingIcon = {
+                                    Icon(Icons.Filled.Link, contentDescription = null)
+                                },
+                                enabled = canAttachAfterPreviousPomodoro,
+                                onClick = {
+                                    val newStart = previousPomodoroEndMin ?: return@DropdownMenuItem
+                                    val newEnd = newStart + dur0
+
+                                    menuExpanded = false
+
+                                    onMoveCommit(
+                                        item.scheduleId,
+                                        item.start.toLocalDate(),
+                                        newStart,
+                                        newEnd
+                                    )
                                 }
                             )
                         }
@@ -2502,6 +2616,9 @@ private fun RightPallet(
     onDrag: (dx: Float, dy: Float) -> Unit,
     onDragEnd: (scheduleId: Int) -> Unit,
     onDragCancel: () -> Unit,
+    onEditTask: (taskId: Int) -> Unit,
+    onPomodoroDoneTodayInc: (taskId: Int) -> Unit,
+    onPomodoroDoneTodayDec: (taskId: Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val keepContent = expanded || isDraggingFromPallet
@@ -2554,7 +2671,10 @@ private fun RightPallet(
                                 onDragStart = onPomodoroDragStart,
                                 onDrag = onDrag,
                                 onDragEnd = { onDragEnd(c.scheduleId) },
-                                onDragCancel = onDragCancel
+                                onDragCancel = onDragCancel,
+                                onEdit = { onEditTask(c.taskId) },
+                                onDoneTodayInc = { onPomodoroDoneTodayInc(c.taskId) },
+                                onDoneTodayDec = { onPomodoroDoneTodayDec(c.taskId) }
                             )
                             HorizontalDivider(thickness = 0.5.dp)
                         }
@@ -2564,7 +2684,8 @@ private fun RightPallet(
                                 onDragStart = onDragStart,
                                 onDrag = onDrag,
                                 onDragEnd = { onDragEnd(t.scheduleId) },
-                                onDragCancel = onDragCancel
+                                onDragCancel = onDragCancel,
+                                onEdit = { onEditTask(t.taskId) }
                             )
                             HorizontalDivider(thickness = 0.5.dp)
                         }
@@ -2581,9 +2702,14 @@ private fun PomodoroPalletCard(
     onDragStart: (PomodoroPalletCardItem, Float, Float, Float, Float) -> Unit,
     onDrag: (dx: Float, dy: Float) -> Unit,
     onDragEnd: () -> Unit,
-    onDragCancel: () -> Unit
+    onDragCancel: () -> Unit,
+    onEdit: () -> Unit,
+    onDoneTodayInc: () -> Unit,
+    onDoneTodayDec: () -> Unit
 ) {
     var coords by remember { mutableStateOf<LayoutCoordinates?>(null) }
+
+    var menuExpanded by remember { mutableStateOf(false) }
 
     val canAddMoreToday = item.remainingToday > 0
 
@@ -2632,7 +2758,8 @@ private fun PomodoroPalletCard(
                 alpha = if (canAddMoreToday) 1f else 0.72f
             }
             .onGloballyPositioned { coords = it }
-            .then(dragModifier),
+            .then(dragModifier)
+            .clickable { menuExpanded = true },
         shape = shape,
         elevation = CardDefaults.cardElevation(defaultElevation = 5.dp),
         colors = CardDefaults.cardColors(
@@ -2684,11 +2811,15 @@ private fun PomodoroPalletCard(
 
                     Text(
                         text = item.taskName,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
                         textAlign = TextAlign.Right,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.labelLarge,
+                        style = MaterialTheme.typography.labelLarge.copy(
+                            textDirection = TextDirection.ContentOrRtl
+                        ),
                         color = MaterialTheme.colorScheme.onSurface
                     )
                 }
@@ -2713,6 +2844,68 @@ private fun PomodoroPalletCard(
                     color = MaterialTheme.colorScheme.onSurface
                 )
             }
+
+            DropdownMenu(
+                expanded = menuExpanded,
+                onDismissRequest = { menuExpanded = false }
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Edit") },
+                    leadingIcon = {
+                        Icon(Icons.Filled.Edit, contentDescription = null)
+                    },
+                    onClick = {
+                        menuExpanded = false
+                        onEdit()
+                    }
+                )
+
+                HorizontalDivider(thickness = 0.5.dp)
+
+                DropdownMenuItem(
+                    text = {
+                        Column {
+                            Text(
+                                text = "انجام‌شده‌های امروز",
+                                style = MaterialTheme.typography.labelMedium
+                            )
+
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                IconButton(
+                                    onClick = onDoneTodayDec,
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.KeyboardArrowDown,
+                                        contentDescription = null
+                                    )
+                                }
+
+                                Text(
+                                    text = item.doneToday.toString(),
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+
+                                IconButton(
+                                    onClick = onDoneTodayInc,
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.KeyboardArrowUp,
+                                        contentDescription = null
+                                    )
+                                }
+                            }
+                        }
+                    },
+                    onClick = {
+                        // خود Row کنترل دارد؛ اینجا عمداً کاری نمی‌کنیم
+                    }
+                )
+            }
         }
     }
 }
@@ -2724,9 +2917,12 @@ private fun PalletTaskItem(
     onDragStart: (item: ScheduleScreenItem, startWindowX: Float, startWindowY: Float, downX: Float, downY: Float) -> Unit,
     onDrag: (dx: Float, dy: Float) -> Unit,
     onDragEnd: () -> Unit,
-    onDragCancel: () -> Unit
+    onDragCancel: () -> Unit,
+    onEdit: () -> Unit
 ) {
     var coords by remember { mutableStateOf<LayoutCoordinates?>(null) }
+
+    var menuExpanded by remember { mutableStateOf(false) }
 
     val shape = RoundedCornerShape(16.dp)
 
@@ -2749,6 +2945,9 @@ private fun PalletTaskItem(
                     onDragEnd = onDragEnd,
                     onDragCancel = onDragCancel
                 )
+            }
+            .clickable {
+                menuExpanded = true
             },
         shape = shape,
         elevation = CardDefaults.cardElevation(defaultElevation = 5.dp),
@@ -2756,11 +2955,31 @@ private fun PalletTaskItem(
             containerColor = scheduleModeColor(item.mode).copy(alpha = 0.45f)
         )
     ) {
-        Text(
-            text = item.title,
-            maxLines = 1,
-            modifier = Modifier.padding(10.dp)
-        )
+        Box(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(
+                text = item.title,
+                maxLines = 1,
+                modifier = Modifier.padding(10.dp)
+            )
+
+            DropdownMenu(
+                expanded = menuExpanded,
+                onDismissRequest = { menuExpanded = false }
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Edit") },
+                    leadingIcon = {
+                        Icon(Icons.Filled.Edit, contentDescription = null)
+                    },
+                    onClick = {
+                        menuExpanded = false
+                        onEdit()
+                    }
+                )
+            }
+        }
     }
 }
 
@@ -2841,11 +3060,15 @@ private fun PomodoroCountStepperOverlay(
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
 
+            val unlimited = max == Int.MAX_VALUE
+
             IconButton(
                 onClick = onInc,
-                enabled = count < max,
+                enabled = unlimited || count < max,
                 modifier = Modifier.size(52.dp)
-            ) { Icon(Icons.Filled.KeyboardArrowUp, contentDescription = null) }
+            ) {
+                Icon(Icons.Filled.KeyboardArrowUp, contentDescription = null)
+            }
 
             Text(
                 text = count.toString(),
@@ -2860,7 +3083,7 @@ private fun PomodoroCountStepperOverlay(
 
             Spacer(Modifier.height(4.dp))
             Text(
-                text = "1..$max",
+                text = if (unlimited) "بدون محدودیت" else "1..$max",
                 style = MaterialTheme.typography.labelSmall
             )
         }
@@ -2938,6 +3161,71 @@ private fun CurrentTimeOverlay(
                 .padding(start = 8.dp)
         )
     }
+}
+
+private data class MovePreviewResult(
+    val start: Int,
+    val end: Int
+)
+
+private fun calculateMovePreviewRange(
+    startMin0: Int,
+    minDur: Int,
+    dur0: Int,
+    dragDy: Float,
+    hourHpx: Float,
+    snapStep: Int
+): MovePreviewResult {
+    val minDeltaNow = ((dragDy / hourHpx) * 60f).roundToInt()
+
+    val moveStartRawNow =
+        (startMin0 + minDeltaNow).coerceIn(0, 24 * 60 - minDur)
+
+    val desiredStart = snap(moveStartRawNow, snapStep)
+    val desiredEnd = desiredStart + dur0
+    val r = clampRange(desiredStart, desiredEnd)
+
+    return MovePreviewResult(
+        start = r.start,
+        end = r.end
+    )
+}
+
+private fun computePreviousPomodoroEndMinById(
+    items: List<ScheduleScreenItem>
+): Map<Int, Int> {
+    val result = LinkedHashMap<Int, Int>()
+
+    val groups = items
+        .asSequence()
+        .filter { !it.inPallet }
+        .filter { it.scheduleId > 0 }
+        .filter { it.mode == ScheduleMode.POMODORO }
+        .groupBy { it.start.toLocalDate() }
+
+    groups.values.forEach { dayItems ->
+        val sorted = dayItems.sortedWith(
+            compareBy<ScheduleScreenItem> { minuteOfDay(it.start) }
+                .thenBy { minuteOfDay(it.end) }
+                .thenBy { it.scheduleId }
+        )
+
+        sorted.forEach { current ->
+            val currentStart = minuteOfDay(current.start)
+
+            val previous = sorted
+                .asSequence()
+                .filter { it.scheduleId != current.scheduleId }
+                .filter { minuteOfDay(it.end) <= currentStart }
+                .maxByOrNull { minuteOfDay(it.end) }
+
+            if (previous != null) {
+                result[current.scheduleId] = minuteOfDay(previous.end)
+            }
+        }
+    }
+
+    return result
 }
 
 

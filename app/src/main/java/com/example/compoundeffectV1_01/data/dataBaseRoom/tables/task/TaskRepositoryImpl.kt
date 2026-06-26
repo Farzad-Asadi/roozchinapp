@@ -82,5 +82,19 @@ class TaskRepositoryImpl @Inject constructor(
     override suspend fun incrementPomodoroDoneUnits(taskId: Int) =
         taskDao.incrementPomodoroDoneUnits(taskId)
 
+    override fun observePomodoroDailyAdjustments(): Flow<List<PomodoroDailyAdjustmentEntity>> =
+        taskDao.observePomodoroDailyAdjustments()
+
+    override suspend fun adjustManualPomodoroDone(
+        taskId: Int,
+        dateEpochDay: Long,
+        delta: Int
+    ) =
+        taskDao.adjustManualPomodoroDone(
+            taskId = taskId,
+            dateEpochDay = dateEpochDay,
+            delta = delta
+        )
+
 
 }

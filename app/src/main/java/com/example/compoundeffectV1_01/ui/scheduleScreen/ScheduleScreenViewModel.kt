@@ -124,6 +124,15 @@ class ScheduleScreenViewModel @Inject constructor(
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    val pomodoroDailyAdjustments =
+        taskRepo.observePomodoroDailyAdjustments()
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5_000),
+                emptyList()
+            )
+
+
     init {
         startPomodoroAutoWatcher()
     }
@@ -1017,6 +1026,19 @@ class ScheduleScreenViewModel @Inject constructor(
         viewModelScope.launch {
             appPreferences.setScheduleVerticalZoom(
                 value.coerceIn(0.6f, 10.0f)
+            )
+        }
+    }
+
+    fun adjustPomodoroDoneToday(
+        taskId: Int,
+        delta: Int
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            taskRepo.adjustManualPomodoroDone(
+                taskId = taskId,
+                dateEpochDay = LocalDate.now().toEpochDay(),
+                delta = delta
             )
         }
     }
