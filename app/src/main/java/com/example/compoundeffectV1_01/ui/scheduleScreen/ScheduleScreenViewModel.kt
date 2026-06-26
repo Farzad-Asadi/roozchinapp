@@ -405,30 +405,34 @@ class ScheduleScreenViewModel @Inject constructor(
         val pauseAt = current.pauseAt ?: return
         val now = LocalDateTime.now()
 
-        val delayMinutes = durationToScheduleDelayMinutes(
-            Duration.between(pauseAt, now)
-        )
+        val pauseDurationRaw = Duration.between(pauseAt, now)
 
-        val scheduleDelay = Duration.ofMinutes(delayMinutes)
-
-        val resumedState = when (current.phase) {
-            PomodoroRunPhase.WAITING_TO_START -> {
-                // اگر قبل از شروع Pause شده، کل کارت فعلی هم عقب می‌رود
-                current.copy(
-                    realStartAt = current.realStartAt.plus(scheduleDelay),
-                    focusEndAt = current.focusEndAt.plus(scheduleDelay),
-                    breakEndAt = current.breakEndAt.plus(scheduleDelay),
-                    isPaused = false,
-                    pauseAt = null
-                )
+        val pauseDuration =
+            if (pauseDurationRaw.isNegative || pauseDurationRaw.isZero) {
+                Duration.ZERO
+            } else {
+                pauseDurationRaw
             }
 
+        // برای تایمر، تأخیر دقیق ثانیه‌ای لازم داریم
+        // تا elapsed بعد از Resume نپرد.
+        val timerDelay = pauseDuration
+
+        // برای کارت تایم‌لاین، چون واحد زمان‌بندی دقیقه است،
+        // تأخیر را به دقیقه‌ی کامل رو به بالا تبدیل می‌کنیم.
+        val scheduleDelayMinutes = durationToScheduleDelayMinutes(pauseDuration)
+
+        val resumedState = when (current.phase) {
+            PomodoroRunPhase.WAITING_TO_START,
             PomodoroRunPhase.FOCUS,
             PomodoroRunPhase.BREAK -> {
-                // اگر شروع شده، start دست نمی‌خورد؛ فقط پایان‌ها عقب می‌روند
                 current.copy(
-                    focusEndAt = current.focusEndAt.plus(scheduleDelay),
-                    breakEndAt = current.breakEndAt.plus(scheduleDelay),
+                    // مهم:
+                    // این سه مقدار برای محاسبه‌ی درست elapsed باید با pauseDuration دقیق شیفت شوند.
+                    realStartAt = current.realStartAt.plus(timerDelay),
+                    focusEndAt = current.focusEndAt.plus(timerDelay),
+                    breakEndAt = current.breakEndAt.plus(timerDelay),
+
                     isPaused = false,
                     pauseAt = null
                 )
@@ -440,7 +444,7 @@ class ScheduleScreenViewModel @Inject constructor(
         _runningPomodoro.value = resumedState
 
         viewModelScope.launch {
-            if (delayMinutes > 0) {
+            if (scheduleDelayMinutes > 0) {
                 withContext(Dispatchers.IO) {
                     val schedule = taskScheduleRepo.getById(current.scheduleId)
                         ?: return@withContext
@@ -457,18 +461,23 @@ class ScheduleScreenViewModel @Inject constructor(
 
                     when (current.phase) {
                         PomodoroRunPhase.WAITING_TO_START -> {
-                            newStart = (oldStart + delayMinutes.toInt())
+                            // هنوز شروع نشده:
+                            // کل کارت فعلی و زنجیره‌ی بعدی جابه‌جا شوند.
+                            newStart = (oldStart + scheduleDelayMinutes.toInt())
                                 .coerceIn(DAY_MIN, DAY_MAX)
 
-                            newEnd = (oldEnd + delayMinutes.toInt())
+                            newEnd = (oldEnd + scheduleDelayMinutes.toInt())
                                 .coerceIn(DAY_MIN, DAY_MAX)
                         }
 
                         PomodoroRunPhase.FOCUS,
                         PomodoroRunPhase.BREAK -> {
+                            // شروع شده:
+                            // start ثابت می‌ماند، end کش می‌آید.
+                            // movePomodoroChainForward بچه‌های چسبیده‌ی زیرش را از end جدید ادامه می‌دهد.
                             newStart = oldStart
 
-                            newEnd = (oldEnd + delayMinutes.toInt())
+                            newEnd = (oldEnd + scheduleDelayMinutes.toInt())
                                 .coerceIn(DAY_MIN, DAY_MAX)
                         }
 
