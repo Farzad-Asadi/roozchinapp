@@ -70,7 +70,7 @@ fun MainScreen(
 
     val savedDefaultStartDestination by mainViewModel.defaultStartDestination.collectAsState()
 
-    var initialStartDestination by rememberSaveable {
+    var initialStartDestination by remember {
         mutableStateOf<String?>(null)
     }
 

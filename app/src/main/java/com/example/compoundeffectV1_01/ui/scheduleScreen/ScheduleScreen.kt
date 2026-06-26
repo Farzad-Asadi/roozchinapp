@@ -142,6 +142,7 @@ import kotlin.math.round
 import kotlin.math.roundToInt
 import android.content.Context
 import android.net.Uri
+import androidx.compose.foundation.ScrollState
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material.icons.filled.Settings as SettingsIcon
 import com.example.compoundeffectV1_01.data.notification.PomodoroNotifications
@@ -308,10 +309,10 @@ fun ScheduleScreen(
             .sortedBy { it.taskName }
     }
 
-    var hasAppliedSavedVerticalZoom by rememberSaveable { mutableStateOf(false) }
+    var hasAppliedSavedVerticalZoom by remember { mutableStateOf(false) }
 
-// مقدار ذخیره‌شونده محلی
-    var verticalZoomSaved by rememberSaveable { mutableFloatStateOf(1f) }
+// مقدار محلی؛ مقدار واقعی از DataStore می‌آید
+    var verticalZoomSaved by remember { mutableFloatStateOf(1f) }
 
 // زوم واقعیِ در حال pinch
     var verticalZoomRaw by remember { mutableFloatStateOf(verticalZoomSaved) }
@@ -347,10 +348,10 @@ fun ScheduleScreen(
     val hourHeightDp = (72.dp * verticalZoom).coerceIn(48.dp, 720.dp)
     val dayWidthDp = (220.dp * horizontalZoom).coerceIn(160.dp, 360.dp)
 
-    val vScroll = rememberScrollState()
-    val hScroll = rememberScrollState()
+    val vScroll = remember { ScrollState(0) }
+    val hScroll = remember { ScrollState(0) }
 
-    val didAutoScroll = remember { mutableStateOf(false) }
+    var didAutoScroll by remember { mutableStateOf(false) }
 
     var pendingScrollTo by remember { mutableStateOf<Int?>(null) }
 
@@ -493,6 +494,10 @@ fun ScheduleScreen(
         }
     }
 
+    val pomodoroChainFlagsById = remember(displayTimelineItems) {
+        computePomodoroChainFlags(displayTimelineItems)
+    }
+
 // 2) بعد layout های همپوشانی را حساب کن (فقط داخل روز)
     val overlapLayouts = remember(displayTimelineItems, startDate, numDays) {
         computeOverlapLayouts(displayTimelineItems, startDate, numDays)
@@ -597,51 +602,74 @@ fun ScheduleScreen(
     }
 
     LaunchedEffect(
+        hasAppliedSavedVerticalZoom,
         vScroll.maxValue,
         hScroll.maxValue,
         gridViewportHeightPx,
         hourHeightPx,
         dayWidthPx,
-        startDate,
-        hasAppliedSavedVerticalZoom
+        startDate
     ) {
-        if (didAutoScroll.value) return@LaunchedEffect
+        if (didAutoScroll) return@LaunchedEffect
 
-        // باید زوم ذخیره‌شده اعمال شده باشد
         if (!hasAppliedSavedVerticalZoom) return@LaunchedEffect
-
-        // باید ScrollState و اندازه واقعی viewport آماده شده باشند
         if (vScroll.maxValue <= 0) return@LaunchedEffect
         if (gridViewportHeightPx <= 0f) return@LaunchedEffect
 
-        val now = LocalDateTime.now()
-        val minutesNow = now.hour * 60 + now.minute
-
-        // موقعیت خط زمان داخل محتوای ۲۴ ساعته
-        val yPx = hourHeightPx * (minutesNow / 60f)
-
-        // هدف: خط زمان وسط viewport باشد
-        val viewportCenterPx = gridViewportHeightPx / 2f
-
-        val targetY = (yPx - viewportCenterPx)
-            .coerceIn(0f, vScroll.maxValue.toFloat())
-
-        vScroll.scrollTo(targetY.toInt())
-
-        // اگر امروز داخل بازه‌ی چندروزه است، افقی هم امروز را بیاور داخل دید
-        val dayIndex = ChronoUnit.DAYS.between(
-            startDate,
-            now.toLocalDate()
-        ).toInt()
-
-        if (dayIndex in 0 until numDays && hScroll.maxValue > 0) {
-            val targetX = (dayIndex * dayWidthPx - dayWidthPx * 0.2f)
-                .coerceIn(0f, hScroll.maxValue.toFloat())
-
-            hScroll.scrollTo(targetX.toInt())
+        // مهم:
+        // اولین بار که maxValue و viewportHeight آماده می‌شوند، هنوز layout نهایی کاملاً settle نشده.
+        // چند فریم صبر می‌کنیم تا Scaffold, ScrollState, Grid و Overlay همه در جای نهایی باشند.
+        repeat(3) {
+            withFrameNanos { }
         }
 
-        didAutoScroll.value = true
+        if (vScroll.maxValue <= 0) return@LaunchedEffect
+        if (gridViewportHeightPx <= 0f) return@LaunchedEffect
+
+        fun calculateTargetY(): Int {
+            val now = LocalDateTime.now()
+            val minutesNow = now.hour * 60 + now.minute
+
+            val yPx = hourHeightPx * (minutesNow / 60f)
+            val viewportCenterPx = gridViewportHeightPx / 2f
+
+            return (yPx - viewportCenterPx)
+                .coerceIn(0f, vScroll.maxValue.toFloat())
+                .roundToInt()
+        }
+
+        fun calculateTargetX(): Int? {
+            val now = LocalDateTime.now()
+
+            val dayIndex = ChronoUnit.DAYS.between(
+                startDate,
+                now.toLocalDate()
+            ).toInt()
+
+            if (dayIndex !in 0 until numDays) return null
+            if (hScroll.maxValue <= 0) return null
+
+            return (dayIndex * dayWidthPx - dayWidthPx * 0.2f)
+                .coerceIn(0f, hScroll.maxValue.toFloat())
+                .roundToInt()
+        }
+
+        // پاس اول
+        vScroll.scrollTo(calculateTargetY())
+        calculateTargetX()?.let { targetX ->
+            hScroll.scrollTo(targetX)
+        }
+
+        // یک فریم بعد، اگر maxValue یا اندازه viewport بعد از اعمال scroll اصلاح شد، دوباره دقیق کن
+        withFrameNanos { }
+
+        // پاس اصلاحی
+        vScroll.scrollTo(calculateTargetY())
+        calculateTargetX()?.let { targetX ->
+            hScroll.scrollTo(targetX)
+        }
+
+        didAutoScroll = true
     }
 
     LaunchedEffect(pendingScrollTo) {
@@ -954,6 +982,8 @@ fun ScheduleScreen(
                                         verticalZoom = verticalZoom,
                                         numDays = numDays,
                                         selected = (selectedScheduleId == displayItem.scheduleId),
+                                        pomodoroChainedWithPrevious = pomodoroChainFlagsById[displayItem.scheduleId]?.hasPrevious == true,
+                                        pomodoroChainedWithNext = pomodoroChainFlagsById[displayItem.scheduleId]?.hasNext == true,
                                         onToggleSelected = {
                                             val newSelection =
                                                 if (selectedScheduleId == displayItem.scheduleId) null
@@ -1277,7 +1307,11 @@ fun ScheduleScreen(
 
                     val date = startDate.plusDays(dayIndex.toLong())
                     val minDur = 5
-                    val startMin = snap(minuteOfDay.coerceIn(0, 24 * 60 - minDur), 5)
+                    val dropSnapStep = snapStepForZoom(verticalZoom)
+                    val startMin = snap(
+                        minuteOfDay.coerceIn(0, 24 * 60 - minDur),
+                        dropSnapStep
+                    )
 
                     // ✅ اگر پومودورو کارت درگ می‌شد
                     val pomo = draggingPomodoro
@@ -1445,6 +1479,8 @@ private fun TimelineItemBox(
     verticalZoom: Float,
     numDays: Int,
     selected: Boolean,
+    pomodoroChainedWithPrevious: Boolean,
+    pomodoroChainedWithNext: Boolean,
     onToggleSelected: () -> Unit,
     onMoveCommit: (scheduleId: Int, newDate: LocalDate, newStartMin: Int, newEndMin: Int) -> Unit,
     onResizeEndCommit: (scheduleId: Int, newEndMin: Int) -> Unit,
@@ -1648,6 +1684,8 @@ private fun TimelineItemBox(
     }
 
     val isPomodoroPARENT = item.mode == ScheduleMode.POMODORO
+    val showPomodoroChainTop = isPomodoroPARENT && pomodoroChainedWithPrevious
+    val showPomodoroChainBottom = isPomodoroPARENT && pomodoroChainedWithNext
 
     val focusMin = (item.focusMinutes ?: 25).coerceAtLeast(1)
     val breakMin = (item.shortBreakMinutes ?: 5).coerceAtLeast(0)
@@ -1806,6 +1844,20 @@ private fun TimelineItemBox(
         scheduleModeColor(item.mode).copy(alpha = 0.35f)
     }
 
+    val categoryBorderColor = colorFromHex(item.categoryColor ?: "#9E9E9E")
+
+    val timelineBorderColor = if (isVirtual) {
+        categoryBorderColor.copy(alpha = 0.55f)
+    } else {
+        categoryBorderColor
+    }
+
+    val timelineBorderWidth = when {
+        selected -> 2.5.dp
+        level > 0 -> 2.dp
+        else -> 1.5.dp
+    }
+
     val dashed = selected && selectionH > taskH
 
 
@@ -1879,6 +1931,7 @@ private fun TimelineItemBox(
 
 
         //  آیکون گروه + نام اسکچول یا تسک
+        //  آیکون گروه + نام اسکچول یا تسک
         if (showHeader) {
             Row(
                 modifier = Modifier
@@ -1886,8 +1939,13 @@ private fun TimelineItemBox(
                     .padding(start = 8.dp, top = 16.dp, end = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                CategoryIconWithPlate(iconName = item.categoryIconName)
+                CategoryIconWithPlate(
+                    iconName = item.categoryIconName,
+                    tint = categoryBorderColor
+                )
+
                 Spacer(Modifier.width(8.dp))
+
                 Text(
                     text = item.title,
                     style = MaterialTheme.typography.labelLarge,
@@ -1904,8 +1962,8 @@ private fun TimelineItemBox(
                 .width(dayWidthDp - 12.dp)
                 .height(taskH)
                 .border(
-                    width = borderWidth,
-                    color = borderColor,
+                    width = timelineBorderWidth,
+                    color = timelineBorderColor,
                     shape = MaterialTheme.shapes.medium
                 )
                 .clip(MaterialTheme.shapes.medium) // ✅ مهم: دو رنگ داخل شکل کلیپ شوند
@@ -1944,6 +2002,23 @@ private fun TimelineItemBox(
                             color = scheduleColor,
                             shape = RectangleShape // چون clip بالا انجام شده
                         )
+                )
+            }
+            if (showPomodoroChainTop) {
+                PomodoroChainMarker(
+                    color = scheduleModeColor(ScheduleMode.POMODORO),
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 2.dp)
+                )
+            }
+
+            if (showPomodoroChainBottom) {
+                PomodoroChainMarker(
+                    color = scheduleModeColor(ScheduleMode.POMODORO),
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 2.dp)
                 )
             }
             val innerTopPad = if (showHeader) 34.dp else 8.dp
@@ -2234,6 +2309,83 @@ private fun TimelineItemBox(
     }
 }
 
+private data class PomodoroChainFlags(
+    val hasPrevious: Boolean = false,
+    val hasNext: Boolean = false
+)
+
+private fun computePomodoroChainFlags(
+    items: List<ScheduleScreenItem>
+): Map<Int, PomodoroChainFlags> {
+    val pomodoros = items
+        .asSequence()
+        .filter { !it.inPallet }
+        .filter { it.mode == ScheduleMode.POMODORO }
+        .toList()
+
+    if (pomodoros.isEmpty()) return emptyMap()
+
+    val startsByMoment = pomodoros.groupBy {
+        it.start.truncatedTo(ChronoUnit.MINUTES)
+    }
+
+    val endsByMoment = pomodoros.groupBy {
+        it.end.truncatedTo(ChronoUnit.MINUTES)
+    }
+
+    val result = LinkedHashMap<Int, PomodoroChainFlags>()
+
+    pomodoros.forEach { item ->
+        val startKey = item.start.truncatedTo(ChronoUnit.MINUTES)
+        val endKey = item.end.truncatedTo(ChronoUnit.MINUTES)
+
+        val hasPrevious = endsByMoment[startKey]
+            .orEmpty()
+            .any { it.scheduleId != item.scheduleId }
+
+        val hasNext = startsByMoment[endKey]
+            .orEmpty()
+            .any { it.scheduleId != item.scheduleId }
+
+        if (hasPrevious || hasNext) {
+            result[item.scheduleId] = PomodoroChainFlags(
+                hasPrevious = hasPrevious,
+                hasNext = hasNext
+            )
+        }
+    }
+
+    return result
+}
+
+@Composable
+private fun PomodoroChainMarker(
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .size(22.dp)
+            .background(
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                shape = CircleShape
+            )
+            .border(
+                width = 1.dp,
+                color = color.copy(alpha = 0.85f),
+                shape = CircleShape
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Link,
+            contentDescription = null,
+            tint = color.copy(alpha = 0.95f),
+            modifier = Modifier.size(15.dp)
+        )
+    }
+}
+
 
 @Composable
 private fun RightPallet(
@@ -2513,7 +2665,8 @@ private fun PalletTaskItem(
 @Composable
 private fun CategoryIconWithPlate(
     iconName: String?,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    tint: Color = MaterialTheme.colorScheme.onSurface
 ) {
     val icon = remember(iconName) { iconFromKey(iconName.orEmpty()) }
 
@@ -2530,7 +2683,7 @@ private fun CategoryIconWithPlate(
             imageVector = icon,
             contentDescription = null,
             modifier = Modifier.size(18.dp),
-            tint = MaterialTheme.colorScheme.onSurface
+            tint = tint
         )
     }
 }
@@ -2615,7 +2768,7 @@ private fun PomodoroCountStepperOverlay(
 private fun CurrentTimeOverlay(
     startDate: LocalDate,
     numDays: Int,
-    dayWidthDp :Dp,
+    dayWidthDp: Dp,
     hourHeightDp: Dp,
     vScrollValue: Int,
     palletOverlayWidth: Dp,
@@ -2634,33 +2787,45 @@ private fun CurrentTimeOverlay(
     val dayIndex = ChronoUnit.DAYS.between(startDate, today).toInt()
     if (dayIndex !in 0 until numDays) return
 
-    val minutesNow = now.value.toLocalTime().hour * 60 + now.value.toLocalTime().minute
-    val yContent = hourHeightDp * (minutesNow / 60f)
-    val yViewport = yContent - with(LocalDensity.current) { vScrollValue.toDp() }
+    val minutesNow =
+        now.value.toLocalTime().hour * 60 + now.value.toLocalTime().minute
+
+    val density = LocalDensity.current
+
+    val yContentPx = with(density) {
+        hourHeightDp.toPx() * (minutesNow / 60f)
+    }
+
+    // ارتفاع overlay بیست‌وچهار dp است؛ خط را وسط همین overlay می‌کشیم.
+    // پس خود overlay را نصف ارتفاعش بالاتر می‌بریم تا خط دقیقاً روی yContent بیفتد.
+    val overlayHeight = 24.dp
+    val halfOverlayHeightPx = with(density) { overlayHeight.toPx() / 2f }
+
+    val yViewportPx = yContentPx - vScrollValue - halfOverlayHeightPx
+    val yViewportDp = with(density) { yViewportPx.toDp() }
 
     val dash = remember { PathEffect.dashPathEffect(floatArrayOf(12f, 10f), 0f) }
     val red = Color(0xFFE53935)
-    val density = LocalDensity.current
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(end = palletOverlayWidth) // چون سمت راست پالت داری
-            .offset(y = yViewport)
-            .height(24.dp) // فضای کافی برای متن + خط
+            .padding(end = palletOverlayWidth)
+            .offset(y = yViewportDp)
+            .height(overlayHeight)
             .drawBehind {
-                val y = (size.height / 2f) - 20f   //تیون کردن دستی
+                val lineY = size.height / 2f
                 val xStart = with(density) { sidebarWidth.toPx() }
+
                 drawLine(
                     color = red,
-                    start = Offset(xStart, y),
-                    end = Offset(size.width, y),
+                    start = Offset(xStart, lineY),
+                    end = Offset(size.width, lineY),
                     strokeWidth = 2.dp.toPx(),
                     pathEffect = dash
                 )
             }
     ) {
-        // متن سمت چپ: "12 : 22"
         Text(
             text = "%02d : %02d".format(minutesNow / 60, minutesNow % 60),
             color = red,
@@ -2736,7 +2901,11 @@ private fun minuteToHHmm(minute: Int): String {
 
 
 private fun snapStepForZoom(zoom: Float): Int {
-    return if (zoom >= 2.0f) 5 else 15
+    return when {
+        zoom >= 4.0f -> 1
+        zoom >= 2.0f -> 5
+        else -> 15
+    }
 }
 
 
