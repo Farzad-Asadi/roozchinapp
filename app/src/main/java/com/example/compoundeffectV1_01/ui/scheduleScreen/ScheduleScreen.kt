@@ -410,8 +410,13 @@ fun ScheduleScreen(
 
     var isAutoScrollingActive by remember { mutableStateOf(false) }
 
-    val updateAutoScroll2: (startMin: Int, endMin: Int, mode: AutoScrollMode) -> Unit =
-        let@{ startMin, endMin, mode ->
+    val updateAutoScroll2: (
+        startMin: Int,
+        endMin: Int,
+        mode: AutoScrollMode,
+        pointerYInGridViewportPx: Float?
+    ) -> Unit =
+        let@{ startMin, endMin, mode, pointerYInGridViewportPx ->
 
             if (gridViewportHeightPx <= 0f) {
                 autoScrollDir = 0
@@ -430,37 +435,66 @@ fun ScheduleScreen(
                 val topHit = distTop < edgeThresholdPx && vScroll.value > 0
                 val botHit = distBottom < edgeThresholdPx && vScroll.value < vScroll.maxValue
 
-                val topI = if (topHit) ((edgeThresholdPx - distTop) / edgeThresholdPx).coerceIn(
-                    0f,
-                    1f
-                ) else 0f
-                val botI = if (botHit) ((edgeThresholdPx - distBottom) / edgeThresholdPx).coerceIn(
-                    0f,
-                    1f
-                ) else 0f
+                val topI = if (topHit) {
+                    ((edgeThresholdPx - distTop) / edgeThresholdPx).coerceIn(0f, 1f)
+                } else {
+                    0f
+                }
+
+                val botI = if (botHit) {
+                    ((edgeThresholdPx - distBottom) / edgeThresholdPx).coerceIn(0f, 1f)
+                } else {
+                    0f
+                }
+
+                return if (botI > topI) +1 to botI else -1 to topI
+            }
+
+            fun pointerIntensity(pointerY: Float): Pair<Int, Float> {
+                val distTop = pointerY
+                val distBottom = gridViewportHeightPx - pointerY
+
+                val topHit = distTop < edgeThresholdPx && vScroll.value > 0
+                val botHit = distBottom < edgeThresholdPx && vScroll.value < vScroll.maxValue
+
+                val topI = if (topHit) {
+                    ((edgeThresholdPx - distTop) / edgeThresholdPx).coerceIn(0f, 1f)
+                } else {
+                    0f
+                }
+
+                val botI = if (botHit) {
+                    ((edgeThresholdPx - distBottom) / edgeThresholdPx).coerceIn(0f, 1f)
+                } else {
+                    0f
+                }
 
                 return if (botI > topI) +1 to botI else -1 to topI
             }
 
             when (mode) {
                 AutoScrollMode.RESIZE_START -> {
-                    val (dir, inten) = edgeIntensity(startMin) // ✅ فقط لبه بالا
+                    val (dir, inten) = edgeIntensity(startMin)
                     autoScrollDir = if (inten == 0f) 0 else dir
                     autoScrollIntensity = inten
                 }
 
                 AutoScrollMode.RESIZE_END -> {
-                    val (dir, inten) = edgeIntensity(endMin)   // ✅ فقط لبه پایین
+                    val (dir, inten) = edgeIntensity(endMin)
                     autoScrollDir = if (inten == 0f) 0 else dir
                     autoScrollIntensity = inten
                 }
 
                 AutoScrollMode.MOVE -> {
-                    // ✅ هر دو لبه را می‌سنجیم و هرکدام شدت بیشتری دارد انتخاب می‌شود
-                    val (dir1, i1) = edgeIntensity(startMin)
-                    val (dir2, i2) = edgeIntensity(endMin)
+                    val pointerY = pointerYInGridViewportPx
 
-                    val (dir, inten) = if (i2 > i1) dir2 to i2 else dir1 to i1
+                    if (pointerY == null) {
+                        autoScrollDir = 0
+                        autoScrollIntensity = 0f
+                        return@let
+                    }
+
+                    val (dir, inten) = pointerIntensity(pointerY)
                     autoScrollDir = if (inten == 0f) 0 else dir
                     autoScrollIntensity = inten
                 }
@@ -1486,7 +1520,12 @@ private fun TimelineItemBox(
     onResizeEndCommit: (scheduleId: Int, newEndMin: Int) -> Unit,
     onResizeStartCommit: (scheduleId: Int, newStartMin: Int) -> Unit,
     onSendToPallet: (scheduleId: Int, taskId: Int) -> Unit,
-    onAutoScroll: (startMin: Int, endMin: Int, mode: AutoScrollMode) -> Unit,
+    onAutoScroll: (
+        startMin: Int,
+        endMin: Int,
+        mode: AutoScrollMode,
+        pointerYInGridViewportPx: Float?
+    ) -> Unit,
     onAutoScrollStart: () -> Unit,
     onAutoScrollStop: () -> Unit,
     vScrollValueProvider: () -> Int,
@@ -1524,6 +1563,22 @@ private fun TimelineItemBox(
     // Move state
     var dragDx by remember(item.scheduleId) { mutableFloatStateOf(0f) }
     var dragDy by remember(item.scheduleId) { mutableFloatStateOf(0f) }
+
+    var movePointerYInGridViewportPx by remember(item.scheduleId) {
+        mutableFloatStateOf(Float.NaN)
+    }
+
+    var moveDragDistancePx by remember(item.scheduleId) {
+        mutableFloatStateOf(0f)
+    }
+
+    var moveAutoScrollArmed by remember(item.scheduleId) {
+        mutableStateOf(false)
+    }
+
+    val moveAutoScrollArmThresholdPx = with(density) {
+        24.dp.toPx()
+    }
 
 
     //ترشولد برای جایجایی افقی
@@ -1659,6 +1714,9 @@ private fun TimelineItemBox(
         dragDy = 0f
         topDy = 0f
         bottomDy = 0f
+        movePointerYInGridViewportPx = Float.NaN
+        moveDragDistancePx = 0f
+        moveAutoScrollArmed = false
     }
 
 
@@ -1731,7 +1789,12 @@ private fun TimelineItemBox(
                     val desired = snap(raw, snapStep)
                     val clamped = clampRange(desired, endMin0)
 
-                    onAutoScroll(endMin0,clamped.start,  AutoScrollMode.RESIZE_START)
+                    onAutoScroll(
+                        clamped.start,
+                        endMin0,
+                        AutoScrollMode.RESIZE_START,
+                        null
+                    )
                 },
                 onDragEnd = {
                     val topDeltaMin2 = ((topDy / hourHpx) * 60f).roundToInt()
@@ -1790,7 +1853,12 @@ private fun TimelineItemBox(
 
                     val clamped = clampRange(startMin0, desired)
 
-                    onAutoScroll(startMin0, clamped.end, AutoScrollMode.RESIZE_END)
+                    onAutoScroll(
+                        startMin0,
+                        clamped.end,
+                        AutoScrollMode.RESIZE_END,
+                        null
+                    )
 
 //                    Log.i("TEST" , "bottomDy=$bottomDy ")
 //                    Log.i("TEST" , "bottomDeltaNow=$bottomDeltaNow ")
@@ -2036,11 +2104,20 @@ private fun TimelineItemBox(
                     )
                     .pointerInput(item.scheduleId, item.start, item.end, selected) {
                         detectDragGesturesAfterLongPress(
-                            onDragStart = {
+                            onDragStart = { downPos ->
                                 isMoving = true
                                 isResizingStart = false
                                 isResizingEnd = false
                                 lastScrollPx = vScrollValueProvider()
+
+                                movePointerYInGridViewportPx = with(density) {
+                                    y.toPx()
+                                } - vScrollValueProvider() + downPos.y
+
+                                moveDragDistancePx = 0f
+                                moveAutoScrollArmed = false
+
+                                // فقط loop را آماده می‌کنیم؛ هنوز auto-scroll فعال نمی‌شود
                                 onAutoScrollStart()
                             },
                             onDrag = { change, dragAmount ->
@@ -2058,7 +2135,26 @@ private fun TimelineItemBox(
                                 val desiredEnd = desiredStart + dur0
                                 val r = clampRange(desiredStart, desiredEnd)
 
-                                onAutoScroll(r.start, r.end, AutoScrollMode.MOVE)
+                                movePointerYInGridViewportPx += dragAmount.y
+                                moveDragDistancePx += dragAmount.getDistance()
+
+                                if (!moveAutoScrollArmed && moveDragDistancePx >= moveAutoScrollArmThresholdPx) {
+                                    moveAutoScrollArmed = true
+                                }
+
+                                val pointerYForAutoScroll =
+                                    if (moveAutoScrollArmed && !movePointerYInGridViewportPx.isNaN()) {
+                                        movePointerYInGridViewportPx
+                                    } else {
+                                        null
+                                    }
+
+                                onAutoScroll(
+                                    r.start,
+                                    r.end,
+                                    AutoScrollMode.MOVE,
+                                    pointerYForAutoScroll
+                                )
 
                             },
                             onDragEnd = {
@@ -2088,13 +2184,20 @@ private fun TimelineItemBox(
                                 isMoving = false
                                 dragDx = 0f
                                 dragDy = 0f
+                                movePointerYInGridViewportPx = Float.NaN
+                                moveDragDistancePx = 0f
+                                moveAutoScrollArmed = false
                                 onAutoScrollStop()
+
 
                             },
                             onDragCancel = {
                                 isMoving = false
                                 dragDx = 0f
                                 dragDy = 0f
+                                movePointerYInGridViewportPx = Float.NaN
+                                moveDragDistancePx = 0f
+                                moveAutoScrollArmed = false
                                 onAutoScrollStop()
 
                             }
