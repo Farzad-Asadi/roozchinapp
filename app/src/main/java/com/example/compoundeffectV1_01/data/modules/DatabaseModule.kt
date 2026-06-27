@@ -6,6 +6,7 @@ import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.appSystemInfo.Sy
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.category.CategoryDao
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.TaskReminderDao
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.TaskReminderRepository
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskChildDao
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskDao
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.TaskScheduleDao
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.TaskScheduleRepository
@@ -36,6 +37,7 @@ object DatabaseModule {
     @Provides fun provideTaskScheduleDao(db: AppDatabase): TaskScheduleDao = db.taskScheduleDao()
     @Provides fun provideTaskReminderDao(db: AppDatabase): TaskReminderDao = db.taskReminderDao()
     @Provides fun provideSystemDao(db: AppDatabase): SystemDao = db.systemDao()
+    @Provides fun provideTaskChildDao(db: AppDatabase): TaskChildDao = db.taskChildDao()
 
 
 

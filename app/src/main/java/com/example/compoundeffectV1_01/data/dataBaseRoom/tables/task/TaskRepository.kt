@@ -1,35 +1,28 @@
 package com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task
 
-import androidx.room.Delete
-import androidx.room.Insert
-import androidx.room.OnConflictStrategy
-import androidx.room.Query
-import androidx.room.Transaction
-import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
-import java.time.LocalDateTime
 
 
 interface TaskRepository {
 
 
-    suspend fun insertTask(vararg task: Task)
+    suspend fun insertTask(vararg taskEntity: TaskEntity)
 
-    suspend fun insertTaskAndReturnId(task: Task): Int
+    suspend fun insertTaskAndReturnId(taskEntity: TaskEntity): Int
 
-    suspend fun updateTask(task: Task)
+    suspend fun updateTask(taskEntity: TaskEntity)
 
-    suspend fun deleteTask(task: Task)
+    suspend fun deleteTask(taskEntity: TaskEntity)
 
-    fun observeTasksByCategory(categoryId: Int): Flow<List<Task>>
+    fun observeTasksByCategory(categoryId: Int): Flow<List<TaskEntity>>
 
-    suspend fun getTasksByCategory(categoryId: Int): List<Task>
+    suspend fun getTasksByCategory(categoryId: Int): List<TaskEntity>
 
     suspend fun updateSiblingIndex(id: Int, siblingIndex: Int)
 
     suspend fun updateTaskParent(id: Int, parentTaskId: Int?)
 
-    suspend fun getTaskById(id: Int): Task?
+    suspend fun getTaskById(id: Int): TaskEntity?
 
     fun observeTasksWithScheduleByCategory(categoryId: Int): Flow<List<TaskWithSchedule>>
 
@@ -37,13 +30,13 @@ interface TaskRepository {
 
     fun observeAllScheduledTasksWithSchedule(): Flow<List<TaskWithSchedule>>
 
-    suspend fun getTasksByCategoryOrdered(categoryId: Int): List<Task>
+    suspend fun getTasksByCategoryOrdered(categoryId: Int): List<TaskEntity>
 
     suspend fun countChildren(taskId: Int): Int
 
     suspend fun setCompletedForIds(ids: List<Int>, done: Boolean)
 
-    suspend fun getSiblings(categoryId: Int, parentId: Int): List<Task>
+    suspend fun getSiblings(categoryId: Int, parentId: Int): List<TaskEntity>
 
     suspend fun shiftSiblingsDown(categoryId: Int, parentId: Int)
 

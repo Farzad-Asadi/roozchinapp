@@ -143,6 +143,7 @@ import kotlin.math.roundToInt
 import android.content.Context
 import android.net.Uri
 import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material.icons.filled.Settings as SettingsIcon
@@ -314,7 +315,7 @@ fun ScheduleScreen(
                     taskName = any.title,
 
                     totalTarget = any.pomodoroTargetUnits ?: 0,
-                    totalDone = (any.pomodoroDoneUnits + manualDeltaToday).coerceAtLeast(0),
+                    totalDone = any.pomodoroDoneUnits.coerceAtLeast(0),
 
                     expectedToday = expected,
                     scheduledToday = scheduled,
@@ -404,7 +405,13 @@ fun ScheduleScreen(
 
     val palletContentWidth = 160.dp
     val palletHandleWidth = 48.dp
+
+// کل عرض پالت برای خود RightPallet
     val palletOverlayWidth = palletHandleWidth + if (palletExpanded) palletContentWidth else 0.dp
+
+// فقط این مقدار باید از Grid کم شود.
+// نوار باز/بسته شدن پالت باید روی Grid بیفتد و شفاف دیده شود.
+    val palletReservedWidth = if (palletExpanded) palletContentWidth else 0.dp
 
     val pendingMove = remember { mutableStateMapOf<Int, PendingMove>() } // key = scheduleId
 
@@ -756,6 +763,7 @@ fun ScheduleScreen(
 
     Scaffold(
         modifier = Modifier,
+        contentWindowInsets = WindowInsets(0),
         topBar = {
             CompactTopBar(
                 title = "Schedule"
@@ -781,7 +789,7 @@ fun ScheduleScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .horizontalScroll(hScroll)
-                        .padding(start = 56.dp, end = palletOverlayWidth) // جای ستون ساعت
+                        .padding(start = 56.dp, end = palletReservedWidth)// جای ستون ساعت
                 ) {
                     repeat(numDays) { i ->
                         val day = startDate.plusDays(i.toLong())
@@ -965,7 +973,7 @@ fun ScheduleScreen(
                         Box(
                             modifier = Modifier
                                 .weight(1f)
-                                .padding(end = palletOverlayWidth)
+                                .padding(end = palletReservedWidth)
                                 .onGloballyPositioned { coords ->
                                     gridOriginInWindow = coords.positionInRoot()
                                 }
@@ -1210,7 +1218,7 @@ fun ScheduleScreen(
                         dayWidthDp=dayWidthDp,
                         hourHeightDp = hourHeightDp,
                         vScrollValue = vScroll.value,
-                        palletOverlayWidth = palletOverlayWidth,
+                        palletOverlayWidth = palletReservedWidth,
                         sidebarWidth = 56.dp
                     )
                 }
@@ -2627,12 +2635,26 @@ private fun RightPallet(
 
         // دکمه باز/بسته
         // دکمه باز/بسته
+        val palletShape = RoundedCornerShape(
+            topStart = 18.dp,
+            bottomStart = 18.dp
+        )
+
         Box(
             modifier = Modifier
                 .width(48.dp)
                 .fillMaxHeight()
-                .padding(vertical = 8.dp)
+//                .padding(vertical = 8.dp, horizontal = 4.dp)
                 .graphicsLayer { alpha = if (isDraggingFromPallet) 0f else 1f }
+                .clip(palletShape)
+                .background(
+                    MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.28f)
+                )
+                .border(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.38f),
+                    shape = palletShape
+                )
                 .clickable(enabled = !isDraggingFromPallet) { onToggle() },
             contentAlignment = Alignment.Center
         ) {
@@ -2641,7 +2663,8 @@ private fun RightPallet(
                     Icons.AutoMirrored.Filled.ArrowForwardIos
                 else
                     Icons.AutoMirrored.Filled.ArrowBackIos,
-                contentDescription = null
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.78f)
             )
         }
 
@@ -2652,16 +2675,39 @@ private fun RightPallet(
             val contentWidth = 160.dp
             val visibleAlpha = if (expanded && !isDraggingFromPallet) 1f else 0f
 
+            val contentShape = RoundedCornerShape(
+                topEnd = 18.dp,
+                bottomEnd = 18.dp
+            )
+
             Box(
                 modifier = Modifier
                     .width(contentWidth)
                     .fillMaxHeight()
-                    .graphicsLayer { alpha = visibleAlpha } // ✅ به جای صفر کردن عرض
-                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    .graphicsLayer { alpha = visibleAlpha }
+                    .clip(contentShape)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.94f))
+                    .border(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.16f),
+                        shape = contentShape
+                    )
                     .padding(8.dp)
             ) {
                 Column(Modifier.fillMaxSize()) {
-                    Text("Pallet", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        text = "Pallet",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 4.dp, vertical = 6.dp)
+                    )
+
+                    HorizontalDivider(
+                        thickness = 0.8.dp,
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.32f)
+                    )
+
                     Spacer(Modifier.height(8.dp))
 
                     LazyColumn {
@@ -3495,15 +3541,16 @@ private fun RunningPomodoroPanel(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(12.dp),
-        elevation = CardDefaults.cardElevation(12.dp),
+            .padding(  start= 52.dp,end= 106.dp,top= 32.dp),
+//        elevation = CardDefaults.cardElevation(8.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.78f)
+        )
     ) {
         Column(
-            modifier = Modifier.padding(12.dp)
-                .background(MaterialTheme.colorScheme.primaryContainer),
+            modifier = Modifier.padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(state.title, style = MaterialTheme.typography.titleMedium)
 

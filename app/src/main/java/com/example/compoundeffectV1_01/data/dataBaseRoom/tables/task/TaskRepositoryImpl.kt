@@ -2,29 +2,28 @@ package com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task
 
 
 import kotlinx.coroutines.flow.Flow
-import java.time.LocalDateTime
 import javax.inject.Inject
 
 class TaskRepositoryImpl @Inject constructor(
     private val taskDao: TaskDao
 ) : TaskRepository {
 
-    override suspend fun insertTask(vararg task: Task) =
-        taskDao.insertTask(*task)
+    override suspend fun insertTask(vararg taskEntity: TaskEntity) =
+        taskDao.insertTask(*taskEntity)
 
-    override suspend fun insertTaskAndReturnId(task: Task): Int =
-        taskDao.insertTaskAndReturnId(task).toInt()
+    override suspend fun insertTaskAndReturnId(taskEntity: TaskEntity): Int =
+        taskDao.insertTaskAndReturnId(taskEntity).toInt()
 
-    override suspend fun updateTask(task: Task) =
-        taskDao.updateTask(task)
+    override suspend fun updateTask(taskEntity: TaskEntity) =
+        taskDao.updateTask(taskEntity)
 
-    override suspend fun deleteTask(task: Task) =
-        taskDao.deleteTask(task)
+    override suspend fun deleteTask(taskEntity: TaskEntity) =
+        taskDao.deleteTask(taskEntity)
 
-    override fun observeTasksByCategory(categoryId: Int): Flow<List<Task>> =
+    override fun observeTasksByCategory(categoryId: Int): Flow<List<TaskEntity>> =
         taskDao.observeTasksByCategory(categoryId)
 
-    override suspend fun getTasksByCategory(categoryId: Int): List<Task> =
+    override suspend fun getTasksByCategory(categoryId: Int): List<TaskEntity> =
         taskDao.getTasksByCategory(categoryId)
 
     override suspend fun updateSiblingIndex(id: Int, siblingIndex: Int) =
@@ -33,7 +32,7 @@ class TaskRepositoryImpl @Inject constructor(
     override suspend fun updateTaskParent(id: Int, parentTaskId: Int?) =
         taskDao.updateTaskParent(id, parentTaskId)
 
-    override suspend fun getTaskById(id: Int): Task? =
+    override suspend fun getTaskById(id: Int): TaskEntity? =
         taskDao.getTaskById(id)
 
     override fun observeTasksWithScheduleByCategory(categoryId: Int): Flow<List<TaskWithSchedule>> =
@@ -45,7 +44,7 @@ class TaskRepositoryImpl @Inject constructor(
     override fun observeAllScheduledTasksWithSchedule(): Flow<List<TaskWithSchedule>> =
         taskDao.observeAllScheduledTasksWithSchedule()
 
-    override suspend fun getTasksByCategoryOrdered(categoryId: Int): List<Task> =
+    override suspend fun getTasksByCategoryOrdered(categoryId: Int): List<TaskEntity> =
         taskDao.getTasksByCategoryOrdered(categoryId)
 
 
@@ -58,7 +57,7 @@ class TaskRepositoryImpl @Inject constructor(
         taskDao.setCompletedForIds(ids, done)
     }
 
-    override suspend fun getSiblings(categoryId: Int, parentId: Int): List<Task> =
+    override suspend fun getSiblings(categoryId: Int, parentId: Int): List<TaskEntity> =
         taskDao.getSiblings(categoryId, parentId)
 
     override suspend fun shiftSiblingsDown(categoryId: Int, parentId: Int) =

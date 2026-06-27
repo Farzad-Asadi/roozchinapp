@@ -12,8 +12,13 @@ import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.category.Categor
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.TaskReminderDao
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.TaskReminderEntity
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.PomodoroDailyAdjustmentEntity
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.ReusableListItemEntity
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskChildDao
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskChildRequirementEntity
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskChildRuleEntity
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskDao
-import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.Task
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskEntity
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskListSessionEntity
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.TaskSchedule
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.TaskScheduleDao
 import com.example.compoundeffectV1_01.data.dataBaseRoom.typeConvertor.ScheduleConverters
@@ -24,11 +29,15 @@ import com.example.compoundeffectV1_01.data.dataBaseRoom.typeConvertor.TypeConve
     entities =
     [
         CategoryEntity::class,
-        Task::class,
+        TaskEntity::class,
         AppSystemInfo::class,
         TaskSchedule::class,
         TaskReminderEntity::class,
-        PomodoroDailyAdjustmentEntity::class
+        PomodoroDailyAdjustmentEntity::class,
+        TaskChildRuleEntity::class,
+        TaskChildRequirementEntity::class,
+        TaskListSessionEntity::class,
+        ReusableListItemEntity::class,
 
     ],
 
@@ -46,6 +55,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun taskScheduleDao(): TaskScheduleDao
     abstract fun taskReminderDao(): TaskReminderDao
     abstract fun systemDao(): SystemDao
+    abstract fun taskChildDao(): TaskChildDao
 
 
 

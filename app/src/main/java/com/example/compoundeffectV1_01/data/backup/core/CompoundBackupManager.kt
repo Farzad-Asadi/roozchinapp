@@ -124,7 +124,7 @@ class CompoundBackupManager @Inject constructor(
                     modules = manifest.modules,
 
                     categoryCount = compoundData?.categories?.size ?: 0,
-                    taskCount = compoundData?.tasks?.size ?: 0,
+                    taskCount = compoundData?.taskEntities?.size ?: 0,
                     scheduleCount = compoundData?.schedules?.size ?: 0,
                     reminderCount = compoundData?.reminders?.size ?: 0,
                     systemInfoCount = compoundData?.systemInfos?.size ?: 0

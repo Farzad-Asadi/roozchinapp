@@ -6,7 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.category.CategoryEntity
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.category.CategoryRepository
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.TaskReminderRepository
-import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.Task
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskEntity
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskRepository
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskWithSchedule
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.TaskScheduleRepository
@@ -69,7 +69,7 @@ class CategoryViewModel @Inject constructor(
         tasksWithScheduleForMenu
             .map { list ->
                 list.mapNotNull { tws ->
-                    val t = tws.task
+                    val t = tws.taskEntity
                     val id = t.id ?: return@mapNotNull null
 
                     TaskMiniUi(
@@ -87,7 +87,7 @@ class CategoryViewModel @Inject constructor(
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val tasksForMenuCategory: StateFlow<List<Task>> =
+    val tasksForMenuCategory: StateFlow<List<TaskEntity>> =
         _menuCategoryId
             .flatMapLatest { id ->
                 if (id == null) flowOf(emptyList())
@@ -124,7 +124,7 @@ class CategoryViewModel @Inject constructor(
                 categories = categories,
                 renderItems = catFlatten.items,
 
-                tasks = tasks,                 // ✅ اینجا کامل شد
+                taskEntities = tasks,                 // ✅ اینجا کامل شد
                 taskRenderItems = taskRender,  // ✅ اینم مثل قبل
 
                 levelById = catFlatten.levelById
@@ -135,7 +135,7 @@ class CategoryViewModel @Inject constructor(
             initialValue = CategoryUiState2(
                 isLoading = true,
                 categories = emptyList(),
-                tasks = emptyList()
+                taskEntities = emptyList()
             )
         )
 
@@ -574,7 +574,7 @@ class CategoryViewModel @Inject constructor(
 
         // Persist اختیاری:
         viewModelScope.launch {
-            val current = uiState.value.tasks.firstOrNull { it.id == id } ?: return@launch
+            val current = uiState.value.taskEntities.firstOrNull { it.id == id } ?: return@launch
             taskRepo.updateTask(current.copy(isExtended = true))
         }
     }
@@ -588,14 +588,14 @@ class CategoryViewModel @Inject constructor(
             _taskCollapsedIds.update { it + taskId }
             // Persist اختیاری:
             viewModelScope.launch {
-                val current = uiState.value.tasks.firstOrNull { it.id == taskId } ?: return@launch
+                val current = uiState.value.taskEntities.firstOrNull { it.id == taskId } ?: return@launch
                 taskRepo.updateTask(current.copy(isExtended = false))
             }
         }
     }
     fun toggleExpandForTask(taskId: Int) {
         viewModelScope.launch {
-            val current = uiState.value.tasks.firstOrNull { it.id == taskId } ?: return@launch
+            val current = uiState.value.taskEntities.firstOrNull { it.id == taskId } ?: return@launch
             val willCollapse = !_taskCollapsedIds.value.contains(taskId)
 
             _taskCollapsedIds.update { set ->

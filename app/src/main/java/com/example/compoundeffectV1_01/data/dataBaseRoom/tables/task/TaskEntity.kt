@@ -8,7 +8,6 @@ import androidx.room.PrimaryKey
 import androidx.room.Relation
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.category.CategoryEntity
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.TaskSchedule
-import java.time.LocalDateTime
 
 @Entity(
     tableName = "task",
@@ -22,7 +21,7 @@ import java.time.LocalDateTime
     ],
     indices = [Index("categoryId")]
 )
-data class Task(
+data class TaskEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Int? = null,
     val taskMode: TaskMode = TaskMode.NORMAL,
@@ -53,7 +52,7 @@ data class Task(
 
 
 data class TaskWithSchedule(
-    @Embedded val task: Task,
+    @Embedded val taskEntity: TaskEntity,
 
     @Relation(
         parentColumn = "id",

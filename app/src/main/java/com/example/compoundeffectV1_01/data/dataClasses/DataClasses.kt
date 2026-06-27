@@ -6,7 +6,7 @@ import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.Reminde
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.ReminderStrengthMode
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.StartEnd
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.TaskReminderEntity
-import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.Task
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskEntity
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskMode
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.RepeatUnit
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.ScheduleMode
@@ -20,7 +20,7 @@ data class CategoryUiState2(
     val categories: List<CategoryEntity> = emptyList(),
     val renderItems: List<CategoryRenderItem> = emptyList(),
 
-    val tasks: List<Task> = emptyList(),
+    val taskEntities: List<TaskEntity> = emptyList(),
     val taskRenderItems: List<TaskRenderItem> = emptyList(),
     val levelById: Map<Int, Int> = emptyMap(),
 
@@ -153,7 +153,7 @@ data class TaskUiState(
     val categories: List<CategoryEntity> = emptyList(),
     val renderItems: List<CategoryRenderItem> = emptyList(),
 
-    val tasks: List<Task> = emptyList(),
+    val taskEntities: List<TaskEntity> = emptyList(),
     val taskRenderItems: List<TaskRenderItem> = emptyList(),
     val levelById: Map<Int, Int> = emptyMap(),
 

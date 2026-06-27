@@ -4,7 +4,7 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
-import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.Task
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskEntity
 
 
 @Entity(
@@ -12,7 +12,7 @@ import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.Task
     indices = [Index(value = ["taskId"])],
     foreignKeys = [
         ForeignKey(
-            entity = Task::class,
+            entity = TaskEntity::class,
             parentColumns = ["id"],
             childColumns = ["taskId"],
             onDelete = ForeignKey.CASCADE

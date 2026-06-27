@@ -1,15 +1,10 @@
 package com.example.compoundeffectV1_01.ui.categoryScreen
 
 import android.annotation.SuppressLint
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import android.os.Build
 import android.os.SystemClock
-import android.provider.Settings
 import android.util.Log
 import androidx.annotation.RequiresApi
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -17,11 +12,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.interaction.Interaction
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.PressInteraction
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,59 +31,34 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowRight
-import androidx.compose.material.icons.automirrored.filled.Note
 import androidx.compose.material.icons.automirrored.filled.Sort
-import androidx.compose.material.icons.filled.Anchor
 import androidx.compose.material.icons.filled.ArrowBackIosNew
-import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.ArrowForwardIos
-import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.AttachFile
-import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Event
-import androidx.compose.material.icons.filled.EventRepeat
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.Flag
-import androidx.compose.material.icons.filled.GolfCourse
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Palette
-import androidx.compose.material.icons.filled.Pattern
 import androidx.compose.material.icons.filled.RadioButtonChecked
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.RemoveDone
-import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.SubdirectoryArrowRight
 import androidx.compose.material.icons.filled.Task
-import androidx.compose.material.icons.filled.Timeline
-import androidx.compose.material.icons.filled.Timer
-import androidx.compose.material.icons.filled.Today
-import androidx.compose.material.icons.filled.Vibration
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FabPosition
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -100,110 +66,60 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.LocalContentColor
-import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.material3.TimePicker
-import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.rememberSwipeToDismissBoxState
-import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.text.TextRange
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
-import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.category.CategoryEntity
-import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.BeforeAfter
-import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.ReminderMode
-import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.ReminderStrengthMode
-import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.StartEnd
-import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.TaskReminderEntity
-import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.Task
-import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskMode
-import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.RepeatUnit
-import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.ScheduleMode
-import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.TaskSchedule
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskEntity
 import com.example.compoundeffectV1_01.data.dataClasses.CategoryDraft
 import com.example.compoundeffectV1_01.data.dataClasses.CategoryRenderItem
 import com.example.compoundeffectV1_01.data.dataClasses.TaskMiniUi
 import com.example.compoundeffectV1_01.data.dataClasses.TaskRenderItem
-import com.example.compoundeffectV1_01.data.notification.rememberPostNotificationsPermissionRequester
 import com.example.compoundeffectV1_01.data.sharedViewModel.MainSharedViewModel
 import com.example.compoundeffectV1_01.ui.navigation.AppGraphRoutes
 import com.example.compoundeffectV1_01.ui.navigation.AppRoutes
 import com.example.compoundeffectV1_01.utils.DimmedDialog
 import com.example.compoundeffectV1_01.utils.IconOption
-import com.example.compoundeffectV1_01.utils.buildColorOptions
 import com.example.compoundeffectV1_01.utils.buildIconSections
 import com.example.compoundeffectV1_01.utils.colorFromHex
-import com.example.compoundeffectV1_01.utils.durationMinutesSameDay
-import com.example.compoundeffectV1_01.utils.ensureAfter
 import com.example.compoundeffectV1_01.utils.iconFromKey
-import com.example.compoundeffectV1_01.utils.plusMinutesClamped
-import com.example.compoundeffectV1_01.utils.reminderModeIcon
-import com.example.compoundeffectV1_01.utils.scheduleModeIcon
-import com.example.compoundeffectV1_01.utils.toFaText
-import com.example.compoundeffectV1_01.utils.toJalali
-import com.example.compoundeffectV1_01.utils.toLocalDate
-import com.gmail.hamedvakhide.compose_jalali_datepicker.JalaliDatePickerDialog
-import ir.huri.jcal.JalaliCalendar
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.yield
 import org.burnoutcrew.reorderable.ReorderableItem
 import org.burnoutcrew.reorderable.detectReorderAfterLongPress
 import org.burnoutcrew.reorderable.rememberReorderableLazyListState
 import org.burnoutcrew.reorderable.reorderable
-import java.time.LocalDate
-import java.time.LocalTime
-import kotlin.math.roundToInt
 
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 @SuppressLint("SuspiciousIndentation", "UnrememberedGetBackStackEntry")
@@ -628,16 +544,16 @@ fun CategoryScreen(
 
         CategoryOptionsSideSheet(
             category = menuCategory,
-            tasks = state.tasks,
+            taskEntities = state.taskEntities,
             taskMiniUis = tasksWithSchedule.map { tws ->
                 TaskMiniUi(
-                    id = tws.task.id ?: -1,
-                    title = tws.task.name,
-                    isDone = tws.task.isCompleted,
+                    id = tws.taskEntity.id ?: -1,
+                    title = tws.taskEntity.name,
+                    isDone = tws.taskEntity.isCompleted,
                     hasSchedule = (tws.schedule != null),
-                    parentTaskId = tws.task.parentTaskId,
-                    siblingIndex = tws.task.siblingIndex,
-                    priority = tws.task.priority,
+                    parentTaskId = tws.taskEntity.parentTaskId,
+                    siblingIndex = tws.taskEntity.siblingIndex,
+                    priority = tws.taskEntity.priority,
 
                     )
             },
@@ -794,7 +710,7 @@ fun CategoryScreen(
 @Composable
 private fun CategoryOptionsSideSheet(
     category: CategoryEntity,
-    tasks: List<Task>,
+    taskEntities: List<TaskEntity>,
     taskMiniUis: List<TaskMiniUi>,
     tasksRenderList: List<TaskRenderItem>,
     onDismiss: () -> Unit,
@@ -870,7 +786,7 @@ private fun CategoryOptionsSideSheet(
 
                         CategorySheetOverviewMode(
                             category = category,
-                            tasksCount = tasks.size,
+                            tasksCount = taskEntities.size,
                             scheduledCount = scheduledCount,
                             onChangeMode = onChangeMode,
                             onClickPickIcon = onClickPickIcon,
@@ -888,7 +804,7 @@ private fun CategoryOptionsSideSheet(
                         // ✅ حالت Tasks: کل سایدشیت عوض میشه
                         CategorySheetTasksMode(
                             category = category,
-                            tasks = tasks,
+                            taskEntities = taskEntities,
                             taskMiniList = taskMiniUis,
                             tasksRenderList = tasksRenderList,
                             onBack = { onChangeMode(CategorySheetMode.OVERVIEW) },
@@ -1090,7 +1006,7 @@ private fun CategorySheetOverviewMode(
 @Composable
 private fun CategorySheetTasksMode(
     category: CategoryEntity,
-    tasks: List<Task>,
+    taskEntities: List<TaskEntity>,
     taskMiniList: List<TaskMiniUi>,
     tasksRenderList: List<TaskRenderItem>,
     onBack: () -> Unit,
@@ -1169,8 +1085,8 @@ private fun CategorySheetTasksMode(
     val draggingKey = remember { mutableStateOf<Int?>(null) }
 
 // کمک: دسترسی سریع به آیتم‌ها با id (از لیست واقعی uiState)
-    val entityById = remember(tasks) {
-        tasks.associateBy { it.id }
+    val entityById = remember(taskEntities) {
+        taskEntities.associateBy { it.id }
     }
 
     val reorderState = rememberReorderableLazyListState(
@@ -1394,7 +1310,7 @@ private fun CategorySheetTasksMode(
             )
             Spacer(Modifier.width(10.dp))
 
-            Text("${tasks.size}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("${taskEntities.size}", color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.width(10.dp))
 
             Text("Tasks", modifier = Modifier.weight(1f))

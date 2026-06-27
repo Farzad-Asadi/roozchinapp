@@ -11,7 +11,7 @@ import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.Reminde
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.StartEnd
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.TaskReminderEntity
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.TaskReminderRepository
-import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.Task
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskEntity
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskMode
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskRepository
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskWithSchedule
@@ -94,7 +94,7 @@ class TaskScreenViewModel @Inject constructor(
         tasksWithScheduleForMenu
             .map { list ->
                 list.mapNotNull { tws ->
-                    val t = tws.task
+                    val t = tws.taskEntity
                     val id = t.id ?: return@mapNotNull null
 
                     TaskMiniUi(
@@ -112,7 +112,7 @@ class TaskScreenViewModel @Inject constructor(
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val tasksForMenuCategory: StateFlow<List<Task>> =
+    val tasksForMenuCategory: StateFlow<List<TaskEntity>> =
         _menuCategoryId
             .flatMapLatest { id ->
                 if (id == null) flowOf(emptyList())
@@ -149,7 +149,7 @@ class TaskScreenViewModel @Inject constructor(
                 categories = categories,
                 renderItems = catFlatten.items,
 
-                tasks = tasks,                 // ✅ اینجا کامل شد
+                taskEntities = tasks,                 // ✅ اینجا کامل شد
                 taskRenderItems = taskRender,  // ✅ اینم مثل قبل
 
                 levelById = catFlatten.levelById
@@ -160,7 +160,7 @@ class TaskScreenViewModel @Inject constructor(
             initialValue = TaskUiState(
                 isLoading = true,
                 categories = emptyList(),
-                tasks = emptyList()
+                taskEntities = emptyList()
             )
         )
 
@@ -503,7 +503,7 @@ class TaskScreenViewModel @Inject constructor(
                     siblings.size
                 }
 
-            val newTask = Task(
+            val newTaskEntity = TaskEntity(
                 id = null,
                 name = d.name.trim(),
                 color = categoryColor,
@@ -522,7 +522,7 @@ class TaskScreenViewModel @Inject constructor(
             )
 
             val newId = withContext(Dispatchers.IO) {
-                taskRepo.insertTaskAndReturnId(newTask) // Long
+                taskRepo.insertTaskAndReturnId(newTaskEntity) // Long
             }
 
 
@@ -1344,10 +1344,10 @@ class TaskScreenViewModel @Inject constructor(
 
 
     private fun buildTaskMiniAll(
-        tasks: List<Task>,
+        taskEntities: List<TaskEntity>,
         schedules: Map<Int, Boolean> = emptyMap()
     ): List<TaskMiniUi> =
-        tasks.mapNotNull { t ->
+        taskEntities.mapNotNull { t ->
             val id = t.id ?: return@mapNotNull null
             TaskMiniUi(
                 id = id,
@@ -1408,8 +1408,8 @@ class TaskScreenViewModel @Inject constructor(
     }
 
 
-    private fun buildParentById(tasks: List<Task>): Map<Int, Int> =
-        tasks.mapNotNull { t ->
+    private fun buildParentById(taskEntities: List<TaskEntity>): Map<Int, Int> =
+        taskEntities.mapNotNull { t ->
             val id = t.id ?: return@mapNotNull null
             id to (t.parentTaskId ?: ROOT)
         }.toMap()

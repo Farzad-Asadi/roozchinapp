@@ -8,27 +8,26 @@ import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
-import java.time.LocalDateTime
 
 @Dao
 interface TaskDao {
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun insertTask(vararg task: Task)
+    suspend fun insertTask(vararg taskEntity: TaskEntity)
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
-    suspend fun insertTaskAndReturnId(task: Task): Long
+    suspend fun insertTaskAndReturnId(taskEntity: TaskEntity): Long
 
 
     @Update
-    suspend fun updateTask(task: Task)
+    suspend fun updateTask(taskEntity: TaskEntity)
 
     @Delete
-    suspend fun deleteTask(task: Task)
+    suspend fun deleteTask(taskEntity: TaskEntity)
 
 
     @Query("SELECT * FROM task WHERE id = :id LIMIT 1")
-    suspend fun getTaskById(id: Int): Task?
+    suspend fun getTaskById(id: Int): TaskEntity?
 
 
 
@@ -51,14 +50,14 @@ interface TaskDao {
     SELECT * FROM task
     WHERE categoryId = :categoryId
     """)
-    fun observeTasksByCategory(categoryId: Int): Flow<List<Task>>
+    fun observeTasksByCategory(categoryId: Int): Flow<List<TaskEntity>>
 
 
     @Query("""
     SELECT * FROM task
     WHERE categoryId = :categoryId
 """)
-    suspend fun getTasksByCategory(categoryId: Int): List<Task>
+    suspend fun getTasksByCategory(categoryId: Int): List<TaskEntity>
 
 
     @Query("UPDATE task SET siblingIndex = :siblingIndex WHERE id = :id")
@@ -87,7 +86,7 @@ interface TaskDao {
     SELECT * FROM task
     WHERE categoryId = :categoryId
     """)
-    suspend fun getTasksByCategoryOrdered(categoryId: Int): List<Task>
+    suspend fun getTasksByCategoryOrdered(categoryId: Int): List<TaskEntity>
 
 
     @Query("SELECT COUNT(*) FROM task WHERE parentTaskId = :taskId")
@@ -104,7 +103,7 @@ interface TaskDao {
       AND parentTaskId = :parentId
     ORDER BY siblingIndex ASC, id ASC
     """)
-    suspend fun getSiblings(categoryId: Int, parentId: Int): List<Task>
+    suspend fun getSiblings(categoryId: Int, parentId: Int): List<TaskEntity>
 
 
     @Query("""
@@ -226,10 +225,10 @@ interface TaskDao {
     //region Backup / Restore
 
     @Query("SELECT * FROM task")
-    suspend fun getAllTasksForBackup(): List<Task>
+    suspend fun getAllTasksForBackup(): List<TaskEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertTasksForRestore(tasks: List<Task>)
+    suspend fun insertTasksForRestore(taskEntities: List<TaskEntity>)
 
     @Query("DELETE FROM task")
     suspend fun deleteAllTasksForRestore()

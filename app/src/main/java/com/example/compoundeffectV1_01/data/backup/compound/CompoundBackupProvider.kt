@@ -26,7 +26,7 @@ class CompoundBackupProvider @Inject constructor(
     override suspend fun exportData(): String {
         val data = CompoundBackupData(
             categories = categoryDao.getAllCategoriesForBackup(),
-            tasks = taskDao.getAllTasksForBackup(),
+            taskEntities = taskDao.getAllTasksForBackup(),
             schedules = scheduleDao.getAllSchedulesForBackup(),
             reminders = reminderDao.getAllRemindersForBackup(),
             systemInfos = systemDao.getAllAppSystemInfo()
@@ -51,7 +51,7 @@ class CompoundBackupProvider @Inject constructor(
 
             // Insert order: parents first
             categoryDao.insertCategoriesForRestore(data.categories)
-            taskDao.insertTasksForRestore(data.tasks)
+            taskDao.insertTasksForRestore(data.taskEntities)
             scheduleDao.insertSchedulesForRestore(data.schedules)
             reminderDao.insertRemindersForRestore(data.reminders)
             systemDao.insertSystemInfosForRestore(data.systemInfos)

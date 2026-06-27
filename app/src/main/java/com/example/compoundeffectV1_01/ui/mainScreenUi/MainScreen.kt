@@ -158,7 +158,7 @@ fun CustomBottomBar(
         modifier = modifier
             .fillMaxWidth()
             .drawBehind {
-                val strokeWidth = 2.dp.toPx()
+                val strokeWidth =2.dp.toPx()
                 drawLine(
                     color = surfaceColor,
                     start = Offset(0f, 0f),
