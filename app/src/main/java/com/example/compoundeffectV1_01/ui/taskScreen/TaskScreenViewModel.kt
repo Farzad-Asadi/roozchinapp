@@ -11,6 +11,10 @@ import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.Reminde
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.StartEnd
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.TaskReminderEntity
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.TaskReminderRepository
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskChildRepository
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskChildResetScope
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskChildRuleEntity
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskChildRuleType
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskEntity
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskMode
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskRepository
@@ -61,6 +65,7 @@ class TaskScreenViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val categoryRepository: CategoryRepository,
     private val taskRepo: TaskRepository,
+    private val taskChildRepo: TaskChildRepository,
     private val scheduleRepo: TaskScheduleRepository,
     private val reminderRepo: TaskReminderRepository,
     private val reminderScheduler: ReminderScheduler,
@@ -186,6 +191,41 @@ class TaskScreenViewModel @Inject constructor(
 
     private val _editingTaskId = MutableStateFlow<Int?>(null)
     val editingTaskId = _editingTaskId.asStateFlow()
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val editingChildRule: StateFlow<TaskChildRuleEntity?> =
+        editingTaskId
+            .flatMapLatest { taskId ->
+                if (taskId == null) {
+                    flowOf(null)
+                } else {
+                    taskChildRepo.observeRulesByChildTaskId(taskId)
+                        .map { rules ->
+                            rules.firstOrNull { it.isEnabled }
+                        }
+                }
+            }
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5_000),
+                null
+            )
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val childRulesForEditingTask: StateFlow<List<TaskChildRuleEntity>> =
+        editingTaskId
+            .flatMapLatest { taskId ->
+                if (taskId == null) {
+                    flowOf(emptyList())
+                } else {
+                    taskChildRepo.observeRulesByParentTaskId(taskId)
+                }
+            }
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5_000),
+                emptyList()
+            )
 
     private val _taskEditBackStack = MutableStateFlow<List<Int>>(emptyList())
     val taskEditBackStack = _taskEditBackStack.asStateFlow()
@@ -338,6 +378,21 @@ class TaskScreenViewModel @Inject constructor(
             }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val childRulesForEditingParentTask: StateFlow<List<TaskChildRuleEntity>> =
+        editingTaskId
+            .flatMapLatest { taskId ->
+                if (taskId == null) {
+                    flowOf(emptyList())
+                } else {
+                    taskChildRepo.observeRulesByParentTaskId(taskId)
+                }
+            }
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5_000),
+                emptyList()
+            )
 
     init {
         val categoryId =
@@ -1616,6 +1671,205 @@ class TaskScreenViewModel @Inject constructor(
 
     fun setOnEndBreakEnabled(b: Boolean) {
         _reminderDraft.update { it.copy(onEndBreak = b) }
+    }
+
+    fun ensureDefaultChildRulesForEditingTask() {
+        val parentTaskId = _editingTaskId.value ?: return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            taskChildRepo.ensureDefaultOccurrenceRulesForDirectChildren(
+                parentTaskId = parentTaskId
+            )
+        }
+    }
+
+    fun saveChildRuleForEditingTask(
+        childTaskId: Int,
+        ruleType: String,
+        timesPerDay: Int,
+        timesPerOccurrence: Int,
+        g5TargetCount: Int,
+        sortOrder: Int
+    ) {
+        val parentTaskId = _editingTaskId.value ?: return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val existing = taskChildRepo.getRule(
+                parentTaskId = parentTaskId,
+                childTaskId = childTaskId
+            )
+
+            val now = System.currentTimeMillis()
+
+            val resetScope = resetScopeForChildRuleType(ruleType)
+
+            val cleanTimesPerDay = timesPerDay.coerceAtLeast(1)
+            val cleanTimesPerOccurrence = timesPerOccurrence.coerceAtLeast(1)
+            val cleanG5TargetCount = g5TargetCount.coerceAtLeast(1)
+
+            val base = existing ?: TaskChildRuleEntity(
+                parentTaskId = parentTaskId,
+                childTaskId = childTaskId,
+                ruleType = ruleType,
+                resetScope = resetScope,
+                sortOrder = sortOrder,
+                createdAtEpochMillis = now,
+                updatedAtEpochMillis = now
+            )
+
+            val updated = base.copy(
+                ruleType = ruleType,
+                resetScope = resetScope,
+
+                timesPerDay = cleanTimesPerDay,
+                timesPerOccurrence = cleanTimesPerOccurrence,
+                g5TargetCount = cleanG5TargetCount,
+
+                targetCount = when (ruleType) {
+                    TaskChildRuleType.N_TIMES_PER_DAY -> cleanTimesPerDay
+                    TaskChildRuleType.N_TIMES_PER_PARENT_OCCURRENCE -> cleanTimesPerOccurrence
+                    TaskChildRuleType.G5_LEARNING -> cleanG5TargetCount
+                    else -> 1
+                },
+
+                sortOrder = existing?.sortOrder ?: sortOrder,
+                isRequired = true,
+                isEnabled = true,
+                updatedAtEpochMillis = now
+            )
+
+            taskChildRepo.upsertRule(updated)
+        }
+    }
+
+
+
+
+
+
+
+
+
+
+    fun ensureDefaultRuleForEditingChildTask() {
+        val childTaskId = _editingTaskId.value ?: return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val child = taskRepo.getTaskById(childTaskId) ?: return@launch
+            val parentTaskId = child.parentTaskId
+
+            if (parentTaskId == ROOT) return@launch
+
+            if (parentTaskId != null) {
+                taskChildRepo.ensureDefaultOccurrenceRulesForDirectChildren(
+                    parentTaskId = parentTaskId
+                )
+            }
+        }
+    }
+
+    fun saveRuleForEditingChildTask(
+        ruleType: String,
+        timesPerDay: Int,
+        timesPerOccurrence: Int,
+        g5TargetCount: Int
+    ) {
+        val childTaskId = _editingTaskId.value ?: return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val child = taskRepo.getTaskById(childTaskId) ?: return@launch
+            val parentTaskId = child.parentTaskId
+
+            if (parentTaskId == ROOT) return@launch
+
+            val existing = parentTaskId?.let {
+                taskChildRepo.getRule(
+                    parentTaskId = it,
+                    childTaskId = childTaskId
+                )
+            }
+
+            val now = System.currentTimeMillis()
+
+            val cleanTimesPerDay = timesPerDay.coerceAtLeast(1)
+            val cleanTimesPerOccurrence = timesPerOccurrence.coerceAtLeast(1)
+            val cleanG5TargetCount = g5TargetCount.coerceAtLeast(1)
+
+            val resetScope = resetScopeForChildRuleType(ruleType)
+
+            val base = existing ?: parentTaskId?.let {
+                TaskChildRuleEntity(
+                    parentTaskId = it,
+                    childTaskId = childTaskId,
+                    ruleType = ruleType,
+                    resetScope = resetScope,
+                    sortOrder = child.siblingIndex,
+                    createdAtEpochMillis = now,
+                    updatedAtEpochMillis = now
+                )
+            }
+
+            val updated = base?.copy(
+                ruleType = ruleType,
+                resetScope = resetScope,
+                targetCount = when (ruleType) {
+                    TaskChildRuleType.N_TIMES_PER_DAY -> cleanTimesPerDay
+                    TaskChildRuleType.N_TIMES_PER_PARENT_OCCURRENCE -> cleanTimesPerOccurrence
+                    TaskChildRuleType.G5_LEARNING -> cleanG5TargetCount
+                    else -> 1
+                },
+                timesPerDay = cleanTimesPerDay,
+                timesPerOccurrence = cleanTimesPerOccurrence,
+                g5TargetCount = cleanG5TargetCount,
+                isRequired = true,
+                isEnabled = true,
+                updatedAtEpochMillis = now
+            )
+
+            if (updated != null) {
+                taskChildRepo.upsertRule(updated)
+            }
+        }
+    }
+
+    private fun resetScopeForChildRuleType(
+        ruleType: String
+    ): String {
+        return when (ruleType) {
+            TaskChildRuleType.ONCE_PER_PARENT_LIFETIME ->
+                TaskChildResetScope.PARENT_LIFETIME
+
+            TaskChildRuleType.ONCE_PER_DAY,
+            TaskChildRuleType.N_TIMES_PER_DAY ->
+                TaskChildResetScope.DAY
+
+            TaskChildRuleType.ONCE_PER_PARENT_OCCURRENCE,
+            TaskChildRuleType.N_TIMES_PER_PARENT_OCCURRENCE ->
+                TaskChildResetScope.PARENT_OCCURRENCE
+
+            TaskChildRuleType.G5_LEARNING ->
+                TaskChildResetScope.LEARNING_CYCLE
+
+            TaskChildRuleType.MANUAL_LIST_ITEM ->
+                TaskChildResetScope.LIST_SESSION
+
+            TaskChildRuleType.MANUAL_RESET ->
+                TaskChildResetScope.MANUAL
+
+            else ->
+                TaskChildResetScope.PARENT_OCCURRENCE
+        }
+    }
+
+
+    fun ensureDefaultChildRulesForEditingParentTask() {
+        val parentTaskId = _editingTaskId.value ?: return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            taskChildRepo.ensureDefaultOccurrenceRulesForDirectChildren(
+                parentTaskId = parentTaskId
+            )
+        }
     }
 
 }

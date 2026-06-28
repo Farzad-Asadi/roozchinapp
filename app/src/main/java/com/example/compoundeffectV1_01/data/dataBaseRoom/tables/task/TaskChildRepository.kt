@@ -122,4 +122,8 @@ interface TaskChildRepository {
         startEpochDay: Long,
         endEpochDay: Long
     ): Flow<List<TaskChildRequirementUi>>
+
+    fun observeRulesByChildTaskId(
+        childTaskId: Int
+    ): Flow<List<TaskChildRuleEntity>>
 }

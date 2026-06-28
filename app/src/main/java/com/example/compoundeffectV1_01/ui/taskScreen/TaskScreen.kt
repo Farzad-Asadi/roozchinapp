@@ -36,6 +36,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.automirrored.filled.Note
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Anchor
@@ -128,6 +129,8 @@ import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.Reminde
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.ReminderStrengthMode
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.StartEnd
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.TaskReminderEntity
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskChildRuleEntity
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskChildRuleType
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskEntity
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskMode
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.RepeatUnit
@@ -182,6 +185,11 @@ fun TaskScreen(
     val reminders by viewModel.remindersUiForScheduleDialog.collectAsState()
     val reminderDraft by viewModel.reminderDraft.collectAsState()
     val editingReminderKey by viewModel.editingReminderKey.collectAsState()
+    val childRulesForEditingTask by viewModel.childRulesForEditingTask.collectAsState()
+    val editingChildRule by viewModel.editingChildRule.collectAsState()
+    val childRulesForEditingParentTask by viewModel.childRulesForEditingParentTask.collectAsState()
+
+
     val requestPostNotifPermission = rememberPostNotificationsPermissionRequester()
 
     val editingTaskEntity = remember(
@@ -197,6 +205,16 @@ fun TaskScreen(
         val parentId = editingTaskEntity?.parentTaskId
         parentId != null && parentId != ROOT
     }
+
+    LaunchedEffect(
+        editingTaskId,
+        isEditingChildTask
+    ) {
+        if (isEditingChildTask && editingTaskId != null) {
+            viewModel.ensureDefaultRuleForEditingChildTask()
+        }
+    }
+
 
     val blockedGrandChildTasksForEditingTask = remember(
         editingTaskId,
@@ -235,6 +253,26 @@ fun TaskScreen(
                 )
         }
     }
+
+    val childRuleByChildTaskId = remember(
+        childRulesForEditingParentTask
+    ) {
+        childRulesForEditingParentTask.associateBy { it.childTaskId }
+    }
+
+
+    LaunchedEffect(
+        editingTaskId,
+        directChildTasksForEditingTask.size,
+        isEditingChildTask
+    ) {
+        if (!isEditingChildTask && editingTaskId != null && directChildTasksForEditingTask.isNotEmpty()) {
+            viewModel.ensureDefaultChildRulesForEditingParentTask()
+        }
+    }
+
+
+
 
 
     val menuCategory = state.categories.firstOrNull { it.categoryId == menuCategoryId }
@@ -349,6 +387,12 @@ fun TaskScreen(
                 },
                 canManageChildTasks = !isEditingChildTask,
                 blockedGrandChildTasks = blockedGrandChildTasksForEditingTask,
+                canManageSchedules = !isEditingChildTask,
+                childRuleByChildTaskId = childRuleByChildTaskId,
+                onSaveChildRule = viewModel::saveChildRuleForEditingTask,
+                isEditingChildTask = isEditingChildTask,
+                editingChildRule = editingChildRule,
+                onSaveEditingChildRule = viewModel::saveRuleForEditingChildTask,
                 modifier = Modifier.padding(padding)
 
             )
@@ -483,6 +527,24 @@ private fun AddEditeTaskScreen(
     onClickChildTask: (Int) -> Unit,
     canManageChildTasks: Boolean,
     blockedGrandChildTasks: List<TaskEntity>,
+    canManageSchedules: Boolean,
+    childRuleByChildTaskId: Map<Int, TaskChildRuleEntity>,
+    onSaveChildRule: (
+        childTaskId: Int,
+        ruleType: String,
+        timesPerDay: Int,
+        timesPerOccurrence: Int,
+        g5TargetCount: Int,
+        sortOrder: Int
+    ) -> Unit,
+    isEditingChildTask: Boolean,
+    editingChildRule: TaskChildRuleEntity?,
+    onSaveEditingChildRule: (
+        ruleType: String,
+        timesPerDay: Int,
+        timesPerOccurrence: Int,
+        g5TargetCount: Int
+    ) -> Unit,
     modifier: Modifier,
 
     ) {
@@ -494,6 +556,10 @@ private fun AddEditeTaskScreen(
     var schedulesExpanded by rememberSaveable { mutableStateOf(false) }
 
     var childTasksExpanded by rememberSaveable { mutableStateOf(false) }
+
+    var editingRuleChildTaskId by rememberSaveable { mutableStateOf<Int?>(null) }
+
+    var showEditingChildRuleDialog by rememberSaveable { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -694,93 +760,189 @@ private fun AddEditeTaskScreen(
             },
         )
 
-        // Schedule section
-        AddEditeDialogRow(
-            onClick = {
-                if (schedules.isNotEmpty()) {
-                    schedulesExpanded = !schedulesExpanded
-                } else {
-                    onOpenSchedule()
-                }
-            },
-            content = {
-                Icon(Icons.Filled.Event, contentDescription = null)
-
-                Spacer(Modifier.width(8.dp))
-
-                Column(
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(
-                        text = "Schedules",
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-
+        // Schedule or child rule section
+        if (!isEditingChildTask) {
+            AddEditeDialogRow(
+                onClick = {
                     if (schedules.isNotEmpty()) {
-                        Text(
-                            text = "${schedules.size} schedule${if (schedules.size > 1) "s" else ""}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        schedulesExpanded = !schedulesExpanded
                     } else {
-                        Text(
-                            text = "No schedule yet",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        onOpenSchedule()
                     }
-                }
+                },
+                content = {
+                    Icon(Icons.Filled.Event, contentDescription = null)
 
-                IconButton(
-                    onClick = onOpenSchedule
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Add,
-                        contentDescription = "Add schedule"
-                    )
-                }
+                    Spacer(Modifier.width(8.dp))
 
-                if (schedules.isNotEmpty()) {
-                    IconButton(
-                        onClick = {
-                            schedulesExpanded = !schedulesExpanded
+                    Column(
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(
+                            text = "Schedules",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+
+                        if (schedules.isNotEmpty()) {
+                            Text(
+                                text = "${schedules.size} schedule${if (schedules.size > 1) "s" else ""}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        } else {
+                            Text(
+                                text = "No schedule yet",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
+                    }
+
+                    IconButton(
+                        onClick = onOpenSchedule
                     ) {
                         Icon(
-                            imageVector = if (schedulesExpanded) {
-                                Icons.Filled.KeyboardArrowUp
-                            } else {
-                                Icons.Filled.KeyboardArrowDown
-                            },
-                            contentDescription = "Expand schedules"
+                            imageVector = Icons.Filled.Add,
+                            contentDescription = "Add schedule"
                         )
+                    }
+
+                    if (schedules.isNotEmpty()) {
+                        IconButton(
+                            onClick = {
+                                schedulesExpanded = !schedulesExpanded
+                            }
+                        ) {
+                            Icon(
+                                imageVector = if (schedulesExpanded) {
+                                    Icons.Filled.KeyboardArrowUp
+                                } else {
+                                    Icons.Filled.KeyboardArrowDown
+                                },
+                                contentDescription = "Expand schedules"
+                            )
+                        }
+                    }
+                }
+            )
+
+            if (schedules.isNotEmpty() && schedulesExpanded) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 44.dp, end = 12.dp)
+                ) {
+                    schedules.forEach { ui ->
+                        ScheduleRow(
+                            schedule = ui.schedule,
+                            onClick = { onClickSchedule(ui.key) },
+                            onRequestDelete = {
+                                pendingDeleteScheduleId = ui.key
+                                pendingDeleteScheduleTitle =
+                                    ui.schedule.title?.takeIf { it.isNotBlank() }
+                                        ?: taskNameForScheduleFallback(draft.name)
+                            }
+                        )
+
+                        HorizontalDivider(thickness = 0.5.dp)
                     }
                 }
             }
-        )
+        } else {
+            AddEditeDialogRow(
+                onClick = {
+                    showEditingChildRuleDialog = true
+                },
+                content = {
+                    Icon(Icons.Filled.Pattern, contentDescription = null)
 
-        if (schedules.isNotEmpty() && schedulesExpanded) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 44.dp, end = 12.dp)
-            ) {
-                schedules.forEach { ui ->
-                    ScheduleRow(
-                        schedule = ui.schedule,
-                        onClick = { onClickSchedule(ui.key) },
-                        onRequestDelete = {
-                            pendingDeleteScheduleId = ui.key
-                            pendingDeleteScheduleTitle =
-                                ui.schedule.title?.takeIf { it.isNotBlank() }
-                                    ?: taskNameForScheduleFallback(draft.name)
-                        }
+                    Spacer(Modifier.width(8.dp))
+
+                    Column(
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(
+                            text = "Child rule",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+
+                        Text(
+                            text = childRuleSummaryText(editingChildRule),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Icon(
+                        imageVector = Icons.Filled.ArrowForwardIos,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            )
+
+            AddEditeDialogRow(
+                onClick = null,
+                content = {
+                    Icon(
+                        imageVector = Icons.Filled.Event,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
-                    HorizontalDivider(thickness = 0.5.dp)
+                    Spacer(Modifier.width(8.dp))
+
+                    Column(
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(
+                            text = "Schedule controlled by parent",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+
+                        Text(
+                            text = "This task is a child task. Its timing is controlled by the parent rule.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
+            )
+
+            if (schedules.isNotEmpty()) {
+                AddEditeDialogRow(
+                    onClick = null,
+                    content = {
+                        Icon(
+                            imageVector = Icons.Filled.Warning,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error
+                        )
+
+                        Spacer(Modifier.width(8.dp))
+
+                        Column(
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(
+                                text = "Invalid child schedule",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.error
+                            )
+
+                            Text(
+                                text = "This child task already has ${schedules.size} independent schedule(s). Cleanup is required.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                )
             }
         }
+
+
+
 
         // Child tasks section
         if (canManageChildTasks) {
@@ -845,10 +1007,13 @@ private fun AddEditeTaskScreen(
                         .padding(start = 44.dp, end = 12.dp)
                 ) {
                     childTasks.forEach { child ->
+                        val childId = child.id
+
                         ChildTaskRow(
                             child = child,
+                            rule = childId?.let { childRuleByChildTaskId[it] },
                             onClick = {
-                                child.id?.let(onClickChildTask)
+                                childId?.let(onClickChildTask)
                             }
                         )
 
@@ -889,8 +1054,59 @@ private fun AddEditeTaskScreen(
             )
         }
 
+        val editingRuleChildTask = remember(
+            editingRuleChildTaskId,
+            childTasks
+        ) {
+            val childId = editingRuleChildTaskId ?: return@remember null
+            childTasks.firstOrNull { it.id == childId }
+        }
 
+        editingRuleChildTask?.let { child ->
+            val childId = child.id
 
+            if (childId != null) {
+                ChildRuleEditorDialog(
+                    child = child,
+                    rule = childRuleByChildTaskId[childId],
+                    onDismiss = {
+                        editingRuleChildTaskId = null
+                    },
+                    onConfirm = { ruleType, timesPerDay, timesPerOccurrence, g5TargetCount ->
+                        onSaveChildRule(
+                            childId,
+                            ruleType,
+                            timesPerDay,
+                            timesPerOccurrence,
+                            g5TargetCount,
+                            child.siblingIndex
+                        )
+
+                        editingRuleChildTaskId = null
+                    }
+                )
+            }
+        }
+
+        if (showEditingChildRuleDialog) {
+            ChildRuleEditorDialog(
+                title = draft.name.ifBlank { "Child task" },
+                rule = editingChildRule,
+                onDismiss = {
+                    showEditingChildRuleDialog = false
+                },
+                onConfirm = { ruleType, timesPerDay, timesPerOccurrence, g5TargetCount ->
+                    onSaveEditingChildRule(
+                        ruleType,
+                        timesPerDay,
+                        timesPerOccurrence,
+                        g5TargetCount
+                    )
+
+                    showEditingChildRuleDialog = false
+                }
+            )
+        }
 
         if (pendingDeleteScheduleId != null) {
             AlertDialog(
@@ -930,6 +1146,7 @@ private fun AddEditeTaskScreen(
 @Composable
 private fun ChildTaskRow(
     child: TaskEntity,
+    rule: TaskChildRuleEntity?,
     onClick: () -> Unit
 ) {
     ListItem(
@@ -961,21 +1178,22 @@ private fun ChildTaskRow(
         },
         supportingContent = {
             Text(
-                text = if (child.taskMode == TaskMode.POMODORO) {
-                    "Pomodoro child"
-                } else {
-                    "Normal child"
-                },
+                text = childRuleSummaryText(rule),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
         },
         trailingContent = {
-            Icon(
-                imageVector = Icons.Filled.ArrowForwardIos,
-                contentDescription = null,
-                modifier = Modifier.size(16.dp)
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
         },
         colors = ListItemDefaults.colors(
             containerColor = MaterialTheme.colorScheme.surface
@@ -3445,6 +3663,7 @@ private fun StartEndDropdown(
     }
 }
 
+
 @Composable
 private fun StrengthRow(
     strength: ReminderStrengthMode,
@@ -3591,6 +3810,141 @@ private fun TaskReminderEntity.buildSummary(): String {
     }
 }
 
+@Composable
+private fun ChildRuleEditorDialog(
+    child: TaskEntity,
+    rule: TaskChildRuleEntity?,
+    onDismiss: () -> Unit,
+    onConfirm: (
+        ruleType: String,
+        timesPerDay: Int,
+        timesPerOccurrence: Int,
+        g5TargetCount: Int
+    ) -> Unit
+) {
+    var selectedRuleType by remember(child.id, rule?.id) {
+        mutableStateOf(
+            rule?.ruleType ?: TaskChildRuleType.ONCE_PER_PARENT_OCCURRENCE
+        )
+    }
+
+    var timesPerDayText by remember(child.id, rule?.id) {
+        mutableStateOf(
+            (rule?.timesPerDay ?: 1).coerceAtLeast(1).toString()
+        )
+    }
+
+    var timesPerOccurrenceText by remember(child.id, rule?.id) {
+        mutableStateOf(
+            (rule?.timesPerOccurrence ?: 1).coerceAtLeast(1).toString()
+        )
+    }
+
+    var g5TargetCountText by remember(child.id, rule?.id) {
+        mutableStateOf(
+            (rule?.g5TargetCount ?: 5).coerceAtLeast(1).toString()
+        )
+    }
+
+    fun cleanPositiveInt(
+        text: String,
+        fallback: Int
+    ): Int {
+        return text
+            .trim()
+            .toIntOrNull()
+            ?.coerceAtLeast(1)
+            ?: fallback
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text("Child rule")
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(520.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                Text(
+                    text = child.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Spacer(Modifier.height(12.dp))
+
+                childRuleTypeOptions.forEach { option ->
+                    ChildRuleTypeOptionRow(
+                        option = option,
+                        selected = selectedRuleType == option.ruleType,
+                        onClick = {
+                            selectedRuleType = option.ruleType
+                        }
+                    )
+
+                    Spacer(Modifier.height(4.dp))
+                }
+
+                Spacer(Modifier.height(12.dp))
+
+                when (selectedRuleType) {
+                    TaskChildRuleType.N_TIMES_PER_DAY -> {
+                        ChildRuleNumberField(
+                            label = "Times per day",
+                            value = timesPerDayText,
+                            onValueChange = { timesPerDayText = it }
+                        )
+                    }
+
+                    TaskChildRuleType.N_TIMES_PER_PARENT_OCCURRENCE -> {
+                        ChildRuleNumberField(
+                            label = "Times per parent occurrence",
+                            value = timesPerOccurrenceText,
+                            onValueChange = { timesPerOccurrenceText = it }
+                        )
+                    }
+
+                    TaskChildRuleType.G5_LEARNING -> {
+                        ChildRuleNumberField(
+                            label = "G5 step count",
+                            value = g5TargetCountText,
+                            onValueChange = { g5TargetCountText = it }
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    onConfirm(
+                        selectedRuleType,
+                        cleanPositiveInt(timesPerDayText, rule?.timesPerDay ?: 1),
+                        cleanPositiveInt(timesPerOccurrenceText, rule?.timesPerOccurrence ?: 1),
+                        cleanPositiveInt(g5TargetCountText, rule?.g5TargetCount ?: 5)
+                    )
+                }
+            ) {
+                Text("Save")
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss
+            ) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+
+
 private fun openAppNotificationSettings(context: Context) {
     val intent = Intent().apply {
         // Android 8+
@@ -3611,3 +3965,291 @@ private fun openAppDetailsSettings(context: Context) {
     }
     runCatching { context.startActivity(intent) }
 }
+
+private fun childRuleSummaryText(
+    rule: TaskChildRuleEntity?
+): String {
+    if (rule == null) {
+        return "Rule: every parent occurrence"
+    }
+
+    return when (rule.ruleType) {
+        TaskChildRuleType.ONCE_PER_PARENT_OCCURRENCE ->
+            "Rule: every parent occurrence"
+
+        TaskChildRuleType.N_TIMES_PER_PARENT_OCCURRENCE ->
+            "Rule: ${rule.timesPerOccurrence.coerceAtLeast(1)} times per parent occurrence"
+
+        TaskChildRuleType.ONCE_PER_DAY ->
+            "Rule: once per day"
+
+        TaskChildRuleType.N_TIMES_PER_DAY ->
+            "Rule: ${rule.timesPerDay.coerceAtLeast(1)} times per day"
+
+        TaskChildRuleType.ONCE_PER_PARENT_LIFETIME ->
+            "Rule: once in parent lifetime"
+
+        TaskChildRuleType.G5_LEARNING ->
+            "Rule: G5 learning ${rule.g5TargetCount.coerceAtLeast(1)} steps"
+
+        TaskChildRuleType.MANUAL_LIST_ITEM ->
+            "Rule: manual list item"
+
+        TaskChildRuleType.MANUAL_RESET ->
+            "Rule: manual reset"
+
+        else ->
+            "Rule: ${rule.ruleType}"
+    }
+}
+
+@Composable
+private fun ChildRuleEditorDialog(
+    title: String,
+    rule: TaskChildRuleEntity?,
+    onDismiss: () -> Unit,
+    onConfirm: (
+        ruleType: String,
+        timesPerDay: Int,
+        timesPerOccurrence: Int,
+        g5TargetCount: Int
+    ) -> Unit
+) {
+    var selectedRuleType by remember(rule?.id) {
+        mutableStateOf(
+            rule?.ruleType ?: TaskChildRuleType.ONCE_PER_PARENT_OCCURRENCE
+        )
+    }
+
+    var timesPerDayText by remember(rule?.id) {
+        mutableStateOf(
+            (rule?.timesPerDay ?: 1).coerceAtLeast(1).toString()
+        )
+    }
+
+    var timesPerOccurrenceText by remember(rule?.id) {
+        mutableStateOf(
+            (rule?.timesPerOccurrence ?: 1).coerceAtLeast(1).toString()
+        )
+    }
+
+    var g5TargetCountText by remember(rule?.id) {
+        mutableStateOf(
+            (rule?.g5TargetCount ?: 5).coerceAtLeast(1).toString()
+        )
+    }
+
+    fun cleanPositiveInt(
+        text: String,
+        fallback: Int
+    ): Int {
+        return text
+            .trim()
+            .toIntOrNull()
+            ?.coerceAtLeast(1)
+            ?: fallback
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text("Child rule")
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(520.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Spacer(Modifier.height(12.dp))
+
+                childRuleTypeOptions.forEach { option ->
+                    ChildRuleTypeOptionRow(
+                        option = option,
+                        selected = selectedRuleType == option.ruleType,
+                        onClick = {
+                            selectedRuleType = option.ruleType
+                        }
+                    )
+
+                    Spacer(Modifier.height(4.dp))
+                }
+
+                Spacer(Modifier.height(12.dp))
+
+                when (selectedRuleType) {
+                    TaskChildRuleType.N_TIMES_PER_DAY -> {
+                        ChildRuleNumberField(
+                            label = "Times per day",
+                            value = timesPerDayText,
+                            onValueChange = { timesPerDayText = it }
+                        )
+                    }
+
+                    TaskChildRuleType.N_TIMES_PER_PARENT_OCCURRENCE -> {
+                        ChildRuleNumberField(
+                            label = "Times per parent occurrence",
+                            value = timesPerOccurrenceText,
+                            onValueChange = { timesPerOccurrenceText = it }
+                        )
+                    }
+
+                    TaskChildRuleType.G5_LEARNING -> {
+                        ChildRuleNumberField(
+                            label = "G5 step count",
+                            value = g5TargetCountText,
+                            onValueChange = { g5TargetCountText = it }
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    onConfirm(
+                        selectedRuleType,
+                        cleanPositiveInt(timesPerDayText, rule?.timesPerDay ?: 1),
+                        cleanPositiveInt(timesPerOccurrenceText, rule?.timesPerOccurrence ?: 1),
+                        cleanPositiveInt(g5TargetCountText, rule?.g5TargetCount ?: 5)
+                    )
+                }
+            ) {
+                Text("Save")
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss
+            ) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@Composable
+private fun ChildRuleTypeOptionRow(
+    option: ChildRuleTypeOption,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    ListItem(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick),
+        leadingContent = {
+            Icon(
+                imageVector = if (selected) {
+                    Icons.Filled.CheckCircle
+                } else {
+                    Icons.Filled.RadioButtonUnchecked
+                },
+                contentDescription = null,
+                tint = if (selected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                }
+            )
+        },
+        headlineContent = {
+            Text(
+                text = option.title,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        },
+        supportingContent = {
+            Text(
+                text = option.subtitle,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        },
+        colors = ListItemDefaults.colors(
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    )
+}
+
+@Composable
+private fun ChildRuleNumberField(
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit
+) {
+    TextField(
+        value = value,
+        onValueChange = { raw ->
+            onValueChange(raw.filter { it.isDigit() }.take(3))
+        },
+        label = {
+            Text(label)
+        },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(
+            keyboardType = KeyboardType.Number
+        ),
+        modifier = Modifier.fillMaxWidth()
+    )
+}
+
+private data class ChildRuleTypeOption(
+    val ruleType: String,
+    val title: String,
+    val subtitle: String
+)
+
+private val childRuleTypeOptions = listOf(
+    ChildRuleTypeOption(
+        ruleType = TaskChildRuleType.ONCE_PER_PARENT_OCCURRENCE,
+        title = "Every parent occurrence",
+        subtitle = "Create one requirement each time the parent runs."
+    ),
+    ChildRuleTypeOption(
+        ruleType = TaskChildRuleType.N_TIMES_PER_PARENT_OCCURRENCE,
+        title = "N times per parent occurrence",
+        subtitle = "Create multiple requirements each time the parent runs."
+    ),
+    ChildRuleTypeOption(
+        ruleType = TaskChildRuleType.ONCE_PER_DAY,
+        title = "Once per day",
+        subtitle = "Count this child once per active day."
+    ),
+    ChildRuleTypeOption(
+        ruleType = TaskChildRuleType.N_TIMES_PER_DAY,
+        title = "N times per day",
+        subtitle = "Count this child multiple times per active day."
+    ),
+    ChildRuleTypeOption(
+        ruleType = TaskChildRuleType.ONCE_PER_PARENT_LIFETIME,
+        title = "Once in parent lifetime",
+        subtitle = "Complete this child once and keep it done."
+    ),
+    ChildRuleTypeOption(
+        ruleType = TaskChildRuleType.G5_LEARNING,
+        title = "G5 learning",
+        subtitle = "Complete this child across multiple learning steps."
+    ),
+    ChildRuleTypeOption(
+        ruleType = TaskChildRuleType.MANUAL_LIST_ITEM,
+        title = "Manual list item",
+        subtitle = "Use this child as a manually added list item."
+    ),
+    ChildRuleTypeOption(
+        ruleType = TaskChildRuleType.MANUAL_RESET,
+        title = "Manual reset",
+        subtitle = "Keep it done until the user manually resets it."
+    )
+)
+

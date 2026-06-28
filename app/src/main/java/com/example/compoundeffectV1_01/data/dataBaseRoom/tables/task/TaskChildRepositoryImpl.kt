@@ -191,4 +191,9 @@ class TaskChildRepositoryImpl @Inject constructor(
             endEpochDay = endEpochDay
         )
 
+    override fun observeRulesByChildTaskId(
+        childTaskId: Int
+    ): Flow<List<TaskChildRuleEntity>> =
+        taskChildDao.observeRulesByChildTaskId(childTaskId)
+
 }
