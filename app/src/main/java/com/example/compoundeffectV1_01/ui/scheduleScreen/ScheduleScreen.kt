@@ -303,6 +303,16 @@ fun ScheduleScreen(
             .filter { it.start.toLocalDate() == today }
     }
 
+    val todayFocusMinutes = remember(todayTimelinePomodoros) {
+        todayTimelinePomodoros.sumOf { item ->
+            (item.focusMinutes ?: 25).coerceAtLeast(1)
+        }
+    }
+
+    val todayFocusText = remember(todayFocusMinutes) {
+        minutesToHHmm(todayFocusMinutes)
+    }
+
     val todayEpochDay = remember(today) {
         today.toEpochDay()
     }
@@ -1281,63 +1291,42 @@ fun ScheduleScreen(
 
 
 
-            // ✅ Drag overlay
+            // ✅ Drag overlay: same visual as pallet card
             if (draggingFromPallet != null || draggingPomodoro != null) {
-                Box(Modifier.fillMaxSize()) {
-
-                    val title = draggingFromPallet?.title ?: draggingPomodoro?.taskName.orEmpty()
-                    val iconName = draggingFromPallet?.categoryIconName // پومودورو فعلاً icon نداره
-
-                    Box(
-                        modifier = Modifier
-                            .offset {
-                                IntOffset(
-                                    (dragX - grabOffsetX - overlayLayerOriginInRoot.x).toInt(),
-                                    (dragY - grabOffsetY - overlayLayerOriginInRoot.y).toInt()
-                                )
-                            }
-                            .width(overlayWidth)
-                            .height(
-                                if (draggingPomodoro != null) 64.dp
-                                else overlayHeight.coerceAtLeast(44.dp)
-                            )
-                            .background(
-                                scheduleModeColor(
-                                    draggingFromPallet?.mode ?: ScheduleMode.POMODORO
-                                ).copy(alpha = 0.6f)
-                            )
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .align(Alignment.TopStart)
-                                .padding(start = 8.dp, top = 8.dp, end = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            if (iconName != null) {
-                                CategoryIconWithPlate(iconName = iconName)
-                            } else {
-                                Icon(Icons.Filled.Timeline, contentDescription = null)
-                            }
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                title,
-                                maxLines = 1,
-                                style = MaterialTheme.typography.labelLarge
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .zIndex(1000f)
+                ) {
+                    val overlayModifier = Modifier
+                        .offset {
+                            IntOffset(
+                                (dragX - grabOffsetX - overlayLayerOriginInRoot.x).toInt(),
+                                (dragY - grabOffsetY - overlayLayerOriginInRoot.y).toInt()
                             )
                         }
-
-                        if (draggingPomodoro != null) {
-                            Text(
-                                "Pomodoro",
-                                modifier = Modifier
-                                    .align(Alignment.BottomStart)
-                                    .padding(start = 16.dp, bottom = 10.dp),
-                                style = MaterialTheme.typography.labelSmall
-                            )
+                        .width(palletContentWidth)
+                        .graphicsLayer {
+                            alpha = 0.92f
+                            scaleX = 1.02f
+                            scaleY = 1.02f
+                            shadowElevation = 12f
                         }
+
+                    draggingPomodoro?.let { card ->
+                        PomodoroPalletCardVisual(
+                            item = card,
+                            modifier = overlayModifier
+                        )
+                    }
+
+                    draggingFromPallet?.let { item ->
+                        PalletTaskItemVisual(
+                            item = item,
+                            modifier = overlayModifier
+                        )
                     }
                 }
-
             }
 
             //Stepper
@@ -1525,6 +1514,7 @@ fun ScheduleScreen(
                     palletExpanded = false
                     navController.navigate(AppRoutes.taskEdit(taskId))
                 },
+                todayFocusText = todayFocusText,
                 onPomodoroDoneTodayInc = { taskId ->
                     viewModel.adjustPomodoroDoneToday(
                         taskId = taskId,
@@ -2925,6 +2915,7 @@ private fun PomodoroChainMarker(
 private fun RightPallet(
     palletItems: List<ScheduleScreenItem>,
     pomodoroCards: List<PomodoroPalletCardItem>,
+    todayFocusText: String,
     expanded: Boolean,
     isDraggingFromPallet: Boolean,
     onToggle: () -> Unit,
@@ -2939,6 +2930,15 @@ private fun RightPallet(
     modifier: Modifier = Modifier
 ) {
     val keepContent = expanded || isDraggingFromPallet
+
+    val sortedPomodoroCards = remember(pomodoroCards) {
+        pomodoroCards.sortedWith(
+            compareBy<PomodoroPalletCardItem> {
+                it.doneToday >= it.expectedToday
+            }
+                .thenBy { it.taskName }
+        )
+    }
 
     Row(modifier = modifier.fillMaxHeight()) {
 
@@ -3004,13 +3004,26 @@ private fun RightPallet(
                     .padding(8.dp)
             ) {
                 Column(Modifier.fillMaxSize()) {
-                    Text(
-                        text = "Pallet",
-                        style = MaterialTheme.typography.titleMedium,
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 4.dp, vertical = 6.dp)
-                    )
+                            .padding(horizontal = 4.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "Pallet",
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 1
+                        )
+
+                        Text(
+                            text = todayFocusText,
+                            style = MaterialTheme.typography.labelLarge,
+                            maxLines = 1,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
 
                     HorizontalDivider(
                         thickness = 0.8.dp,
@@ -3020,7 +3033,7 @@ private fun RightPallet(
                     Spacer(Modifier.height(8.dp))
 
                     LazyColumn {
-                        items(pomodoroCards, key = { "pomo_${it.taskId}" }) { c ->
+                        items(sortedPomodoroCards, key = { "pomo_${it.taskId}" }) { c ->
                             PomodoroPalletCard(
                                 item = c,
                                 onDragStart = onPomodoroDragStart,
@@ -3099,9 +3112,166 @@ private fun PomodoroPalletCard(
             Modifier
         }
 
-    Card(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
+            .onGloballyPositioned { coords = it }
+            .then(dragModifier)
+            .clickable { menuExpanded = true }
+    ) {
+        PomodoroPalletCardVisual(
+            item = item,
+            modifier = Modifier.fillMaxWidth(),
+            enabledAlpha = if (canAddMoreToday) 1f else 0.72f
+        )
+
+        DropdownMenu(
+            expanded = menuExpanded,
+            onDismissRequest = { menuExpanded = false }
+        ) {
+            DropdownMenuItem(
+                text = { Text("Edit") },
+                leadingIcon = {
+                    Icon(Icons.Filled.Edit, contentDescription = null)
+                },
+                onClick = {
+                    menuExpanded = false
+                    onEdit()
+                }
+            )
+
+            HorizontalDivider(thickness = 0.5.dp)
+
+            DropdownMenuItem(
+                text = {
+                    Column {
+                        Text(
+                            text = "انجام‌شده‌های امروز",
+                            style = MaterialTheme.typography.labelMedium
+                        )
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            IconButton(
+                                onClick = onDoneTodayDec,
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.KeyboardArrowDown,
+                                    contentDescription = null
+                                )
+                            }
+
+                            Text(
+                                text = item.doneToday.toString(),
+                                style = MaterialTheme.typography.titleMedium
+                            )
+
+                            IconButton(
+                                onClick = onDoneTodayInc,
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.KeyboardArrowUp,
+                                    contentDescription = null
+                                )
+                            }
+                        }
+                    }
+                },
+                onClick = {
+                    // کنترل‌ها داخل خود Row هستند
+                }
+            )
+        }
+    }
+}
+
+
+@Composable
+private fun PalletTaskItem(
+    item: ScheduleScreenItem,
+    onDragStart: (item: ScheduleScreenItem, startWindowX: Float, startWindowY: Float, downX: Float, downY: Float) -> Unit,
+    onDrag: (dx: Float, dy: Float) -> Unit,
+    onDragEnd: () -> Unit,
+    onDragCancel: () -> Unit,
+    onEdit: () -> Unit
+) {
+    var coords by remember { mutableStateOf<LayoutCoordinates?>(null) }
+
+    var menuExpanded by remember { mutableStateOf(false) }
+
+    val shape = RoundedCornerShape(16.dp)
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .onGloballyPositioned { coords = it }
+            .pointerInput(item.scheduleId) {
+                detectDragGesturesAfterLongPress(
+                    onDragStart = { downPos ->
+                        val c = coords ?: return@detectDragGesturesAfterLongPress
+                        val r = c.localToRoot(downPos)
+                        onDragStart(item, r.x, r.y, downPos.x, downPos.y)
+                    },
+                    onDrag = { change, dragAmount ->
+                        change.consume()
+                        onDrag(dragAmount.x, dragAmount.y)
+                    },
+                    onDragEnd = onDragEnd,
+                    onDragCancel = onDragCancel
+                )
+            }
+            .clickable {
+                menuExpanded = true
+            }
+    ) {
+        PalletTaskItemVisual(
+            item = item,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        DropdownMenu(
+            expanded = menuExpanded,
+            onDismissRequest = { menuExpanded = false }
+        ) {
+            DropdownMenuItem(
+                text = { Text("Edit") },
+                leadingIcon = {
+                    Icon(Icons.Filled.Edit, contentDescription = null)
+                },
+                onClick = {
+                    menuExpanded = false
+                    onEdit()
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun PomodoroPalletCardVisual(
+    item: PomodoroPalletCardItem,
+    modifier: Modifier = Modifier,
+    enabledAlpha: Float = 1f
+) {
+    val pomoColor = scheduleModeColor(ScheduleMode.POMODORO)
+    val categoryBorderColor = colorFromHex(item.categoryColor ?: "#9E9E9E")
+    val shape = RoundedCornerShape(18.dp)
+
+    val doneProgress = remember(item.expectedToday, item.doneToday) {
+        if (item.expectedToday <= 0) {
+            0f
+        } else {
+            (item.doneToday.toFloat() / item.expectedToday.toFloat())
+                .coerceIn(0f, 1f)
+        }
+    }
+
+    Card(
+        modifier = modifier
             .height(112.dp)
             .padding(vertical = 2.dp)
             .border(
@@ -3110,11 +3280,8 @@ private fun PomodoroPalletCard(
                 shape = shape
             )
             .graphicsLayer {
-                alpha = if (canAddMoreToday) 1f else 0.72f
-            }
-            .onGloballyPositioned { coords = it }
-            .then(dragModifier)
-            .clickable { menuExpanded = true },
+                alpha = enabledAlpha
+            },
         shape = shape,
         elevation = CardDefaults.cardElevation(defaultElevation = 5.dp),
         colors = CardDefaults.cardColors(
@@ -3154,7 +3321,6 @@ private fun PomodoroPalletCard(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-
                     Icon(
                         imageVector = iconFromKey(item.categoryIconName ?: "Category"),
                         contentDescription = null,
@@ -3199,145 +3365,9 @@ private fun PomodoroPalletCard(
                     color = MaterialTheme.colorScheme.onSurface
                 )
             }
-
-            DropdownMenu(
-                expanded = menuExpanded,
-                onDismissRequest = { menuExpanded = false }
-            ) {
-                DropdownMenuItem(
-                    text = { Text("Edit") },
-                    leadingIcon = {
-                        Icon(Icons.Filled.Edit, contentDescription = null)
-                    },
-                    onClick = {
-                        menuExpanded = false
-                        onEdit()
-                    }
-                )
-
-                HorizontalDivider(thickness = 0.5.dp)
-
-                DropdownMenuItem(
-                    text = {
-                        Column {
-                            Text(
-                                text = "انجام‌شده‌های امروز",
-                                style = MaterialTheme.typography.labelMedium
-                            )
-
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                IconButton(
-                                    onClick = onDoneTodayDec,
-                                    modifier = Modifier.size(36.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Filled.KeyboardArrowDown,
-                                        contentDescription = null
-                                    )
-                                }
-
-                                Text(
-                                    text = item.doneToday.toString(),
-                                    style = MaterialTheme.typography.titleMedium
-                                )
-
-                                IconButton(
-                                    onClick = onDoneTodayInc,
-                                    modifier = Modifier.size(36.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Filled.KeyboardArrowUp,
-                                        contentDescription = null
-                                    )
-                                }
-                            }
-                        }
-                    },
-                    onClick = {
-                        // خود Row کنترل دارد؛ اینجا عمداً کاری نمی‌کنیم
-                    }
-                )
-            }
         }
     }
 }
-
-
-@Composable
-private fun PalletTaskItem(
-    item: ScheduleScreenItem,
-    onDragStart: (item: ScheduleScreenItem, startWindowX: Float, startWindowY: Float, downX: Float, downY: Float) -> Unit,
-    onDrag: (dx: Float, dy: Float) -> Unit,
-    onDragEnd: () -> Unit,
-    onDragCancel: () -> Unit,
-    onEdit: () -> Unit
-) {
-    var coords by remember { mutableStateOf<LayoutCoordinates?>(null) }
-
-    var menuExpanded by remember { mutableStateOf(false) }
-
-    val shape = RoundedCornerShape(16.dp)
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 6.dp)
-            .onGloballyPositioned { coords = it }
-            .pointerInput(item.scheduleId) {
-                detectDragGesturesAfterLongPress(
-                    onDragStart = { downPos ->
-                        val c = coords ?: return@detectDragGesturesAfterLongPress
-                        val r = c.localToRoot(downPos)
-                        onDragStart(item, r.x, r.y, downPos.x, downPos.y)
-                    },
-                    onDrag = { change, dragAmount ->
-                        change.consume()
-                        onDrag(dragAmount.x, dragAmount.y)
-                    },
-                    onDragEnd = onDragEnd,
-                    onDragCancel = onDragCancel
-                )
-            }
-            .clickable {
-                menuExpanded = true
-            },
-        shape = shape,
-        elevation = CardDefaults.cardElevation(defaultElevation = 5.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = scheduleModeColor(item.mode).copy(alpha = 0.45f)
-        )
-    ) {
-        Box(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(
-                text = item.title,
-                maxLines = 1,
-                modifier = Modifier.padding(10.dp)
-            )
-
-            DropdownMenu(
-                expanded = menuExpanded,
-                onDismissRequest = { menuExpanded = false }
-            ) {
-                DropdownMenuItem(
-                    text = { Text("Edit") },
-                    leadingIcon = {
-                        Icon(Icons.Filled.Edit, contentDescription = null)
-                    },
-                    onClick = {
-                        menuExpanded = false
-                        onEdit()
-                    }
-                )
-            }
-        }
-    }
-}
-
 
 @Composable
 private fun CategoryIconWithPlate(
@@ -3628,6 +3658,38 @@ private fun buildTaskChildOccurrenceKeyForItem(
     )
 }
 
+@Composable
+private fun PalletTaskItemVisual(
+    item: ScheduleScreenItem,
+    modifier: Modifier = Modifier
+) {
+    val shape = RoundedCornerShape(16.dp)
+
+    Card(
+        modifier = modifier
+            .padding(vertical = 6.dp),
+        shape = shape,
+        elevation = CardDefaults.cardElevation(defaultElevation = 5.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = scheduleModeColor(item.mode).copy(alpha = 0.45f)
+        )
+    ) {
+        Box(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(
+                text = item.title,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(10.dp),
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    textDirection = TextDirection.ContentOrRtl
+                )
+            )
+        }
+    }
+}
+
 private fun requirementMatchesTimelineItem(
     requirement: TaskChildRequirementUi,
     item: ScheduleScreenItem
@@ -3724,6 +3786,16 @@ private fun buildTaskChildRequirementSummaryForTimelineItem(
             it.status == TaskChildRequirementStatus.COMPLETE
         }
     )
+}
+
+private fun minutesToHHmm(
+    totalMinutes: Int
+): String {
+    val safe = totalMinutes.coerceAtLeast(0)
+    val hours = safe / 60
+    val minutes = safe % 60
+
+    return "${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}"
 }
 
 //>>>>>>>>>>>>>>>> Utils <<<<<<<<<<<<<<<<<<

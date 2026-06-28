@@ -620,6 +620,8 @@ class TaskScreenViewModel @Inject constructor(
                 val safeInterval = sd.repeat.interval.coerceIn(1, 99)
                 val isPomo = (sd.mode == ScheduleMode.POMODORO)
 
+
+
                 val schedule = TaskSchedule(
                     id = null,
                     taskId = newId,
@@ -837,6 +839,24 @@ class TaskScreenViewModel @Inject constructor(
 
         val isPomo = (sd.mode == ScheduleMode.POMODORO)
 
+        val safeDurationMinutes = when (sd.mode) {
+            ScheduleMode.TIME_RANGE -> {
+                val startMin = sd.start.toMinuteOfDay()
+                val endMin = sd.end.toMinuteOfDay()
+                (endMin - startMin).coerceAtLeast(1)
+            }
+
+            ScheduleMode.POMODORO -> {
+                val focus = sd.focusMinutes.coerceAtLeast(1)
+                val shortBreak = sd.shortBreakMinutes.coerceAtLeast(0)
+                (focus + shortBreak).coerceAtLeast(1)
+            }
+
+            ScheduleMode.AMOUNT_OF_TIME -> {
+                sd.durationMinutes.coerceAtLeast(1)
+            }
+        }
+
         val newSchedule = TaskSchedule(
             id = if (tid != null) key else null,
             taskId = tid ?: 0,
@@ -845,9 +865,17 @@ class TaskScreenViewModel @Inject constructor(
             dateEpochDay = sd.date.toEpochDay(),
 
             startMinuteOfDay = if (sd.mode == ScheduleMode.TIME_RANGE) sd.start.toMinuteOfDay() else 480,
-            endMinuteOfDay = if (sd.mode == ScheduleMode.TIME_RANGE) sd.end.toMinuteOfDay() else 480 + sd.durationMinutes,
+            endMinuteOfDay = if (sd.mode == ScheduleMode.TIME_RANGE) {
+                sd.end.toMinuteOfDay()
+            } else {
+                480 + safeDurationMinutes
+            },
 
-            durationMinutes = if (sd.mode == ScheduleMode.AMOUNT_OF_TIME) sd.durationMinutes else null,
+            durationMinutes = when (sd.mode) {
+                ScheduleMode.TIME_RANGE -> null
+                ScheduleMode.AMOUNT_OF_TIME -> safeDurationMinutes
+                ScheduleMode.POMODORO -> safeDurationMinutes
+            },
 
             // ✅ پالتی بودن: AMOUNT و POMODORO هر دو پالتی‌اند
             inPallet = (sd.mode == ScheduleMode.AMOUNT_OF_TIME || sd.mode == ScheduleMode.POMODORO),
@@ -940,7 +968,17 @@ class TaskScreenViewModel @Inject constructor(
             date = dateEpochDay?.let(LocalDate::ofEpochDay) ?: LocalDate.now(),
             start = startMinuteOfDay?.let(::minuteToLocalTime) ?: LocalTime.of(20, 0),
             end = endMinuteOfDay?.let(::minuteToLocalTime) ?: LocalTime.of(21, 0),
-            durationMinutes = durationMinutes ?: 0,
+            durationMinutes = when (mode) {
+                ScheduleMode.POMODORO -> {
+                    val focus = focusMinutes ?: 25
+                    val shortBreak = shortBreakMinutes ?: 5
+                    (durationMinutes ?: (focus + shortBreak)).coerceAtLeast(1)
+                }
+
+                else -> {
+                    durationMinutes ?: 0
+                }
+            },
 
             focusMinutes = focusMinutes ?: 25,
             shortBreakMinutes = shortBreakMinutes ?: 5,
