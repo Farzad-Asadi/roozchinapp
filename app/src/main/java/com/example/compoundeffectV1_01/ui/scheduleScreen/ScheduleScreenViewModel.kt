@@ -523,7 +523,8 @@ class ScheduleScreenViewModel @Inject constructor(
                     scheduleId = state.scheduleId,
                     title = state.title,
                     type = type,
-                    triggerAtMillis = millis
+                    triggerAtMillis = millis,
+                    useAlarmClock = true
                 )
             }
         }
@@ -970,7 +971,8 @@ class ScheduleScreenViewModel @Inject constructor(
                     scheduleId = scheduleId,
                     title = taskTitle,
                     type = type,
-                    triggerAtMillis = millis
+                    triggerAtMillis = millis,
+                    useAlarmClock = true
                 )
             }
         }
@@ -986,7 +988,8 @@ class ScheduleScreenViewModel @Inject constructor(
                 scheduleId = scheduleId,
                 title = taskTitle,
                 type = PomodoroAlarmReceiver.TYPE_START_SOON,
-                triggerAtMillis = warningAtMillis
+                triggerAtMillis = warningAtMillis,
+                useAlarmClock = true
             )
         }
 

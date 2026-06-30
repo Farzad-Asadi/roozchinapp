@@ -129,6 +129,7 @@ import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.Reminde
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.ReminderStrengthMode
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.StartEnd
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.TaskReminderEntity
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskChildResetScope
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskChildRuleEntity
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskChildRuleType
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskEntity
@@ -248,7 +249,8 @@ fun TaskScreen(
             state.taskEntities
                 .filter { it.parentTaskId == parentId }
                 .sortedWith(
-                    compareBy<TaskEntity> { it.siblingIndex }
+                    compareBy<TaskEntity> { it.isCompleted }
+                        .thenBy { it.siblingIndex }
                         .thenBy { it.id ?: 0 }
                 )
         }
@@ -326,7 +328,8 @@ fun TaskScreen(
                 onPriorityChange = viewModel::setTaskPriority,
                 onCompletedToggle = viewModel::setTaskCompleted,
                 onNoteChange = viewModel::setTaskNote,
-
+                onToggleChildTaskCompleted = viewModel::setDirectChildTaskCompleted,
+                onDeleteChildTask = viewModel::deleteDirectChildTask,
                 onInsertAtTopChange = viewModel::setTaskInsertAtTop,
                 onChildLevelChange = viewModel::setTaskChildLevel,
                 onPickCategory = { showPickTaskCategory = true },
@@ -387,10 +390,15 @@ fun TaskScreen(
                 },
                 canManageChildTasks = !isEditingChildTask,
                 canAddChildTask = editingTaskId != null && !isEditingChildTask,
-                onAddChildTask = { childName ->
+                onAddChildTask = { childName, ruleType, timesPerDay, timesPerOccurrence, g5TargetCount, onCreated ->
                     viewModel.createDirectChildTaskForEditingTask(
                         categoryColor = selectedCategory.color,
-                        childName = childName
+                        childName = childName,
+                        ruleType = ruleType,
+                        timesPerDay = timesPerDay,
+                        timesPerOccurrence = timesPerOccurrence,
+                        g5TargetCount = g5TargetCount,
+                        onCreated = onCreated
                     )
                 },
                 blockedGrandChildTasks = blockedGrandChildTasksForEditingTask,
@@ -534,6 +542,8 @@ private fun AddEditeTaskScreen(
     childTasks: List<TaskEntity>,
     onClickChildTask: (Int) -> Unit,
     canManageChildTasks: Boolean,
+    onToggleChildTaskCompleted: (Int, Boolean) -> Unit,
+    onDeleteChildTask: (Int) -> Unit,
     blockedGrandChildTasks: List<TaskEntity>,
     canManageSchedules: Boolean,
     childRuleByChildTaskId: Map<Int, TaskChildRuleEntity>,
@@ -554,7 +564,14 @@ private fun AddEditeTaskScreen(
         g5TargetCount: Int
     ) -> Unit,
     canAddChildTask: Boolean,
-    onAddChildTask: (String) -> Unit,
+    onAddChildTask: (
+        childName: String,
+        ruleType: String,
+        timesPerDay: Int,
+        timesPerOccurrence: Int,
+        g5TargetCount: Int,
+        onCreated: (Int) -> Unit
+    ) -> Unit,
     modifier: Modifier,
 
     ) {
@@ -573,6 +590,27 @@ private fun AddEditeTaskScreen(
 
     var showAddChildTaskDialog by rememberSaveable { mutableStateOf(false) }
     var newChildTaskName by rememberSaveable { mutableStateOf("") }
+
+    var showNewChildRuleDialog by rememberSaveable { mutableStateOf(false) }
+
+    var newChildRuleType by rememberSaveable {
+        mutableStateOf(TaskChildRuleType.ONCE_PER_PARENT_OCCURRENCE)
+    }
+
+    var newChildTimesPerDay by rememberSaveable {
+        mutableIntStateOf(1)
+    }
+
+    var newChildTimesPerOccurrence by rememberSaveable {
+        mutableIntStateOf(1)
+    }
+
+    var newChildG5TargetCount by rememberSaveable {
+        mutableIntStateOf(5)
+    }
+
+    var pendingDeleteChildTaskId by rememberSaveable { mutableStateOf<Int?>(null) }
+    var pendingDeleteChildTaskName by rememberSaveable { mutableStateOf("") }
 
     Column(
         modifier = Modifier
@@ -997,6 +1035,12 @@ private fun AddEditeTaskScreen(
                         enabled = canAddChildTask,
                         onClick = {
                             newChildTaskName = ""
+
+                            newChildRuleType = TaskChildRuleType.ONCE_PER_PARENT_OCCURRENCE
+                            newChildTimesPerDay = 1
+                            newChildTimesPerOccurrence = 1
+                            newChildG5TargetCount = 5
+
                             showAddChildTaskDialog = true
                         }
                     ) {
@@ -1039,6 +1083,17 @@ private fun AddEditeTaskScreen(
                             rule = childId?.let { childRuleByChildTaskId[it] },
                             onClick = {
                                 childId?.let(onClickChildTask)
+                            },
+                            onToggleCompleted = { completed ->
+                                childId?.let {
+                                    onToggleChildTaskCompleted(it, completed)
+                                }
+                            },
+                            onRequestDelete = {
+                                childId?.let {
+                                    pendingDeleteChildTaskId = it
+                                    pendingDeleteChildTaskName = child.name
+                                }
                             }
                         )
 
@@ -1163,6 +1218,241 @@ private fun AddEditeTaskScreen(
             )
         }
 
+        if (showAddChildTaskDialog) {
+            val rulePreview = newChildRulePreviewEntity(
+                ruleType = newChildRuleType,
+                timesPerDay = newChildTimesPerDay,
+                timesPerOccurrence = newChildTimesPerOccurrence,
+                g5TargetCount = newChildG5TargetCount
+            )
+
+            fun submitChildTask(
+                closeDialog: Boolean,
+                openFullEditor: Boolean
+            ) {
+                val cleanName = newChildTaskName.trim()
+
+                if (cleanName.isBlank()) return
+
+                onAddChildTask(
+                    cleanName,
+                    newChildRuleType,
+                    newChildTimesPerDay,
+                    newChildTimesPerOccurrence,
+                    newChildG5TargetCount
+                ) { createdChildTaskId ->
+                    if (openFullEditor) {
+                        onClickChildTask(createdChildTaskId)
+                    }
+                }
+
+                childTasksExpanded = true
+
+                if (closeDialog || openFullEditor) {
+                    showAddChildTaskDialog = false
+                    newChildTaskName = ""
+                } else {
+                    newChildTaskName = ""
+                }
+            }
+
+            DimmedDialog(
+                onDismiss = {
+                    showAddChildTaskDialog = false
+                    newChildTaskName = ""
+                },
+                shape = RoundedCornerShape(28.dp),
+                modifier = Modifier
+                    .fillMaxWidth(0.92f)
+                    .background(
+                        MaterialTheme.colorScheme.surface,
+                        shape = RoundedCornerShape(28.dp)
+                    )
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    AddEditeDialogTopBar(
+                        title = "New child task",
+                        onNavigationClick = {
+                            showAddChildTaskDialog = false
+                            newChildTaskName = ""
+                        },
+                        actions = {
+                            IconButton(
+                                onClick = {
+                                    showNewChildRuleDialog = true
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Pattern,
+                                    contentDescription = "Rule"
+                                )
+                            }
+
+                            IconButton(
+                                enabled = newChildTaskName.isNotBlank(),
+                                onClick = {
+                                    submitChildTask(
+                                        closeDialog = true,
+                                        openFullEditor = false
+                                    )
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Check,
+                                    contentDescription = "Create"
+                                )
+                            }
+
+                            IconButton(
+                                enabled = newChildTaskName.isNotBlank(),
+                                onClick = {
+                                    submitChildTask(
+                                        closeDialog = false,
+                                        openFullEditor = false
+                                    )
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.DoneAll,
+                                    contentDescription = "Create and continue"
+                                )
+                            }
+
+                            IconButton(
+                                enabled = newChildTaskName.isNotBlank(),
+                                onClick = {
+                                    submitChildTask(
+                                        closeDialog = true,
+                                        openFullEditor = true
+                                    )
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.ArrowForwardIos,
+                                    contentDescription = "Create and open"
+                                )
+                            }
+                        }
+                    )
+
+                    AddEditeDialogTextField(
+                        value = newChildTaskName,
+                        onValueChange = { value ->
+                            newChildTaskName = value
+                        },
+                        hint = "Child task name",
+                        showDivider = true
+                    )
+
+                    AddEditeDialogRow(
+                        onClick = {
+                            showNewChildRuleDialog = true
+                        },
+                        content = {
+                            Icon(
+                                imageVector = Icons.Filled.Pattern,
+                                contentDescription = null
+                            )
+
+                            Spacer(Modifier.width(8.dp))
+
+                            Column(
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(
+                                    text = "Rule",
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+
+                                Text(
+                                    text = childRuleSummaryText(rulePreview),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+
+                            Icon(
+                                imageVector = Icons.Filled.ArrowForwardIos,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        },
+                        showDivider = false
+                    )
+                }
+            }
+        }
+
+        if (showNewChildRuleDialog) {
+            val rulePreview = newChildRulePreviewEntity(
+                ruleType = newChildRuleType,
+                timesPerDay = newChildTimesPerDay,
+                timesPerOccurrence = newChildTimesPerOccurrence,
+                g5TargetCount = newChildG5TargetCount
+            )
+
+            ChildRuleEditorDialog(
+                title = newChildTaskName.ifBlank { "Child rule" },
+                rule = rulePreview,
+                onDismiss = {
+                    showNewChildRuleDialog = false
+                },
+                onConfirm = { ruleType, timesPerDay, timesPerOccurrence, g5TargetCount ->
+                    newChildRuleType = ruleType
+                    newChildTimesPerDay = timesPerDay
+                    newChildTimesPerOccurrence = timesPerOccurrence
+                    newChildG5TargetCount = g5TargetCount
+
+                    showNewChildRuleDialog = false
+                }
+            )
+        }
+
+        if (pendingDeleteChildTaskId != null) {
+            AlertDialog(
+                onDismissRequest = {
+                    pendingDeleteChildTaskId = null
+                    pendingDeleteChildTaskName = ""
+                },
+                title = {
+                    Text("Delete child task?")
+                },
+                text = {
+                    Text(
+                        "آیا از حذف این تسک فرزند مطمئنی؟\n\n$pendingDeleteChildTaskName"
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            val childId = pendingDeleteChildTaskId ?: return@TextButton
+
+                            onDeleteChildTask(childId)
+
+                            pendingDeleteChildTaskId = null
+                            pendingDeleteChildTaskName = ""
+                        }
+                    ) {
+                        Text("Delete")
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = {
+                            pendingDeleteChildTaskId = null
+                            pendingDeleteChildTaskName = ""
+                        }
+                    ) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
+
 
     }
 
@@ -1172,46 +1462,77 @@ private fun AddEditeTaskScreen(
 private fun ChildTaskRow(
     child: TaskEntity,
     rule: TaskChildRuleEntity?,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onToggleCompleted: (Boolean) -> Unit,
+    onRequestDelete: () -> Unit
 ) {
+    val isDone = child.isCompleted
+
     ListItem(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .clickable(onClick = onClick),
         leadingContent = {
-            Icon(
-                imageVector = if (child.isCompleted) {
-                    Icons.Filled.CheckCircle
-                } else {
-                    Icons.Filled.RadioButtonUnchecked
+            IconButton(
+                onClick = {
+                    onToggleCompleted(!isDone)
                 },
-                contentDescription = null,
-                tint = if (child.isCompleted) {
-                    Color(0xFF2E7D32)
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                }
-            )
+                modifier = Modifier.size(40.dp)
+            ) {
+                Icon(
+                    imageVector = if (isDone) {
+                        Icons.Filled.CheckCircle
+                    } else {
+                        Icons.Filled.RadioButtonUnchecked
+                    },
+                    contentDescription = if (isDone) {
+                        "Mark child task incomplete"
+                    } else {
+                        "Mark child task complete"
+                    },
+                    tint = if (isDone) {
+                        Color(0xFF2E7D32)
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                )
+            }
         },
         headlineContent = {
             Text(
                 text = child.name,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
+                color = if (isDone) {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                }
             )
         },
         supportingContent = {
             Text(
                 text = childRuleSummaryText(rule),
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         },
         trailingContent = {
             Row(
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                IconButton(
+                    onClick = onRequestDelete,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Delete,
+                        contentDescription = "Delete child task",
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
 
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
@@ -3968,7 +4289,57 @@ private fun ChildRuleEditorDialog(
     )
 }
 
+private fun newChildRulePreviewEntity(
+    ruleType: String,
+    timesPerDay: Int,
+    timesPerOccurrence: Int,
+    g5TargetCount: Int
+): TaskChildRuleEntity {
+    return TaskChildRuleEntity(
+        parentTaskId = 0,
+        childTaskId = 0,
+        ruleType = ruleType,
+        resetScope = resetScopeForRuleTypeUi(ruleType),
+        targetCount = when (ruleType) {
+            TaskChildRuleType.N_TIMES_PER_DAY -> timesPerDay.coerceAtLeast(1)
+            TaskChildRuleType.N_TIMES_PER_PARENT_OCCURRENCE -> timesPerOccurrence.coerceAtLeast(1)
+            TaskChildRuleType.G5_LEARNING -> g5TargetCount.coerceAtLeast(1)
+            else -> 1
+        },
+        timesPerDay = timesPerDay.coerceAtLeast(1),
+        timesPerOccurrence = timesPerOccurrence.coerceAtLeast(1),
+        g5TargetCount = g5TargetCount.coerceAtLeast(1),
+        showInTimelineCard = true,
+        showInBottomSheet = true
+    )
+}
 
+private fun resetScopeForRuleTypeUi(ruleType: String): String {
+    return when (ruleType) {
+        TaskChildRuleType.ONCE_PER_PARENT_LIFETIME ->
+            TaskChildResetScope.PARENT_LIFETIME
+
+        TaskChildRuleType.ONCE_PER_DAY,
+        TaskChildRuleType.N_TIMES_PER_DAY ->
+            TaskChildResetScope.DAY
+
+        TaskChildRuleType.ONCE_PER_PARENT_OCCURRENCE,
+        TaskChildRuleType.N_TIMES_PER_PARENT_OCCURRENCE ->
+            TaskChildResetScope.PARENT_OCCURRENCE
+
+        TaskChildRuleType.G5_LEARNING ->
+            TaskChildResetScope.LEARNING_CYCLE
+
+        TaskChildRuleType.MANUAL_LIST_ITEM ->
+            TaskChildResetScope.LIST_SESSION
+
+        TaskChildRuleType.MANUAL_RESET ->
+            TaskChildResetScope.MANUAL
+
+        else ->
+            TaskChildResetScope.PARENT_OCCURRENCE
+    }
+}
 
 private fun openAppNotificationSettings(context: Context) {
     val intent = Intent().apply {

@@ -11,13 +11,21 @@ class PomodoroAlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val type = intent.getStringExtra(EXTRA_TYPE).orEmpty()
         val scheduleId = intent.getIntExtra(EXTRA_SCHEDULE_ID, -1)
+        val triggerAtMillis = intent.getLongExtra(EXTRA_TRIGGER_AT_MILLIS, -1L)
+
+        val delayMs =
+            if (triggerAtMillis > 0L) {
+                System.currentTimeMillis() - triggerAtMillis
+            } else {
+                null
+            }
         val pomodoroTitle = intent.getStringExtra(EXTRA_TITLE)
             ?.takeIf { it.isNotBlank() }
             ?: "Pomodoro"
 
         Log.e(
             "POMODORO",
-            "🔥 RECEIVER FIRED type=$type scheduleId=$scheduleId title=$pomodoroTitle"
+            "🔥 RECEIVER FIRED type=$type scheduleId=$scheduleId title=$pomodoroTitle delayMs=$delayMs"
         )
 
         val (title, message) = when (type) {
@@ -62,5 +70,7 @@ class PomodoroAlarmReceiver : BroadcastReceiver() {
         const val TYPE_FOCUS_START = "FOCUS_START"
         const val TYPE_FOCUS_END = "FOCUS_END"
         const val TYPE_BREAK_END = "BREAK_END"
+
+        const val EXTRA_TRIGGER_AT_MILLIS = "triggerAtMillis"
     }
 }

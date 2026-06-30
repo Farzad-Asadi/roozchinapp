@@ -303,15 +303,7 @@ fun ScheduleScreen(
             .filter { it.start.toLocalDate() == today }
     }
 
-    val todayFocusMinutes = remember(todayTimelinePomodoros) {
-        todayTimelinePomodoros.sumOf { item ->
-            (item.focusMinutes ?: 25).coerceAtLeast(1)
-        }
-    }
 
-    val todayFocusText = remember(todayFocusMinutes) {
-        minutesToHHmm(todayFocusMinutes)
-    }
 
     val todayEpochDay = remember(today) {
         today.toEpochDay()
@@ -346,6 +338,9 @@ fun ScheduleScreen(
                 }
 
                 val manualDeltaToday = manualDoneTodayDeltaByTaskId[taskId] ?: 0
+
+                // این مقدار برای خود کارت پومودورو است.
+                // بنابراین مازاد هم باید دیده شود.
                 val doneToday = (realDoneToday + manualDeltaToday).coerceAtLeast(0)
 
                 // اجازه می‌دهیم نهایتاً یک پومودوروی اضافه‌تر از هدف روزانه ساخته شود.
@@ -374,6 +369,50 @@ fun ScheduleScreen(
                 )
             }
             .sortedBy { it.taskName }
+    }
+
+    val todayDoneFocusMinutes = remember(pomodoroPalletCards) {
+        pomodoroPalletCards.sumOf { card ->
+            card.doneToday.coerceAtLeast(0) * card.focus.coerceAtLeast(1)
+        }
+    }
+
+    val todayFocusText = remember(todayDoneFocusMinutes) {
+        minutesToHHmm(todayDoneFocusMinutes)
+    }
+
+// کل هدف امروز باید از ruleهای فعال امروز بیاید، نه از تعداد کارت‌های ساخته‌شده در تایم‌لاین.
+    val todayTargetPomodoroCount = remember(pomodoroPalletCards) {
+        pomodoroPalletCards.sumOf { card ->
+            card.expectedToday.coerceAtLeast(0)
+        }
+    }
+
+// انجام‌شده‌ی امروز هم باید per-task به سقف expectedToday محدود شود.
+// یعنی پومودوروهای اضافه، آمار امروز را بیشتر از هدف روزانه نمی‌کنند.
+    val todayDonePomodoroCount = remember(pomodoroPalletCards) {
+        pomodoroPalletCards.sumOf { card ->
+            card.doneToday.coerceIn(
+                minimumValue = 0,
+                maximumValue = card.expectedToday.coerceAtLeast(0)
+            )
+        }
+    }
+
+    val todayDoneScheduledProgress = remember(
+        todayDonePomodoroCount,
+        todayTargetPomodoroCount
+    ) {
+        when {
+            todayTargetPomodoroCount > 0 -> {
+                todayDonePomodoroCount
+                    .toFloat()
+                    .div(todayTargetPomodoroCount.toFloat())
+                    .coerceIn(0f, 1f)
+            }
+
+            else -> 0f
+        }
     }
 
     var hasAppliedSavedVerticalZoom by remember { mutableStateOf(false) }
@@ -1519,6 +1558,8 @@ fun ScheduleScreen(
                     navController.navigate(AppRoutes.taskEdit(taskId))
                 },
                 todayFocusText = todayFocusText,
+                todayDonePomodoroCount = todayDonePomodoroCount,
+                todayScheduledPomodoroCount = todayTargetPomodoroCount,
                 onPomodoroDoneTodayInc = { taskId ->
                     viewModel.adjustPomodoroDoneToday(
                         taskId = taskId,
@@ -2920,6 +2961,8 @@ private fun RightPallet(
     palletItems: List<ScheduleScreenItem>,
     pomodoroCards: List<PomodoroPalletCardItem>,
     todayFocusText: String,
+    todayDonePomodoroCount: Int,
+    todayScheduledPomodoroCount: Int,
     expanded: Boolean,
     isDraggingFromPallet: Boolean,
     onToggle: () -> Unit,
@@ -3021,12 +3064,23 @@ private fun RightPallet(
                             maxLines = 1
                         )
 
-                        Text(
-                            text = todayFocusText,
-                            style = MaterialTheme.typography.labelLarge,
-                            maxLines = 1,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                        Column(
+                            horizontalAlignment = Alignment.End
+                        ) {
+                            Text(
+                                text = todayFocusText,
+                                style = MaterialTheme.typography.labelLarge,
+                                maxLines = 1,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+
+                            Spacer(Modifier.height(3.dp))
+
+                            TodayPomodoroDoneRemainingBar(
+                                doneCount = todayDonePomodoroCount,
+                                scheduledCount = todayScheduledPomodoroCount
+                            )
+                        }
                     }
 
                     HorizontalDivider(
@@ -3065,6 +3119,69 @@ private fun RightPallet(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun TodayPomodoroDoneRemainingBar(
+    doneCount: Int,
+    scheduledCount: Int,
+    modifier: Modifier = Modifier
+) {
+    val safeDone = doneCount.coerceAtLeast(0)
+    val safeScheduled = scheduledCount.coerceAtLeast(0)
+
+    val progress = remember(safeDone, safeScheduled) {
+        when {
+            safeScheduled > 0 -> {
+                safeDone.toFloat()
+                    .div(safeScheduled.toFloat())
+                    .coerceIn(0f, 1f)
+            }
+
+            safeDone > 0 -> 1f
+
+            else -> 0f
+        }
+    }
+
+    Row(
+        modifier = modifier.width(76.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(7.dp)
+                .clip(RoundedCornerShape(999.dp))
+                .background(
+                    MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.85f)
+                )
+                .border(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f),
+                    shape = RoundedCornerShape(999.dp)
+                )
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .fillMaxWidth(progress)
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.92f)
+                    )
+                    .align(Alignment.CenterStart)
+            )
+        }
+
+        Text(
+            text = "$safeDone/$safeScheduled",
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 1,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 

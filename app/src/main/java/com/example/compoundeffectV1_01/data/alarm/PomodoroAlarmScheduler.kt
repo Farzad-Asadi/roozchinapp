@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.util.Log
+import com.example.compoundeffectV1_01.MainActivity
 import com.example.compoundeffectV1_01.domain.pomodoro.scheduler.PomodoroScheduler
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -40,13 +41,15 @@ class PomodoroAlarmScheduler @Inject constructor(
     private fun pomodoroIntent(
         scheduleId: Int,
         title: String,
-        type: String
+        type: String,
+        triggerAtMillis: Long
     ): Intent {
         return Intent(context, PomodoroAlarmReceiver::class.java).apply {
             action = "com.example.compoundeffect.POMODORO_ALARM"
             putExtra(PomodoroAlarmReceiver.EXTRA_SCHEDULE_ID, scheduleId)
             putExtra(PomodoroAlarmReceiver.EXTRA_TITLE, title)
             putExtra(PomodoroAlarmReceiver.EXTRA_TYPE, type)
+            putExtra(PomodoroAlarmReceiver.EXTRA_TRIGGER_AT_MILLIS, triggerAtMillis)
         }
     }
 
@@ -55,7 +58,8 @@ class PomodoroAlarmScheduler @Inject constructor(
         scheduleId: Int,
         title: String,
         type: String,
-        triggerAtMillis: Long
+        triggerAtMillis: Long,
+        useAlarmClock: Boolean = false
     ) {
         val alarmManager = context.getSystemService(AlarmManager::class.java)
 
@@ -87,7 +91,12 @@ class PomodoroAlarmScheduler @Inject constructor(
         val pendingIntent = PendingIntent.getBroadcast(
             context,
             requestCode,
-            pomodoroIntent(scheduleId, title, type),
+            pomodoroIntent(
+                scheduleId = scheduleId,
+                title = title,
+                type = type,
+                triggerAtMillis = safeTriggerAtMillis
+            ),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
@@ -98,11 +107,21 @@ class PomodoroAlarmScheduler @Inject constructor(
             "⏰ set pomodoro alarm type=$type scheduleId=$scheduleId at=$safeTriggerAtMillis"
         )
 
-        alarmManager.setExactAndAllowWhileIdle(
-            AlarmManager.RTC_WAKEUP,
-            safeTriggerAtMillis,
-            pendingIntent
-        )
+        if (useAlarmClock) {
+            alarmManager.setAlarmClock(
+                AlarmManager.AlarmClockInfo(
+                    safeTriggerAtMillis,
+                    alarmClockShowIntent(scheduleId)
+                ),
+                pendingIntent
+            )
+        } else {
+            alarmManager.setExactAndAllowWhileIdle(
+                AlarmManager.RTC_WAKEUP,
+                safeTriggerAtMillis,
+                pendingIntent
+            )
+        }
     }
 
     // برای سازگاری با کدهای قبلی که هنوز schedule(type, millis) صدا می‌زنند.
@@ -135,7 +154,12 @@ class PomodoroAlarmScheduler @Inject constructor(
             val pendingIntent = PendingIntent.getBroadcast(
                 context,
                 requestCode,
-                pomodoroIntent(scheduleId, "Pomodoro", type),
+                pomodoroIntent(
+                    scheduleId = scheduleId,
+                    title = "Pomodoro",
+                    type = type,
+                    triggerAtMillis = 0L
+                ),
                 PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
             )
 
@@ -203,5 +227,21 @@ class PomodoroAlarmScheduler @Inject constructor(
         }
 
         activeRequestCodes.remove(requestCode)
+    }
+
+    private fun alarmClockShowIntent(
+        scheduleId: Int
+    ): PendingIntent {
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra(PomodoroAlarmReceiver.EXTRA_SCHEDULE_ID, scheduleId)
+        }
+
+        return PendingIntent.getActivity(
+            context,
+            abs(scheduleId * 10_000 + 777),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
     }
 }

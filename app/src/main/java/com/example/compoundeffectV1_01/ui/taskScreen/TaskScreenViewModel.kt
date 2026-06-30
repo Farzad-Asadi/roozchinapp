@@ -809,7 +809,12 @@ class TaskScreenViewModel @Inject constructor(
 
     fun createDirectChildTaskForEditingTask(
         categoryColor: String,
-        childName: String
+        childName: String,
+        ruleType: String = TaskChildRuleType.ONCE_PER_PARENT_OCCURRENCE,
+        timesPerDay: Int = 1,
+        timesPerOccurrence: Int = 1,
+        g5TargetCount: Int = 5,
+        onCreated: (Int) -> Unit = {}
     ) {
         val parentTaskId = _editingTaskId.value ?: return
         val cleanName = childName.trim()
@@ -819,6 +824,13 @@ class TaskScreenViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             val parent = taskRepo.getTaskById(parentTaskId) ?: return@launch
             val categoryId = parent.categoryId ?: return@launch
+
+            val parentIsAlreadyChild =
+                parent.parentTaskId != null && parent.parentTaskId != ROOT
+
+            if (parentIsAlreadyChild) {
+                return@launch
+            }
 
             val all = taskRepo.getTasksByCategory(categoryId)
 
@@ -847,9 +859,99 @@ class TaskScreenViewModel @Inject constructor(
                 pomodoroDoneUnits = 0
             )
 
-            taskRepo.insertTaskAndReturnId(child)
+            val newChildTaskId = taskRepo.insertTaskAndReturnId(child)
 
-            taskChildRepo.ensureDefaultOccurrenceRulesForDirectChildren(parentTaskId)
+            val safeRuleType = ruleType.ifBlank {
+                TaskChildRuleType.ONCE_PER_PARENT_OCCURRENCE
+            }
+
+            val safeTimesPerDay = timesPerDay.coerceAtLeast(1)
+            val safeTimesPerOccurrence = timesPerOccurrence.coerceAtLeast(1)
+            val safeG5TargetCount = g5TargetCount.coerceAtLeast(1)
+
+            taskChildRepo.upsertRule(
+                TaskChildRuleEntity(
+                    parentTaskId = parentTaskId,
+                    childTaskId = newChildTaskId,
+                    ruleType = safeRuleType,
+                    resetScope = resetScopeForChildRuleType(safeRuleType),
+                    sortOrder = newSiblingIndex,
+                    targetCount = when (safeRuleType) {
+                        TaskChildRuleType.N_TIMES_PER_DAY -> safeTimesPerDay
+                        TaskChildRuleType.N_TIMES_PER_PARENT_OCCURRENCE -> safeTimesPerOccurrence
+                        TaskChildRuleType.G5_LEARNING -> safeG5TargetCount
+                        else -> 1
+                    },
+                    timesPerDay = safeTimesPerDay,
+                    timesPerOccurrence = safeTimesPerOccurrence,
+                    g5TargetCount = safeG5TargetCount,
+                    showInTimelineCard = true,
+                    showInBottomSheet = true
+                )
+            )
+
+            withContext(Dispatchers.Main) {
+                onCreated(newChildTaskId)
+            }
+        }
+    }
+
+
+    fun setDirectChildTaskCompleted(
+        childTaskId: Int,
+        completed: Boolean
+    ) {
+        val parentTaskId = _editingTaskId.value ?: return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val child = taskRepo.getTaskById(childTaskId) ?: return@launch
+
+            if (child.parentTaskId != parentTaskId) {
+                return@launch
+            }
+
+            taskRepo.updateTask(
+                child.copy(
+                    isCompleted = completed
+                )
+            )
+        }
+    }
+
+    fun deleteDirectChildTask(
+        childTaskId: Int
+    ) {
+        val parentTaskId = _editingTaskId.value ?: return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val child = taskRepo.getTaskById(childTaskId) ?: return@launch
+
+            if (child.parentTaskId != parentTaskId) {
+                return@launch
+            }
+
+            val categoryId = child.categoryId ?: return@launch
+
+            taskRepo.deleteTask(child)
+
+            val remainingSiblings = taskRepo
+                .getTasksByCategory(categoryId)
+                .filter { it.parentTaskId == parentTaskId }
+                .sortedWith(
+                    compareBy<TaskEntity> { it.siblingIndex }
+                        .thenBy { it.id ?: 0 }
+                )
+
+            remainingSiblings.forEachIndexed { index, task ->
+                val id = task.id ?: return@forEachIndexed
+
+                if (task.siblingIndex != index) {
+                    taskRepo.updateSiblingIndex(
+                        id = id,
+                        siblingIndex = index
+                    )
+                }
+            }
         }
     }
 
