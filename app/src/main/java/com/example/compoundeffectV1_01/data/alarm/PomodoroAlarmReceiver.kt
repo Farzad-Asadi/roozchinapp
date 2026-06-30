@@ -22,23 +22,23 @@ class PomodoroAlarmReceiver : BroadcastReceiver() {
 
         val (title, message) = when (type) {
             TYPE_START_SOON -> {
-                "شروع نزدیک است" to
-                        "پومودوروی «$pomodoroTitle» کمتر از یک دقیقه دیگر شروع می‌شود."
+                "پومودوروی «$pomodoroTitle" to
+                        "  کمتر از یک دقیقه دیگر شروع می‌شود."
             }
 
             TYPE_FOCUS_START -> {
-                "پومودورو شروع شد" to
-                        "زمان تمرکز «$pomodoroTitle» شروع شد."
+                "پومودوروی «$pomodoroTitle" to
+                        "زمان تمرکز شروع شد."
             }
 
             TYPE_FOCUS_END -> {
-                "تمرکز تمام شد" to
-                        "تمرکز «$pomodoroTitle» تمام شد. وقت استراحت است."
+                "پومودوروی «$pomodoroTitle" to
+                        "تمرکز تمام شد. وقت استراحت است."
             }
 
             TYPE_BREAK_END -> {
-                "پومودورو تمام شد" to
-                        "استراحت «$pomodoroTitle» تمام شد."
+                "پومودوروی «$pomodoroTitle" to
+                        "استراحت به زودی تمام می شود."
             }
 
             else -> {

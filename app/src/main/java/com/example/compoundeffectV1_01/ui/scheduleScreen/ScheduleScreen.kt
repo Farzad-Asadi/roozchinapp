@@ -655,13 +655,17 @@ fun ScheduleScreen(
             openExactAlarmSettings()
         }
 
-    LaunchedEffect(hasAskedSchedulePermissions) {
+    LaunchedEffect(
+        hasAskedSchedulePermissions,
+        hasNotificationPermission(),
+        hasExactAlarmPermission()
+    ) {
         val asked = hasAskedSchedulePermissions ?: return@LaunchedEffect
 
-        val needsSomething =
-            !hasNotificationPermission() || !hasExactAlarmPermission()
+        val needsNotification = !hasNotificationPermission()
+        val needsExactAlarm = !hasExactAlarmPermission()
 
-        if (!asked && needsSomething) {
+        if (needsNotification || needsExactAlarm) {
             showPermissionDialog = true
         }
     }

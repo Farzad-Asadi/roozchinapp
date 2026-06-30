@@ -386,6 +386,13 @@ fun TaskScreen(
                     viewModel.openChildTaskForEdit(childTaskId)
                 },
                 canManageChildTasks = !isEditingChildTask,
+                canAddChildTask = editingTaskId != null && !isEditingChildTask,
+                onAddChildTask = { childName ->
+                    viewModel.createDirectChildTaskForEditingTask(
+                        categoryColor = selectedCategory.color,
+                        childName = childName
+                    )
+                },
                 blockedGrandChildTasks = blockedGrandChildTasksForEditingTask,
                 canManageSchedules = !isEditingChildTask,
                 childRuleByChildTaskId = childRuleByChildTaskId,
@@ -393,6 +400,7 @@ fun TaskScreen(
                 isEditingChildTask = isEditingChildTask,
                 editingChildRule = editingChildRule,
                 onSaveEditingChildRule = viewModel::saveRuleForEditingChildTask,
+
                 modifier = Modifier.padding(padding)
 
             )
@@ -545,6 +553,8 @@ private fun AddEditeTaskScreen(
         timesPerOccurrence: Int,
         g5TargetCount: Int
     ) -> Unit,
+    canAddChildTask: Boolean,
+    onAddChildTask: (String) -> Unit,
     modifier: Modifier,
 
     ) {
@@ -560,6 +570,9 @@ private fun AddEditeTaskScreen(
     var editingRuleChildTaskId by rememberSaveable { mutableStateOf<Int?>(null) }
 
     var showEditingChildRuleDialog by rememberSaveable { mutableStateOf(false) }
+
+    var showAddChildTaskDialog by rememberSaveable { mutableStateOf(false) }
+    var newChildTaskName by rememberSaveable { mutableStateOf("") }
 
     Column(
         modifier = Modifier
@@ -979,6 +992,18 @@ private fun AddEditeTaskScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
+                    }
+                    IconButton(
+                        enabled = canAddChildTask,
+                        onClick = {
+                            newChildTaskName = ""
+                            showAddChildTaskDialog = true
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Add,
+                            contentDescription = "Add child task"
+                        )
                     }
 
                     if (childTasks.isNotEmpty()) {

@@ -59,6 +59,11 @@ class PomodoroAlarmScheduler @Inject constructor(
     ) {
         val alarmManager = context.getSystemService(AlarmManager::class.java)
 
+        Log.e(
+            "ALARM_DEBUG",
+            "canScheduleExact=${if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) alarmManager.canScheduleExactAlarms() else true}"
+        )
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             if (!alarmManager.canScheduleExactAlarms()) {
                 Log.e("ALARM_DEBUG", "❌ EXACT ALARM NOT GRANTED")

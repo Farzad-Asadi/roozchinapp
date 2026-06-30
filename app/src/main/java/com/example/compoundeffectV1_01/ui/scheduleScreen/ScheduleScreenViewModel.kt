@@ -284,6 +284,12 @@ class ScheduleScreenViewModel @Inject constructor(
         }
     }
 
+    private fun breakEndNotificationAt(
+        breakEndAt: LocalDateTime
+    ): LocalDateTime {
+        return breakEndAt.minusSeconds(15)
+    }
+
     fun openTaskChildSheet(item: ScheduleScreenItem) {
         val state = buildTaskChildSheetState(item) ?: return
 
@@ -526,16 +532,25 @@ class ScheduleScreenViewModel @Inject constructor(
             PomodoroRunPhase.WAITING_TO_START -> {
                 scheduleIfFuture(PomodoroAlarmReceiver.TYPE_FOCUS_START, state.realStartAt)
                 scheduleIfFuture(PomodoroAlarmReceiver.TYPE_FOCUS_END, state.focusEndAt)
-                scheduleIfFuture(PomodoroAlarmReceiver.TYPE_BREAK_END, state.breakEndAt)
+                scheduleIfFuture(
+                    PomodoroAlarmReceiver.TYPE_BREAK_END,
+                    breakEndNotificationAt(state.breakEndAt)
+                )
             }
 
             PomodoroRunPhase.FOCUS -> {
                 scheduleIfFuture(PomodoroAlarmReceiver.TYPE_FOCUS_END, state.focusEndAt)
-                scheduleIfFuture(PomodoroAlarmReceiver.TYPE_BREAK_END, state.breakEndAt)
+                scheduleIfFuture(
+                    PomodoroAlarmReceiver.TYPE_BREAK_END,
+                    breakEndNotificationAt(state.breakEndAt)
+                )
             }
 
             PomodoroRunPhase.BREAK -> {
-                scheduleIfFuture(PomodoroAlarmReceiver.TYPE_BREAK_END, state.breakEndAt)
+                scheduleIfFuture(
+                    PomodoroAlarmReceiver.TYPE_BREAK_END,
+                    breakEndNotificationAt(state.breakEndAt)
+                )
             }
 
             PomodoroRunPhase.FINISHED -> Unit
@@ -979,7 +994,10 @@ class ScheduleScreenViewModel @Inject constructor(
         scheduleIfFuture(PomodoroAlarmReceiver.TYPE_FOCUS_END, focusEndAt)
 
         if (shortBreak > 0) {
-            scheduleIfFuture(PomodoroAlarmReceiver.TYPE_BREAK_END, breakEndAt)
+            scheduleIfFuture(
+                PomodoroAlarmReceiver.TYPE_BREAK_END,
+                breakEndNotificationAt(breakEndAt)
+            )
         }
     }
 

@@ -807,6 +807,52 @@ class TaskScreenViewModel @Inject constructor(
         _taskEditBackStack.value = emptyList()
     }
 
+    fun createDirectChildTaskForEditingTask(
+        categoryColor: String,
+        childName: String
+    ) {
+        val parentTaskId = _editingTaskId.value ?: return
+        val cleanName = childName.trim()
+
+        if (cleanName.isBlank()) return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val parent = taskRepo.getTaskById(parentTaskId) ?: return@launch
+            val categoryId = parent.categoryId ?: return@launch
+
+            val all = taskRepo.getTasksByCategory(categoryId)
+
+            val siblings = all.filter {
+                it.parentTaskId == parentTaskId
+            }
+
+            val newSiblingIndex =
+                (siblings.maxOfOrNull { it.siblingIndex } ?: -1) + 1
+
+            val child = TaskEntity(
+                id = null,
+                name = cleanName,
+                color = categoryColor,
+                description = "",
+                durationOverlap = 0,
+                selected = false,
+                changed = false,
+                categoryId = categoryId,
+                isCompleted = false,
+                priority = parent.priority,
+                parentTaskId = parentTaskId,
+                siblingIndex = newSiblingIndex,
+                taskMode = TaskMode.NORMAL,
+                pomodoroTargetUnits = 50,
+                pomodoroDoneUnits = 0
+            )
+
+            taskRepo.insertTaskAndReturnId(child)
+
+            taskChildRepo.ensureDefaultOccurrenceRulesForDirectChildren(parentTaskId)
+        }
+    }
+
 
     //اسچدول ها
     fun setScheduleTitle(v: String) = _scheduleDraft.update { it.copy(title = v) }
