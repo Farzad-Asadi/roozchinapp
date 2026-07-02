@@ -384,6 +384,8 @@ class ScheduleScreenViewModel @Inject constructor(
 
             pomodoroAlarmScheduler.cancelPomodoroEvents(scheduleId)
 
+            clearRunningPomodoroIfMatches(scheduleId)
+
             taskScheduleRepo.deleteById(scheduleId)
             val reminders = reminderRepo.getByScheduleId(scheduleId)
             reminders.forEach { rUi ->
@@ -555,6 +557,123 @@ class ScheduleScreenViewModel @Inject constructor(
             }
 
             PomodoroRunPhase.FINISHED -> Unit
+        }
+    }
+
+    private fun clearRunningPomodoroIfMatches(scheduleId: Int) {
+        val current = _runningPomodoro.value ?: return
+        if (current.scheduleId != scheduleId) return
+
+        runningPomodoroJob?.cancel()
+        runningPomodoroJob = null
+        _runningPomodoro.value = null
+    }
+
+    private suspend fun reconcileRunningPomodoroAfterPomodoroScheduleChange() {
+        val current = _runningPomodoro.value ?: return
+        val scheduleId = current.scheduleId
+
+        val schedule = taskScheduleRepo.getById(scheduleId)
+
+        if (
+            schedule == null ||
+            schedule.mode != ScheduleMode.POMODORO ||
+            schedule.inPallet
+        ) {
+            pomodoroAlarmScheduler.cancelPomodoroEvents(scheduleId)
+            clearRunningPomodoroIfMatches(scheduleId)
+            return
+        }
+
+        val dateEpochDay = schedule.dateEpochDay
+        val startMin = schedule.startMinuteOfDay
+        val focus = schedule.focusMinutes ?: 25
+        val shortBreak = schedule.shortBreakMinutes ?: 0
+
+        if (dateEpochDay == null || startMin == null) {
+            pomodoroAlarmScheduler.cancelPomodoroEvents(scheduleId)
+            clearRunningPomodoroIfMatches(scheduleId)
+            return
+        }
+
+        val realStartAt = LocalDate.ofEpochDay(dateEpochDay)
+            .atStartOfDay()
+            .plusMinutes(startMin.toLong())
+
+        val focusEndAt = realStartAt.plusMinutes(focus.toLong())
+        val breakEndAt = focusEndAt.plusMinutes(shortBreak.toLong())
+
+        val now = LocalDateTime.now()
+
+        val isNowOnMovedCard =
+            !now.isBefore(realStartAt) && now.isBefore(breakEndAt)
+
+        if (!isNowOnMovedCard) {
+            clearRunningPomodoroIfMatches(scheduleId)
+
+            // اول آلارم‌های قبلی تایمر فعال را پاک می‌کنیم.
+            pomodoroAlarmScheduler.cancelPomodoroEvents(scheduleId)
+
+            // بعد اگر این پومودورو هنوز روی timeline است، آلارم‌های schedule آینده‌اش را
+            // طبق زمان جدید دوباره می‌سازیم.
+            schedulePomodoroTimelineAlarms(schedule)
+
+            return
+        }
+
+        val phase = when {
+            now.isBefore(focusEndAt) -> PomodoroRunPhase.FOCUS
+            now.isBefore(breakEndAt) -> PomodoroRunPhase.BREAK
+            else -> PomodoroRunPhase.FINISHED
+        }
+
+        if (phase == PomodoroRunPhase.FINISHED) {
+            pomodoroAlarmScheduler.cancelPomodoroEvents(scheduleId)
+            clearRunningPomodoroIfMatches(scheduleId)
+            return
+        }
+
+        val focusTotalSeconds = Duration
+            .between(realStartAt, focusEndAt)
+            .seconds
+            .coerceAtLeast(0)
+
+        val breakTotalSeconds = Duration
+            .between(focusEndAt, breakEndAt)
+            .seconds
+            .coerceAtLeast(0)
+
+        val focusElapsed = Duration
+            .between(realStartAt, now)
+            .seconds
+            .coerceIn(0, focusTotalSeconds)
+
+        val breakElapsed = Duration
+            .between(focusEndAt, now)
+            .seconds
+            .coerceIn(0, breakTotalSeconds)
+
+        val updatedState = current.copy(
+            realStartAt = realStartAt,
+            focusEndAt = focusEndAt,
+            breakEndAt = breakEndAt,
+            phase = phase,
+            waitingSeconds = 0,
+            focusElapsedSeconds = focusElapsed,
+            breakElapsedSeconds = breakElapsed,
+            isPaused = current.isPaused,
+            pauseAt = current.pauseAt
+        )
+
+        _runningPomodoro.value = updatedState
+
+        if (updatedState.isPaused) {
+            runningPomodoroJob?.cancel()
+            runningPomodoroJob = null
+            pomodoroAlarmScheduler.cancelPomodoroEvents(scheduleId)
+        } else {
+            scheduleRunningPomodoroAlarms(updatedState)
+            startRunningPomodoroTicker(updatedState)
         }
     }
 
@@ -1214,6 +1333,14 @@ class ScheduleScreenViewModel @Inject constructor(
                 startMin = newStartMin,
                 endMin = newEndMin
             )
+
+            pomodoroAlarmScheduler.cancelPomodoroEvents(scheduleId)
+
+            val updated = taskScheduleRepo.getById(scheduleId)
+            if (updated != null) {
+                schedulePomodoroTimelineAlarms(updated)
+            }
+
             return
         }
 
@@ -1352,6 +1479,8 @@ class ScheduleScreenViewModel @Inject constructor(
 
             pomodoroAlarmScheduler.cancelPomodoroEvents(scheduleId)
 
+            clearRunningPomodoroIfMatches(scheduleId)
+
             val reminders = reminderRepo.getByScheduleId(scheduleId)
             reminders.forEach { rUi ->
                 try {
@@ -1446,6 +1575,8 @@ class ScheduleScreenViewModel @Inject constructor(
                 newStartMin = newStart,
                 newEndMin = newEnd
             )
+
+            reconcileRunningPomodoroAfterPomodoroScheduleChange()
         }
     }
 

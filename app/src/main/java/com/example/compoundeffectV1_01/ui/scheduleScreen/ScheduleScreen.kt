@@ -3606,17 +3606,37 @@ private fun CurrentTimeOverlay(
     palletOverlayWidth: Dp,
     sidebarWidth: Dp = 56.dp,
 ) {
-    val now = remember { mutableStateOf(LocalDateTime.now()) }
+    fun currentMinuteNow(): LocalDateTime {
+        return LocalDateTime.now()
+            .withSecond(0)
+            .withNano(0)
+    }
+
+    val now = remember {
+        mutableStateOf(currentMinuteNow())
+    }
 
     LaunchedEffect(Unit) {
         while (true) {
-            delay(60_000)
-            now.value = LocalDateTime.now()
+            val rawNow = LocalDateTime.now()
+
+            // ✅ زمان باقی‌مانده تا ابتدای دقیقه‌ی بعد
+            // اگر صفحه مثلاً 10:12:43 باز شود، اولین آپدیت در 10:13:00 انجام می‌شود،
+            // نه در 10:13:43.
+            val millisUntilNextMinute =
+                ((60 - rawNow.second) * 1_000L - rawNow.nano / 1_000_000L)
+                    .coerceAtLeast(250L)
+
+            delay(millisUntilNextMinute)
+
+            now.value = currentMinuteNow()
         }
     }
 
     val today = now.value.toLocalDate()
     val dayIndex = ChronoUnit.DAYS.between(startDate, today).toInt()
+
+    // اگر امروز داخل بازه‌ی ۵ روزه‌ی تایم‌لاین نیست، خط را نشان نده.
     if (dayIndex !in 0 until numDays) return
 
     val minutesNow =
@@ -3659,7 +3679,7 @@ private fun CurrentTimeOverlay(
             }
     ) {
         Text(
-            text = "%02d : %02d".format(minutesNow / 60, minutesNow % 60),
+            text = "%02d:%02d".format(minutesNow / 60, minutesNow % 60),
             color = red,
             style = MaterialTheme.typography.labelMedium,
             modifier = Modifier

@@ -385,6 +385,7 @@ fun TaskScreen(
                 onPomodoroTargetUnitsChange = viewModel::setTaskPomodoroTargetUnits,
                 onPomodoroDoneUnitsChange = viewModel::setTaskPomodoroDoneUnits,
                 childTasks = directChildTasksForEditingTask,
+                taskNameSuggestionCandidates = state.taskEntities,
                 onClickChildTask = { childTaskId ->
                     viewModel.openChildTaskForEdit(childTaskId)
                 },
@@ -540,6 +541,7 @@ private fun AddEditeTaskScreen(
     onPomodoroTargetUnitsChange: (Int?) -> Unit,
     onPomodoroDoneUnitsChange: (Int) -> Unit,
     childTasks: List<TaskEntity>,
+    taskNameSuggestionCandidates: List<TaskEntity>,
     onClickChildTask: (Int) -> Unit,
     canManageChildTasks: Boolean,
     onToggleChildTaskCompleted: (Int, Boolean) -> Unit,
@@ -607,6 +609,19 @@ private fun AddEditeTaskScreen(
 
     var newChildG5TargetCount by rememberSaveable {
         mutableIntStateOf(5)
+    }
+
+    val newChildTaskNameSuggestions = remember(
+        newChildTaskName,
+        taskNameSuggestionCandidates,
+        childTasks
+    ) {
+        buildChildTaskNameSuggestions(
+            query = newChildTaskName,
+            candidates = taskNameSuggestionCandidates,
+            currentParentChildren = childTasks,
+            limit = 6
+        )
     }
 
     var pendingDeleteChildTaskId by rememberSaveable { mutableStateOf<Int?>(null) }
@@ -1337,15 +1352,6 @@ private fun AddEditeTaskScreen(
                         }
                     )
 
-                    AddEditeDialogTextField(
-                        value = newChildTaskName,
-                        onValueChange = { value ->
-                            newChildTaskName = value
-                        },
-                        hint = "Child task name",
-                        showDivider = true
-                    )
-
                     AddEditeDialogRow(
                         onClick = {
                             showNewChildRuleDialog = true
@@ -1381,8 +1387,57 @@ private fun AddEditeTaskScreen(
                                 modifier = Modifier.size(16.dp)
                             )
                         },
-                        showDivider = false
+                        showDivider = true
                     )
+
+                    AddEditeDialogTextField(
+                        value = newChildTaskName,
+                        onValueChange = { value ->
+                            newChildTaskName = value
+                        },
+                        hint = "Child task name",
+                        showDivider = newChildTaskNameSuggestions.isEmpty()
+                    )
+
+                    if (newChildTaskNameSuggestions.isNotEmpty()) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 18.dp, end = 18.dp, bottom = 10.dp)
+                        ) {
+                            newChildTaskNameSuggestions.forEach { suggestion ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .clickable {
+                                            newChildTaskName = suggestion
+                                        }
+                                        .padding(horizontal = 12.dp, vertical = 9.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.History,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+
+                                    Spacer(Modifier.width(10.dp))
+
+                                    Text(
+                                        text = suggestion,
+                                        modifier = Modifier.weight(1f),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+                            }
+
+                            HorizontalDivider(thickness = 0.5.dp)
+                        }
+                    }
                 }
             }
         }
@@ -1545,6 +1600,73 @@ private fun ChildTaskRow(
             containerColor = MaterialTheme.colorScheme.surface
         )
     )
+}
+
+private fun normalizeTaskNameSuggestionText(
+    value: String
+): String {
+    return value
+        .trim()
+        .replace('ي', 'ی')
+        .replace('ك', 'ک')
+        .replace(Regex("\\s+"), " ")
+        .lowercase()
+}
+
+private fun buildChildTaskNameSuggestions(
+    query: String,
+    candidates: List<TaskEntity>,
+    currentParentChildren: List<TaskEntity>,
+    limit: Int = 6
+): List<String> {
+    val normalizedQuery = normalizeTaskNameSuggestionText(query)
+
+    if (normalizedQuery.isBlank()) {
+        return emptyList()
+    }
+
+    val currentChildNames = currentParentChildren
+        .map { normalizeTaskNameSuggestionText(it.name) }
+        .toSet()
+
+    return candidates
+        .asSequence()
+        // فقط تسک‌هایی که قبلاً child بوده‌اند
+        .filter { task ->
+            val parentId = task.parentTaskId
+            parentId != null && parentId != ROOT
+        }
+        .map { task ->
+            task.name.trim()
+        }
+        .filter { name ->
+            name.isNotBlank()
+        }
+        .map { name ->
+            normalizeTaskNameSuggestionText(name) to name
+        }
+        // چیزی که همین parent همین الان دارد، پیشنهاد نشود
+        .filter { (normalizedName, _) ->
+            normalizedName !in currentChildNames
+        }
+        .filter { (normalizedName, _) ->
+            normalizedName.contains(normalizedQuery)
+        }
+        .distinctBy { (normalizedName, _) ->
+            normalizedName
+        }
+        .sortedWith(
+            compareBy<Pair<String, String>> { (normalizedName, _) ->
+                !normalizedName.startsWith(normalizedQuery)
+            }
+                .thenBy { (_, name) -> name.length }
+                .thenBy { (_, name) -> name }
+        )
+        .take(limit)
+        .map { (_, name) ->
+            name
+        }
+        .toList()
 }
 
 
