@@ -141,6 +141,7 @@ import java.time.temporal.ChronoUnit
 import kotlin.math.round
 import kotlin.math.roundToInt
 import android.content.Context
+import android.content.ContextWrapper
 import android.net.Uri
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.WindowInsets
@@ -149,11 +150,15 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.LifecycleOwner
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskChildRequirementContextType
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskChildRequirementStatus
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskChildRequirementSummaryUi
@@ -3698,20 +3703,51 @@ private fun CurrentTimeOverlay(
         mutableStateOf(currentMinuteNow())
     }
 
+    val lifecycleOwner = LocalContext.current.findLifecycleOwner()
+
+    DisposableEffect(lifecycleOwner) {
+        if (lifecycleOwner == null) {
+            onDispose { }
+        } else {
+            val observer = LifecycleEventObserver { _, event ->
+                when (event) {
+                    Lifecycle.Event.ON_START,
+                    Lifecycle.Event.ON_RESUME -> {
+                        // ✅ وقتی کاربر از background / صفحه خاموش برمی‌گردد،
+                        // خط زمان همان لحظه با ساعت واقعی sync می‌شود.
+                        now.value = currentMinuteNow()
+                    }
+
+                    else -> Unit
+                }
+            }
+
+            lifecycleOwner.lifecycle.addObserver(observer)
+
+            // ✅ همان لحظه‌ی نصب observer هم یک sync فوری انجام بده.
+            now.value = currentMinuteNow()
+
+            onDispose {
+                lifecycleOwner.lifecycle.removeObserver(observer)
+            }
+        }
+    }
+
     LaunchedEffect(Unit) {
         while (true) {
+            // ✅ ابتدای هر چرخه اول زمان را اصلاح کن، بعد منتظر دقیقه‌ی بعد بمان.
+            // این باعث می‌شود اگر coroutine بعد از pause/resume ادامه پیدا کرد،
+            // با اولین فرصت مقدار stale روی صفحه نماند.
+            now.value = currentMinuteNow()
+
             val rawNow = LocalDateTime.now()
 
-            // ✅ زمان باقی‌مانده تا ابتدای دقیقه‌ی بعد
-            // اگر صفحه مثلاً 10:12:43 باز شود، اولین آپدیت در 10:13:00 انجام می‌شود،
-            // نه در 10:13:43.
+            // زمان باقی‌مانده تا ابتدای دقیقه‌ی بعد
             val millisUntilNextMinute =
                 ((60 - rawNow.second) * 1_000L - rawNow.nano / 1_000_000L)
                     .coerceAtLeast(250L)
 
             delay(millisUntilNextMinute)
-
-            now.value = currentMinuteNow()
         }
     }
 
@@ -4689,3 +4725,10 @@ private fun formatSeconds(totalSeconds: Long): String {
     return "%02d:%02d".format(m, s)
 }
 
+private tailrec fun Context.findLifecycleOwner(): LifecycleOwner? {
+    return when (this) {
+        is LifecycleOwner -> this
+        is ContextWrapper -> baseContext.findLifecycleOwner()
+        else -> null
+    }
+}
