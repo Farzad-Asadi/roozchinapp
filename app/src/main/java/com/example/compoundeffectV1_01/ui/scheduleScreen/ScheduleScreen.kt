@@ -145,6 +145,7 @@ import android.net.Uri
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -471,6 +472,8 @@ fun ScheduleScreen(
 
     var didAutoScroll by remember { mutableStateOf(false) }
 
+    val timelineInitialReady = hasAppliedSavedVerticalZoom && didAutoScroll
+
     var pendingScrollTo by remember { mutableStateOf<Int?>(null) }
 
     var pendingScrollByPx by remember { mutableFloatStateOf(0f) }
@@ -781,8 +784,14 @@ fun ScheduleScreen(
         if (didAutoScroll) return@LaunchedEffect
 
         if (!hasAppliedSavedVerticalZoom) return@LaunchedEffect
-        if (vScroll.maxValue <= 0) return@LaunchedEffect
         if (gridViewportHeightPx <= 0f) return@LaunchedEffect
+
+        // اگر به هر دلیل محتوا قابل اسکرول نبود، صفحه را قفل نکن.
+        // در این حالت چیزی برای auto-scroll عمودی وجود ندارد.
+        if (vScroll.maxValue <= 0) {
+            didAutoScroll = true
+            return@LaunchedEffect
+        }
 
         // مهم:
         // اولین بار که maxValue و viewportHeight آماده می‌شوند، هنوز layout نهایی کاملاً settle نشده.
@@ -791,8 +800,12 @@ fun ScheduleScreen(
             withFrameNanos { }
         }
 
-        if (vScroll.maxValue <= 0) return@LaunchedEffect
         if (gridViewportHeightPx <= 0f) return@LaunchedEffect
+
+        if (vScroll.maxValue <= 0) {
+            didAutoScroll = true
+            return@LaunchedEffect
+        }
 
         fun calculateTargetY(): Int {
             val now = LocalDateTime.now()
@@ -1375,8 +1388,33 @@ fun ScheduleScreen(
                 }
             }
 
+            if (!timelineInitialReady) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.surface)
+                        .zIndex(900f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        CircularProgressIndicator(
+                            strokeWidth = 3.dp,
+                            modifier = Modifier.size(34.dp)
+                        )
 
+                        Spacer(Modifier.height(14.dp))
 
+                        Text(
+                            text = "Loading timeline...",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
 
             // ✅ Drag overlay: same visual as pallet card
             if (draggingFromPallet != null || draggingPomodoro != null) {
