@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -78,6 +79,21 @@ class ScheduleScreenViewModel @Inject constructor(
 
     private val _runningPomodoro = MutableStateFlow<RunningPomodoroUiState?>(null)
     val runningPomodoro = _runningPomodoro.asStateFlow()
+
+
+    //runningPomodoroScheduleId فقط ID کارت پومودوروی فعال را منتشر می‌کند.
+    //چون distinctUntilChanged دارد، با هر tick ثانیه‌ای تایمر دوباره emit نمی‌شود؛ فقط وقتی تایمر شروع، عوض، یا تمام شود تغییر می‌کند.
+    val runningPomodoroScheduleId: StateFlow<Int?> =
+        runningPomodoro
+            .map { state ->
+                state?.scheduleId
+            }
+            .distinctUntilChanged()
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5_000),
+                null
+            )
 
     private var lastEnsuredTaskChildOccurrenceKeys: Set<String> = emptySet()
 

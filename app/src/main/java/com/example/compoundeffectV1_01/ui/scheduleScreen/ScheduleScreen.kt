@@ -3,11 +3,10 @@ package com.example.compoundeffectV1_01.ui.scheduleScreen
 import android.Manifest
 import android.app.Activity
 import android.app.AlarmManager
-import android.content.Intent
+import android.content.Context
+import android.content.ContextWrapper
 import android.content.pm.PackageManager
 import android.os.Build
-import android.provider.Settings
-import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -17,6 +16,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -43,7 +44,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -51,7 +51,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBackIos
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -68,18 +67,23 @@ import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -98,9 +102,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -113,6 +120,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDirection
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
@@ -120,11 +129,18 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.LifecycleOwner
 import androidx.navigation.NavHostController
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskChildRequirementContextType
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskChildRequirementStatus
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskChildRequirementSummaryUi
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskChildRequirementUi
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.RepeatUnit
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.ScheduleMode
-import com.example.compoundeffectV1_01.data.dataStore.AppPreferences
 import com.example.compoundeffectV1_01.ui.navigation.AppRoutes
+import com.example.compoundeffectV1_01.utils.colorFromHex
 import com.example.compoundeffectV1_01.utils.convertToPersianDatePretty
 import com.example.compoundeffectV1_01.utils.iconFromKey
 import com.example.compoundeffectV1_01.utils.requestExactAlarmPermission
@@ -136,43 +152,16 @@ import kotlinx.coroutines.withContext
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
-import java.time.LocalTime
-import java.time.temporal.ChronoUnit
-import kotlin.math.round
-import kotlin.math.roundToInt
-import android.content.Context
-import android.content.ContextWrapper
-import android.net.Uri
-import androidx.compose.foundation.ScrollState
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.text.style.TextDirection
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.LifecycleOwner
-import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskChildRequirementContextType
-import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskChildRequirementStatus
-import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskChildRequirementSummaryUi
-import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskChildRequirementUi
-import androidx.compose.material.icons.filled.Settings as SettingsIcon
-import com.example.compoundeffectV1_01.data.notification.PomodoroNotifications
-import com.example.compoundeffectV1_01.utils.colorFromHex
 import java.time.ZoneId
+import java.time.temporal.ChronoUnit
 import kotlin.math.PI
 import kotlin.math.acos
 import kotlin.math.asin
 import kotlin.math.atan
 import kotlin.math.cos
 import kotlin.math.floor
+import kotlin.math.round
+import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.tan
 
@@ -184,7 +173,7 @@ fun ScheduleScreen(
 ) {
     val allItems by viewModel.allItems.collectAsState()
 
-    val runningPomodoro by viewModel.runningPomodoro.collectAsState()
+    val runningPomodoroScheduleId by viewModel.runningPomodoroScheduleId.collectAsState()
 
     val savedScheduleVerticalZoom by viewModel.scheduleVerticalZoom.collectAsState()
 
@@ -321,6 +310,12 @@ fun ScheduleScreen(
             .filter { it.start.toLocalDate() == today }
     }
 
+    val todayPomodorosByTaskId = remember(todayTimelinePomodoros) {
+        todayTimelinePomodoros.groupBy { item ->
+            item.taskId
+        }
+    }
+
 
 
     val todayEpochDay = remember(today) {
@@ -340,19 +335,25 @@ fun ScheduleScreen(
     // ✅ کارت‌های تجمیعی پالت
     val pomodoroPalletCards = remember(
         pomodoroPARENTRulesToday,
-        todayTimelinePomodoros,
-        manualDoneTodayDeltaByTaskId.toMap()
+        todayPomodorosByTaskId,
+        manualDoneTodayDeltaByTaskId
     ) {
         pomodoroPARENTRulesToday
-            .groupBy { it.taskId }
+            .groupBy { rule ->
+                rule.taskId
+            }
             .mapNotNull { (taskId, rules) ->
-                val any = rules.first()
+                val any = rules.firstOrNull() ?: return@mapNotNull null
+                val taskPomodoros = todayPomodorosByTaskId[taskId].orEmpty()
 
-                val expected = rules.sumOf { (it.pomodoroUnitsPerDay ?: 1).coerceAtLeast(1) }
-                val scheduled = todayTimelinePomodoros.count { it.taskId == taskId }
+                val expected = rules.sumOf { rule ->
+                    (rule.pomodoroUnitsPerDay ?: 1).coerceAtLeast(1)
+                }
 
-                val realDoneToday = todayTimelinePomodoros.count {
-                    it.taskId == taskId && it.pomodoroFocusDoneApplied
+                val scheduled = taskPomodoros.size
+
+                val realDoneToday = taskPomodoros.count { item ->
+                    item.pomodoroFocusDoneApplied
                 }
 
                 val manualDeltaToday = manualDoneTodayDeltaByTaskId[taskId] ?: 0
@@ -366,7 +367,7 @@ fun ScheduleScreen(
 
                 PomodoroPalletCardItem(
                     taskId = taskId,
-                    scheduleId =any.scheduleId ,
+                    scheduleId = any.scheduleId,
                     taskName = any.title,
 
                     totalTarget = any.pomodoroTargetUnits ?: 0,
@@ -386,7 +387,9 @@ fun ScheduleScreen(
                     remainingToday = addableToday
                 )
             }
-            .sortedBy { it.taskName }
+            .sortedBy { card ->
+                card.taskName
+            }
     }
 
     val todayDoneFocusMinutes = remember(pomodoroPalletCards) {
@@ -515,6 +518,8 @@ fun ScheduleScreen(
     val palletReservedWidth = if (palletExpanded) palletContentWidth else 0.dp
 
     val pendingMove = remember { mutableStateMapOf<Int, PendingMove>() } // key = scheduleId
+
+    var pendingMoveVersion by remember { mutableIntStateOf(0) }
 
     var selectedScheduleId by rememberSaveable { mutableStateOf<Int?>(null) }
 
@@ -651,14 +656,18 @@ fun ScheduleScreen(
     var pomodoroAdjust by remember { mutableStateOf<PomodoroAdjustState?>(null) }
 
     // 1) اول آیتم‌های نمایشی (با pendingMove) را بساز
-    val displayTimelineItems = remember(timelineItems, pendingMove) {
-        timelineItems.map { it ->
-            val pm = pendingMove[it.scheduleId]
-            if (pm == null) it
-            else it.copy(
-                start = pm.date.atStartOfDay().plusMinutes(pm.startMin.toLong()),
-                end = pm.date.atStartOfDay().plusMinutes(pm.endMin.toLong())
-            )
+    val displayTimelineItems = remember(timelineItems, pendingMoveVersion) {
+        timelineItems.map { item ->
+            val pending = pendingMove[item.scheduleId]
+
+            if (pending == null) {
+                item
+            } else {
+                item.copy(
+                    start = pending.date.atStartOfDay().plusMinutes(pending.startMin.toLong()),
+                    end = pending.date.atStartOfDay().plusMinutes(pending.endMin.toLong())
+                )
+            }
         }
     }
 
@@ -670,10 +679,40 @@ fun ScheduleScreen(
         computePreviousPomodoroEndMinById(displayTimelineItems)
     }
 
+    val childRequirementRenderInfoByScheduleId = remember(
+        displayTimelineItems,
+        taskChildRequirementsByParentTaskId
+    ) {
+        displayTimelineItems.associate { item ->
+            val requirements = taskChildRequirementsByParentTaskId[item.taskId]
+                .orEmpty()
+                .filter { requirement ->
+                    requirementMatchesTimelineItem(
+                        requirement = requirement,
+                        item = item
+                    )
+                }
+
+            val summary = buildTaskChildRequirementSummaryForTimelineItem(
+                item = item,
+                requirements = requirements
+            )
+
+            item.scheduleId to TimelineChildRequirementRenderInfo(
+                requirements = requirements,
+                summary = summary
+            )
+        }
+    }
+
+
+
 // 2) بعد layout های همپوشانی را حساب کن (فقط داخل روز)
     val overlapLayouts = remember(displayTimelineItems, startDate, numDays) {
         computeOverlapLayouts(displayTimelineItems, startDate, numDays)
     }
+
+
     val context = LocalContext.current
 
 
@@ -755,16 +794,27 @@ fun ScheduleScreen(
     }
 
     LaunchedEffect(timelineItems) {
-        timelineItems.forEach { ti ->
-            val pm = pendingMove[ti.scheduleId] ?: return@forEach
+        var changed = false
 
-            val curDate = ti.start.toLocalDate()
-            val curStart = ti.start.toLocalTime().hour * 60 + ti.start.toLocalTime().minute
-            val curEnd = ti.end.toLocalTime().hour * 60 + ti.end.toLocalTime().minute
+        timelineItems.forEach { item ->
+            val pending = pendingMove[item.scheduleId] ?: return@forEach
 
-            if (curDate == pm.date && curStart == pm.startMin && curEnd == pm.endMin) {
-                pendingMove.remove(ti.scheduleId)
+            val currentDate = item.start.toLocalDate()
+            val currentStart = item.start.toLocalTime().hour * 60 + item.start.toLocalTime().minute
+            val currentEnd = item.end.toLocalTime().hour * 60 + item.end.toLocalTime().minute
+
+            if (
+                currentDate == pending.date &&
+                currentStart == pending.startMin &&
+                currentEnd == pending.endMin
+            ) {
+                pendingMove.remove(item.scheduleId)
+                changed = true
             }
+        }
+
+        if (changed) {
+            pendingMoveVersion++
         }
     }
 
@@ -1102,6 +1152,15 @@ fun ScheduleScreen(
                             val totalWidth = dayWidthDp * numDays
                             val colorFor = MaterialTheme.colorScheme.outlineVariant
 
+                            val sunWindows = remember(startDate, numDays) {
+                                List(numDays) { dayIndex ->
+                                    calculateTimelineSunWindow(
+                                        date = startDate.plusDays(dayIndex.toLong()),
+                                        location = SAQQEZ_TIMELINE_LIGHT_LOCATION
+                                    )
+                                }
+                            }
+
                             // پس‌زمینه Grid + شب/روز + خطوط
                             Box(
                                 modifier = Modifier
@@ -1110,8 +1169,7 @@ fun ScheduleScreen(
                                     .drawBehind {
                                         // ✅ اول بک‌گراند شب/روز سقز را بکش؛ خطوط و کارت‌ها روی آن می‌آیند.
                                         drawSaqqezDayNightTimelineBackground(
-                                            startDate = startDate,
-                                            numDays = numDays,
+                                            sunWindows = sunWindows,
                                             dayWidthDp = dayWidthDp,
                                             hourHeightDp = hourHeightDp
                                         )
@@ -1184,29 +1242,16 @@ fun ScheduleScreen(
 
                                     val layout = overlapLayouts[displayItem.scheduleId]
 
-                                    val pm = pendingMove[displayItem.scheduleId]
-                                    val item = if (pm == null) displayItem else displayItem.copy(
-                                        start = LocalDateTime.of(pm.date, LocalTime.MIN)
-                                            .plusMinutes(pm.startMin.toLong()),
-                                        end = LocalDateTime.of(pm.date, LocalTime.MIN)
-                                            .plusMinutes(pm.endMin.toLong())
-                                    )
+                                    val item = displayItem
+
+                                    val childRequirementRenderInfo =
+                                        childRequirementRenderInfoByScheduleId[item.scheduleId]
 
                                     val childPreviewRequirements =
-                                        taskChildRequirementsByParentTaskId[item.taskId]
-                                            .orEmpty()
-                                            .filter { requirement ->
-                                                requirementMatchesTimelineItem(
-                                                    requirement = requirement,
-                                                    item = item
-                                                )
-                                            }
+                                        childRequirementRenderInfo?.requirements.orEmpty()
 
                                     val childSummary =
-                                        buildTaskChildRequirementSummaryForTimelineItem(
-                                            item = item,
-                                            requirements = childPreviewRequirements
-                                        )
+                                        childRequirementRenderInfo?.summary
 
                                     TimelineItemBox(
                                         item = item,
@@ -1219,7 +1264,7 @@ fun ScheduleScreen(
                                         selected = (selectedScheduleId == displayItem.scheduleId),
                                         pomodoroChainedWithPrevious = pomodoroChainFlagsById[displayItem.scheduleId]?.hasPrevious == true,
                                         pomodoroChainedWithNext = pomodoroChainFlagsById[displayItem.scheduleId]?.hasNext == true,
-                                        isPomodoroTimerActive = runningPomodoro?.scheduleId == displayItem.scheduleId,
+                                        isPomodoroTimerActive = runningPomodoroScheduleId == displayItem.scheduleId,
                                         previousPomodoroEndMin = previousPomodoroEndMinById[displayItem.scheduleId],
                                         onToggleSelected = {
                                             val newSelection =
@@ -1253,6 +1298,7 @@ fun ScheduleScreen(
 
                                             // واقعی → همان رفتار فعلی
                                             pendingMove[scheduleId] = PendingMove(date, s, e)
+                                            pendingMoveVersion++
 
                                             if (item.mode == ScheduleMode.POMODORO) {
                                                 viewModel.movePomodoroSchedule(scheduleId, date, s, e)
@@ -1384,9 +1430,9 @@ fun ScheduleScreen(
                     CurrentTimeOverlay(
                         startDate = startDate,
                         numDays = numDays,
-                        dayWidthDp=dayWidthDp,
+                        dayWidthDp = dayWidthDp,
                         hourHeightDp = hourHeightDp,
-                        vScrollValue = vScroll.value,
+                        vScroll = vScroll,
                         palletOverlayWidth = palletReservedWidth,
                         sidebarWidth = 56.dp
                     )
@@ -1498,15 +1544,9 @@ fun ScheduleScreen(
 
 
             //تایمر پومودورو
-            runningPomodoro?.let { running ->
-                RunningPomodoroPanel(
-                    state = running,
-                    onPause = { viewModel.pauseRunningPomodoro() },
-                    onResume = { viewModel.resumeRunningPomodoro() },
-                    onSkip = { viewModel.skipRunningPomodoro() },
-                    onRestart = { viewModel.restartRunningPomodoro() }
-                )
-            }
+            RunningPomodoroPanelHost(
+                viewModel = viewModel
+            )
 
             RightPallet(
                 palletItems = palletItems,
@@ -1656,9 +1696,11 @@ fun ScheduleScreen(
                 onPomodoroDoneTodayDec = { taskId ->
                     val currentManualDelta = manualDoneTodayDeltaByTaskId[taskId] ?: 0
 
-                    val realDoneToday = todayTimelinePomodoros.count {
-                        it.taskId == taskId && it.pomodoroFocusDoneApplied
-                    }
+                    val realDoneToday = todayPomodorosByTaskId[taskId]
+                        .orEmpty()
+                        .count { item ->
+                            item.pomodoroFocusDoneApplied
+                        }
 
                     val visibleDoneToday = realDoneToday + currentManualDelta
 
@@ -2965,6 +3007,28 @@ private fun TimelineItemBox(
     }
 }
 
+
+//RunningPomodoroPanelHost فقط مسئول نمایش پنل تایمر فعال است.
+//چون collect کردن runningPomodoro داخل این composable انجام می‌شود، tick ثانیه‌ای تایمر فقط همین بخش کوچک را recompose می‌کند، نه کل ScheduleScreen.
+@Composable
+private fun RunningPomodoroPanelHost(
+    viewModel: ScheduleScreenViewModel
+) {
+    val runningPomodoro by viewModel.runningPomodoro.collectAsState()
+
+    runningPomodoro?.let { running ->
+        RunningPomodoroPanel(
+            state = running,
+            onPause = { viewModel.pauseRunningPomodoro() },
+            onResume = { viewModel.resumeRunningPomodoro() },
+            onSkip = { viewModel.skipRunningPomodoro() },
+            onRestart = { viewModel.restartRunningPomodoro() }
+        )
+    }
+}
+
+
+
 private data class PomodoroChainFlags(
     val hasPrevious: Boolean = false,
     val hasNext: Boolean = false
@@ -3683,13 +3747,16 @@ private fun PomodoroCountStepperOverlay(
     }
 }
 
+
+//CurrentTimeOverlay به جای گرفتن عدد scroll، خود ScrollState را می‌گیرد.
+//با این کار خواندن vScroll.value داخل همین composable انجام می‌شود و اسکرول عمودی کمتر باعث recomposition سطح بالای ScheduleScreen می‌شود.
 @Composable
 private fun CurrentTimeOverlay(
     startDate: LocalDate,
     numDays: Int,
     dayWidthDp: Dp,
     hourHeightDp: Dp,
-    vScrollValue: Int,
+    vScroll: ScrollState,
     palletOverlayWidth: Dp,
     sidebarWidth: Dp = 56.dp,
 ) {
@@ -3771,6 +3838,8 @@ private fun CurrentTimeOverlay(
     val overlayHeight = 24.dp
     val halfOverlayHeightPx = with(density) { overlayHeight.toPx() / 2f }
 
+    val vScrollValue = vScroll.value
+
     val yViewportPx = yContentPx - vScrollValue - halfOverlayHeightPx
     val yViewportDp = with(density) { yViewportPx.toDp() }
 
@@ -3807,6 +3876,14 @@ private fun CurrentTimeOverlay(
     }
 }
 
+
+//TimelineChildRequirementRenderInfo اطلاعات آماده‌ی نمایش زیرتسک‌های یک کارت timeline را نگه می‌دارد:
+//لیست requirementهای مربوط به همان کارت و summary شمارش کامل/انجام‌شده.
+private data class TimelineChildRequirementRenderInfo(
+    val requirements: List<TaskChildRequirementUi>,
+    val summary: TaskChildRequirementSummaryUi?
+)
+
 private data class MovePreviewResult(
     val start: Int,
     val end: Int
@@ -3842,29 +3919,66 @@ private fun computePreviousPomodoroEndMinById(
 
     val groups = items
         .asSequence()
-        .filter { !it.inPallet }
-        .filter { it.scheduleId > 0 }
-        .filter { it.mode == ScheduleMode.POMODORO }
-        .groupBy { it.start.toLocalDate() }
+        .filter { item ->
+            !item.inPallet
+        }
+        .filter { item ->
+            item.scheduleId > 0
+        }
+        .filter { item ->
+            item.mode == ScheduleMode.POMODORO
+        }
+        .groupBy { item ->
+            item.start.toLocalDate()
+        }
 
     groups.values.forEach { dayItems ->
-        val sorted = dayItems.sortedWith(
-            compareBy<ScheduleScreenItem> { minuteOfDay(it.start) }
-                .thenBy { minuteOfDay(it.end) }
-                .thenBy { it.scheduleId }
+        val sortedByStart = dayItems.sortedWith(
+            compareBy<ScheduleScreenItem> { item ->
+                minuteOfDay(item.start)
+            }.thenBy { item ->
+                minuteOfDay(item.end)
+            }.thenBy { item ->
+                item.scheduleId
+            }
         )
 
-        sorted.forEach { current ->
+        val sortedByEnd = dayItems.sortedWith(
+            compareBy<ScheduleScreenItem> { item ->
+                minuteOfDay(item.end)
+            }.thenBy { item ->
+                minuteOfDay(item.start)
+            }.thenBy { item ->
+                item.scheduleId
+            }
+        )
+
+        var endCursor = 0
+        var bestPreviousEnd: Int? = null
+
+        sortedByStart.forEach { current ->
             val currentStart = minuteOfDay(current.start)
 
-            val previous = sorted
-                .asSequence()
-                .filter { it.scheduleId != current.scheduleId }
-                .filter { minuteOfDay(it.end) <= currentStart }
-                .maxByOrNull { minuteOfDay(it.end) }
+            while (endCursor < sortedByEnd.size) {
+                val candidate = sortedByEnd[endCursor]
+                val candidateEnd = minuteOfDay(candidate.end)
 
-            if (previous != null) {
-                result[current.scheduleId] = minuteOfDay(previous.end)
+                if (candidateEnd > currentStart) {
+                    break
+                }
+
+                if (candidate.scheduleId != current.scheduleId) {
+                    bestPreviousEnd = when (val currentBest = bestPreviousEnd) {
+                        null -> candidateEnd
+                        else -> maxOf(currentBest, candidateEnd)
+                    }
+                }
+
+                endCursor++
+            }
+
+            bestPreviousEnd?.let { previousEnd ->
+                result[current.scheduleId] = previousEnd
             }
         }
     }
@@ -4091,11 +4205,9 @@ private data class TimelineSunWindow(
 )
 
 private fun DrawScope.drawSaqqezDayNightTimelineBackground(
-    startDate: LocalDate,
-    numDays: Int,
+    sunWindows: List<TimelineSunWindow>,
     dayWidthDp: Dp,
     hourHeightDp: Dp,
-    location: TimelineLightLocation = SAQQEZ_TIMELINE_LIGHT_LOCATION,
     twilightMinutes: Int = TWILIGHT_BLEND_MINUTES
 ) {
     val dayW = dayWidthDp.toPx()
@@ -4154,13 +4266,7 @@ private fun DrawScope.drawSaqqezDayNightTimelineBackground(
         )
     }
 
-    repeat(numDays) { dayIndex ->
-        val date = startDate.plusDays(dayIndex.toLong())
-        val sunWindow = calculateTimelineSunWindow(
-            date = date,
-            location = location
-        )
-
+    sunWindows.forEachIndexed { dayIndex, sunWindow ->
         val dayX = dayIndex * dayW
 
         val sunriseStart = sunWindow.sunriseMinute - twilightMinutes
