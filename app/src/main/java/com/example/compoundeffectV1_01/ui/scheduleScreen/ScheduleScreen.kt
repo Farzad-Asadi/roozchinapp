@@ -11,6 +11,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -24,6 +25,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.horizontalScroll
@@ -472,6 +474,10 @@ fun ScheduleScreen(
     var isPinchZooming by remember { mutableStateOf(false) }
     val horizontalZoom by rememberSaveable { mutableFloatStateOf(1f) }
 
+    var doubleTapRestoreZoom by rememberSaveable {
+        mutableFloatStateOf(1f)
+    }
+
     val hourHeightDp = (72.dp * verticalZoom).coerceIn(48.dp, 720.dp)
     val dayWidthDp = (220.dp * horizontalZoom).coerceIn(160.dp, 360.dp)
 
@@ -525,6 +531,104 @@ fun ScheduleScreen(
 
     val dayWidthPx = with(density) { dayWidthDp.toPx() }
     val hourHeightPx = with(density) { hourHeightDp.toPx() }
+
+
+    //launchDoubleTapVerticalZoom با محل دبل‌تاچ، دقیقه‌ی لمس‌شده را حساب می‌کند.
+    //بعد zoom را تا targetZoom انیمیت می‌کند و هم‌زمان vScroll را طوری تنظیم می‌کند که همان دقیقه وسط viewport قرار بگیرد.
+    fun launchDoubleTapVerticalZoom(
+        tapYInGridContentPx: Float
+    ) {
+        if (gridViewportHeightPx <= 0f) return
+
+        val currentZoom = verticalZoomAnim.value
+        val isCurrentlyMaxZoom =
+            currentZoom >= ZOOM_MAX - 0.01f
+
+        val targetZoom =
+            if (isCurrentlyMaxZoom) {
+                doubleTapRestoreZoom.coerceIn(ZOOM_MIN, ZOOM_MAX)
+            } else {
+                doubleTapRestoreZoom = currentZoom.coerceIn(ZOOM_MIN, ZOOM_MAX)
+                ZOOM_MAX
+            }
+
+        if (kotlin.math.abs(targetZoom - currentZoom) < 0.01f) return
+
+        scope.launch {
+            isPinchZooming = true
+
+            try {
+                val oldHourHeightPx = with(density) {
+                    (72.dp * currentZoom)
+                        .coerceIn(48.dp, 720.dp)
+                        .toPx()
+                }
+
+                val contentYAtTap =
+                    tapYInGridContentPx.coerceIn(
+                        0f,
+                        oldHourHeightPx * 24f
+                    )
+
+                val minuteAtTap =
+                    (contentYAtTap / oldHourHeightPx) * 60f
+
+                val startZoom = currentZoom
+                val endZoom = targetZoom
+
+                val durationMs = 260L
+                val startNs = withFrameNanos { it }
+                val endNs = startNs + durationMs * 1_000_000L
+
+                while (true) {
+                    val frameNs = withFrameNanos { it }
+
+                    val rawT =
+                        ((frameNs - startNs).toDouble() / (endNs - startNs).toDouble())
+                            .coerceIn(0.0, 1.0)
+                            .toFloat()
+
+                    val t = FastOutSlowInEasing.transform(rawT)
+
+                    val zoom =
+                        startZoom + (endZoom - startZoom) * t
+
+                    verticalZoomAnim.snapTo(zoom)
+
+                    val newHourHeightPx = with(density) {
+                        (72.dp * zoom)
+                            .coerceIn(48.dp, 720.dp)
+                            .toPx()
+                    }
+
+                    val contentHeightPx = newHourHeightPx * 24f
+
+                    val maxScrollForZoom =
+                        (contentHeightPx - gridViewportHeightPx)
+                            .roundToInt()
+                            .coerceAtLeast(0)
+
+                    val newContentY =
+                        (minuteAtTap / 60f) * newHourHeightPx
+
+                    val targetScroll =
+                        (newContentY - gridViewportHeightPx / 2f)
+                            .roundToInt()
+                            .coerceIn(0, maxScrollForZoom)
+
+                    vScroll.scrollTo(targetScroll)
+
+                    if (rawT >= 1f) break
+                }
+
+                verticalZoomSaved = endZoom
+                verticalZoomRaw = endZoom
+                viewModel.setScheduleVerticalZoom(endZoom)
+            } finally {
+                isPinchZooming = false
+            }
+        }
+    }
 
     var grabOffsetX by remember { mutableFloatStateOf(0f) }
     var grabOffsetY by remember { mutableFloatStateOf(0f) }
@@ -1225,15 +1329,24 @@ fun ScheduleScreen(
                                     }
                             ) {
 
-                                // ✅ لایه‌ی خالیِ قابل کلیک (زیر آیتم‌ها)
+                                // ✅ لایه‌ی خالیِ قابل کلیک/دبل‌تاچ (زیر آیتم‌ها)
                                 Box(
                                     modifier = Modifier
                                         .matchParentSize()
-                                        .clickable(
-                                            indication = null,
-                                            interactionSource = remember { MutableInteractionSource() }
+                                        .pointerInput(
+                                            gridViewportHeightPx
                                         ) {
-                                            selectedScheduleId = null
+                                            detectTapGestures(
+                                                onTap = {
+                                                    selectedScheduleId = null
+                                                },
+                                                onDoubleTap = { tapOffset ->
+                                                    selectedScheduleId = null
+                                                    launchDoubleTapVerticalZoom(
+                                                        tapYInGridContentPx = tapOffset.y
+                                                    )
+                                                }
+                                            )
                                         }
                                 )
 

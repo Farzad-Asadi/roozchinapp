@@ -839,39 +839,24 @@ class ScheduleScreenViewModel @Inject constructor(
                     val oldStart = schedule.startMinuteOfDay ?: return@withContext
                     val oldEnd = schedule.endMinuteOfDay ?: return@withContext
 
-                    val newStart: Int
-                    val newEnd: Int
+                    val delayMinutes = scheduleDelayMinutes.toInt()
+                    val duration = (oldEnd - oldStart).coerceAtLeast(1)
 
-                    when (current.phase) {
-                        PomodoroRunPhase.WAITING_TO_START -> {
-                            // هنوز شروع نشده:
-                            // کل کارت فعلی و زنجیره‌ی بعدی جابه‌جا شوند.
-                            newStart = (oldStart + scheduleDelayMinutes.toInt())
-                                .coerceIn(DAY_MIN, DAY_MAX)
+                    val desiredStart = oldStart + delayMinutes
+                    val desiredEnd = desiredStart + duration
 
-                            newEnd = (oldEnd + scheduleDelayMinutes.toInt())
-                                .coerceIn(DAY_MIN, DAY_MAX)
-                        }
-
-                        PomodoroRunPhase.FOCUS,
-                        PomodoroRunPhase.BREAK -> {
-                            // شروع شده:
-                            // start ثابت می‌ماند، end کش می‌آید.
-                            // movePomodoroChainForward بچه‌های چسبیده‌ی زیرش را از end جدید ادامه می‌دهد.
-                            newStart = oldStart
-
-                            newEnd = (oldEnd + scheduleDelayMinutes.toInt())
-                                .coerceIn(DAY_MIN, DAY_MAX)
-                        }
-
-                        PomodoroRunPhase.FINISHED -> return@withContext
+                    if (desiredStart >= DAY_MAX || desiredEnd > DAY_MAX) {
+                        // فعلاً اگر Resume باعث شود پومودورو از روز بیرون بزند،
+                        // timeline را دستکاری نکن تا duration خراب نشود.
+                        // تایمر داخلی همچنان با resumedState ادامه پیدا می‌کند.
+                        return@withContext
                     }
 
                     movePomodoroChainForward(
                         scheduleId = current.scheduleId,
                         newDate = date,
-                        newStartMin = newStart,
-                        newEndMin = newEnd
+                        newStartMin = desiredStart,
+                        newEndMin = desiredEnd
                     )
                 }
             }

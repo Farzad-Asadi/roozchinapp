@@ -16,6 +16,8 @@ interface TaskRepository {
 
     fun observeTasksByCategory(categoryId: Int): Flow<List<TaskEntity>>
 
+    fun observeAllTasks(): Flow<List<TaskEntity>>
+
     suspend fun getTasksByCategory(categoryId: Int): List<TaskEntity>
 
     suspend fun updateSiblingIndex(id: Int, siblingIndex: Int)

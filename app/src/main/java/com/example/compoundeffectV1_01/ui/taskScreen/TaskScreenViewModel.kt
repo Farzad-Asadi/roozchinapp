@@ -129,6 +129,22 @@ class TaskScreenViewModel @Inject constructor(
                 initialValue = emptyList()
             )
 
+    val allTaskEntities: StateFlow<List<TaskEntity>> =
+        taskRepo.observeAllTasks()
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5_000),
+                emptyList()
+            )
+
+    val allEnabledChildRules: StateFlow<List<TaskChildRuleEntity>> =
+        taskChildRepo.observeAllEnabledRules()
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5_000),
+                emptyList()
+            )
+
 
     val uiState: StateFlow<TaskUiState> =
         combine(

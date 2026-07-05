@@ -96,4 +96,6 @@ class TaskRepositoryImpl @Inject constructor(
         )
 
 
+    override fun observeAllTasks(): Flow<List<TaskEntity>> =
+        taskDao.observeAllTasks()
 }

@@ -55,6 +55,12 @@ interface TaskDao {
 
     @Query("""
     SELECT * FROM task
+    ORDER BY name COLLATE NOCASE ASC, id ASC
+""")
+    fun observeAllTasks(): Flow<List<TaskEntity>>
+
+    @Query("""
+    SELECT * FROM task
     WHERE categoryId = :categoryId
 """)
     suspend fun getTasksByCategory(categoryId: Int): List<TaskEntity>

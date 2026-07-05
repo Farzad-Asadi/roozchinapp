@@ -35,6 +35,13 @@ interface TaskChildDao {
     ): Flow<List<TaskChildRuleEntity>>
 
     @Query("""
+    SELECT * FROM task_child_rule
+    WHERE isEnabled = 1
+    ORDER BY ruleType ASC, parentTaskId ASC, sortOrder ASC, id ASC
+""")
+    fun observeAllEnabledRules(): Flow<List<TaskChildRuleEntity>>
+
+    @Query("""
         SELECT * FROM task_child_rule
         WHERE parentTaskId = :parentTaskId
           AND childTaskId = :childTaskId

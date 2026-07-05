@@ -190,6 +190,8 @@ fun TaskScreen(
     val editingChildRule by viewModel.editingChildRule.collectAsState()
     val childRulesForEditingParentTask by viewModel.childRulesForEditingParentTask.collectAsState()
 
+    val allTaskEntities by viewModel.allTaskEntities.collectAsState()
+    val allEnabledChildRules by viewModel.allEnabledChildRules.collectAsState()
 
     val requestPostNotifPermission = rememberPostNotificationsPermissionRequester()
 
@@ -385,7 +387,9 @@ fun TaskScreen(
                 onPomodoroTargetUnitsChange = viewModel::setTaskPomodoroTargetUnits,
                 onPomodoroDoneUnitsChange = viewModel::setTaskPomodoroDoneUnits,
                 childTasks = directChildTasksForEditingTask,
-                taskNameSuggestionCandidates = state.taskEntities,
+                editingParentTaskId = editingTaskId,
+                taskNameSuggestionCandidates = allTaskEntities,
+                childNameSuggestionRules = allEnabledChildRules,
                 onClickChildTask = { childTaskId ->
                     viewModel.openChildTaskForEdit(childTaskId)
                 },
@@ -541,7 +545,9 @@ private fun AddEditeTaskScreen(
     onPomodoroTargetUnitsChange: (Int?) -> Unit,
     onPomodoroDoneUnitsChange: (Int) -> Unit,
     childTasks: List<TaskEntity>,
+    editingParentTaskId: Int?,
     taskNameSuggestionCandidates: List<TaskEntity>,
+    childNameSuggestionRules: List<TaskChildRuleEntity>,
     onClickChildTask: (Int) -> Unit,
     canManageChildTasks: Boolean,
     onToggleChildTaskCompleted: (Int, Boolean) -> Unit,
@@ -613,14 +619,20 @@ private fun AddEditeTaskScreen(
 
     val newChildTaskNameSuggestions = remember(
         newChildTaskName,
+        newChildRuleType,
+        editingParentTaskId,
         taskNameSuggestionCandidates,
+        childNameSuggestionRules,
         childTasks
     ) {
         buildChildTaskNameSuggestions(
             query = newChildTaskName,
-            candidates = taskNameSuggestionCandidates,
+            selectedRuleType = newChildRuleType,
+            parentTaskId = editingParentTaskId,
+            allTasks = taskNameSuggestionCandidates,
+            allRules = childNameSuggestionRules,
             currentParentChildren = childTasks,
-            limit = 6
+            limit = 8
         )
     }
 
@@ -1602,6 +1614,173 @@ private fun ChildTaskRow(
     )
 }
 
+private fun buildChildTaskNameSuggestions(
+    query: String,
+    selectedRuleType: String,
+    parentTaskId: Int?,
+    allTasks: List<TaskEntity>,
+    allRules: List<TaskChildRuleEntity>,
+    currentParentChildren: List<TaskEntity>,
+    limit: Int = 8
+): List<String> {
+    val normalizedQuery = normalizeTaskNameSuggestionText(query)
+
+    val taskById = allTasks
+        .mapNotNull { task ->
+            val id = task.id ?: return@mapNotNull null
+            id to task
+        }
+        .toMap()
+
+    val sameRuleChildTaskIds = allRules
+        .asSequence()
+        .filter { rule ->
+            rule.isEnabled
+        }
+        .filter { rule ->
+            rule.ruleType == selectedRuleType
+        }
+        .map { rule ->
+            rule.childTaskId
+        }
+        .toSet()
+
+    val parentChildIds = currentParentChildren
+        .mapNotNull { child ->
+            child.id
+        }
+        .toSet()
+
+    val candidates = buildList {
+        // 1) تسک‌های فرزند همین والد، completedها بالاتر
+        currentParentChildren
+            .sortedWith(
+                compareByDescending<TaskEntity> { child ->
+                    child.isCompleted
+                }.thenBy { child ->
+                    child.siblingIndex
+                }.thenBy { child ->
+                    child.id ?: 0
+                }
+            )
+            .forEach { child ->
+                add(
+                    ChildTaskNameSuggestionCandidate(
+                        task = child,
+                        groupPriority = 0
+                    )
+                )
+            }
+
+        // 2) تسک‌های هم‌رول در کل پروژه
+        sameRuleChildTaskIds
+            .asSequence()
+            .mapNotNull { childTaskId ->
+                taskById[childTaskId]
+            }
+            .filter { task ->
+                task.id !in parentChildIds
+            }
+            .sortedWith(
+                compareByDescending<TaskEntity> { task ->
+                    task.isCompleted
+                }.thenBy { task ->
+                    task.name.trim()
+                }.thenBy { task ->
+                    task.id ?: 0
+                }
+            )
+            .forEach { task ->
+                add(
+                    ChildTaskNameSuggestionCandidate(
+                        task = task,
+                        groupPriority = 1
+                    )
+                )
+            }
+
+        // 3) کل تسک‌ها
+        allTasks
+            .asSequence()
+            .filter { task ->
+                task.id != parentTaskId
+            }
+            .filter { task ->
+                task.id !in parentChildIds
+            }
+            .filter { task ->
+                task.id !in sameRuleChildTaskIds
+            }
+            .sortedWith(
+                compareBy<TaskEntity> { task ->
+                    task.name.trim()
+                }.thenBy { task ->
+                    task.id ?: 0
+                }
+            )
+            .forEach { task ->
+                add(
+                    ChildTaskNameSuggestionCandidate(
+                        task = task,
+                        groupPriority = 2
+                    )
+                )
+            }
+    }
+
+    return candidates
+        .asSequence()
+        .mapNotNull { candidate ->
+            val cleanName = candidate.task.name.trim()
+            val normalizedName = normalizeTaskNameSuggestionText(cleanName)
+
+            if (cleanName.isBlank()) {
+                null
+            } else {
+                candidate.copy(
+                    cleanName = cleanName,
+                    normalizedName = normalizedName
+                )
+            }
+        }
+        .filter { candidate ->
+            normalizedQuery.isBlank() ||
+                    candidate.normalizedName.contains(normalizedQuery)
+        }
+        .distinctBy { candidate ->
+            candidate.normalizedName
+        }
+        .sortedWith(
+            compareBy<ChildTaskNameSuggestionCandidate> { candidate ->
+                candidate.groupPriority
+            }.thenBy { candidate ->
+                if (normalizedQuery.isBlank()) {
+                    false
+                } else {
+                    !candidate.normalizedName.startsWith(normalizedQuery)
+                }
+            }.thenByDescending { candidate ->
+                candidate.task.isCompleted
+            }.thenBy { candidate ->
+                candidate.cleanName.length
+            }.thenBy { candidate ->
+                candidate.cleanName
+            }
+        )
+        .take(limit)
+        .map { candidate ->
+            candidate.cleanName
+        }
+        .toList()
+}
+
+private data class ChildTaskNameSuggestionCandidate(
+    val task: TaskEntity,
+    val groupPriority: Int,
+    val cleanName: String = "",
+    val normalizedName: String = ""
+)
+
 private fun normalizeTaskNameSuggestionText(
     value: String
 ): String {
@@ -1611,62 +1790,6 @@ private fun normalizeTaskNameSuggestionText(
         .replace('ك', 'ک')
         .replace(Regex("\\s+"), " ")
         .lowercase()
-}
-
-private fun buildChildTaskNameSuggestions(
-    query: String,
-    candidates: List<TaskEntity>,
-    currentParentChildren: List<TaskEntity>,
-    limit: Int = 6
-): List<String> {
-    val normalizedQuery = normalizeTaskNameSuggestionText(query)
-
-    if (normalizedQuery.isBlank()) {
-        return emptyList()
-    }
-
-    val currentChildNames = currentParentChildren
-        .map { normalizeTaskNameSuggestionText(it.name) }
-        .toSet()
-
-    return candidates
-        .asSequence()
-        // فقط تسک‌هایی که قبلاً child بوده‌اند
-        .filter { task ->
-            val parentId = task.parentTaskId
-            parentId != null && parentId != ROOT
-        }
-        .map { task ->
-            task.name.trim()
-        }
-        .filter { name ->
-            name.isNotBlank()
-        }
-        .map { name ->
-            normalizeTaskNameSuggestionText(name) to name
-        }
-        // چیزی که همین parent همین الان دارد، پیشنهاد نشود
-        .filter { (normalizedName, _) ->
-            normalizedName !in currentChildNames
-        }
-        .filter { (normalizedName, _) ->
-            normalizedName.contains(normalizedQuery)
-        }
-        .distinctBy { (normalizedName, _) ->
-            normalizedName
-        }
-        .sortedWith(
-            compareBy<Pair<String, String>> { (normalizedName, _) ->
-                !normalizedName.startsWith(normalizedQuery)
-            }
-                .thenBy { (_, name) -> name.length }
-                .thenBy { (_, name) -> name }
-        )
-        .take(limit)
-        .map { (_, name) ->
-            name
-        }
-        .toList()
 }
 
 

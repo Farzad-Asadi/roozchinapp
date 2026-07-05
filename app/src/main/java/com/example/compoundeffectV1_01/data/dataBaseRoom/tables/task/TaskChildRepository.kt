@@ -137,4 +137,6 @@ interface TaskChildRepository {
         parentRuleScheduleId: Int?,
         occurrenceDateEpochDay: Long
     ): Flow<List<TaskChildRequirementUi>>
+
+    fun observeAllEnabledRules(): Flow<List<TaskChildRuleEntity>>
 }
