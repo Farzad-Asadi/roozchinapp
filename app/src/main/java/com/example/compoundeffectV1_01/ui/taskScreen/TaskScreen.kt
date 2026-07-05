@@ -179,6 +179,7 @@ fun TaskScreen(
     val pickerFlatten by viewModel.parentPickerItems.collectAsState()
     val editingTaskId by viewModel.editingTaskId.collectAsState()
     val taskDraft by viewModel.taskDraft.collectAsState()
+    val isEditingDraftTask by viewModel.isEditingDraftTask.collectAsState()
     val scheduleDraft by viewModel.scheduleDraft.collectAsState()
     val menuCategoryId by viewModel.menuCategoryId.collectAsState()
     val childLevelUi by viewModel.childLevelUi.collectAsState()
@@ -291,7 +292,7 @@ fun TaskScreen(
         val handledInsideEditor = viewModel.navigateBackInsideTaskEditor()
 
         if (!handledInsideEditor) {
-            viewModel.finishEditTask()
+            viewModel.finishOrDeleteEmptyDraftTask()
             viewModel.clearTaskEditBackStack()
             onClickBack()
         }
@@ -310,11 +311,8 @@ fun TaskScreen(
                 state.categories.firstOrNull { it.categoryId == selectedCategoryId }
                     ?: menuCategory
 
-            val isDraftTask =
-                editingTaskEntity?.entityStatus == TaskEntityStatus.DRAFT
-
             val isEdit =
-                editingTaskId != null && !isDraftTask
+                editingTaskId != null && !isEditingDraftTask
 
             AddEditeTaskScreen(
                 addTaskMod = !isEdit,
@@ -326,7 +324,7 @@ fun TaskScreen(
                     val handledInsideEditor = viewModel.navigateBackInsideTaskEditor()
 
                     if (!handledInsideEditor) {
-                        viewModel.finishEditTask()
+                        viewModel.finishOrDeleteEmptyDraftTask()
                         viewModel.clearTaskEditBackStack()
                         onClickBack()
                     }

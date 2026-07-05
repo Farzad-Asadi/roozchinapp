@@ -30,6 +30,23 @@ interface TaskDao {
     suspend fun getTaskById(id: Int): TaskEntity?
 
 
+    @Query("""
+SELECT * FROM task
+WHERE entityStatus = 'DRAFT'
+  AND draftCreatedAtEpochMillis IS NOT NULL
+  AND draftCreatedAtEpochMillis < :cutoffEpochMillis
+  AND (
+      parentTaskId IS NULL
+      OR parentTaskId = :rootParentTaskId
+  )
+ORDER BY draftCreatedAtEpochMillis ASC, id ASC
+""")
+    suspend fun getOldDraftRootTasks(
+        cutoffEpochMillis: Long,
+        rootParentTaskId: Int = -1
+    ): List<TaskEntity>
+
+
 
     @Query("""
 SELECT COUNT(*) FROM task_schedule s

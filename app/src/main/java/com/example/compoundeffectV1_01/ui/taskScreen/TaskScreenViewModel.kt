@@ -72,6 +72,9 @@ class TaskScreenViewModel @Inject constructor(
     private val reminderScheduler: ReminderScheduler,
 ) : ViewModel() {
 
+    private val staleDraftMaxAgeMillis: Long =
+        24L * 60L * 60L * 1_000L
+
 
     private var pendingReminderKeyCounter = -1
     private fun newPendingReminderKey(): Int = pendingReminderKeyCounter--
@@ -208,6 +211,9 @@ class TaskScreenViewModel @Inject constructor(
 
     private val _editingTaskId = MutableStateFlow<Int?>(null)
     val editingTaskId = _editingTaskId.asStateFlow()
+
+    private val _isEditingDraftTask = MutableStateFlow(false)
+    val isEditingDraftTask = _isEditingDraftTask.asStateFlow()
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val editingChildRule: StateFlow<TaskChildRuleEntity?> =
@@ -412,6 +418,9 @@ class TaskScreenViewModel @Inject constructor(
             )
 
     init {
+
+        cleanupStaleDraftTasks()
+
         val categoryId =
             savedStateHandle.get<Int>(com.example.compoundeffectV1_01.ui.navigation.AppRoutes.ARG_CATEGORY_ID)
                 ?: -1
@@ -444,9 +453,38 @@ class TaskScreenViewModel @Inject constructor(
 
 
     //تسک ها
+
+    private fun cleanupStaleDraftTasks() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val currentEditingTaskId = _editingTaskId.value
+
+            val cutoffEpochMillis =
+                System.currentTimeMillis() - staleDraftMaxAgeMillis
+
+            val oldDraftRoots =
+                taskRepo.getOldDraftRootTasks(
+                    cutoffEpochMillis = cutoffEpochMillis,
+                    rootParentTaskId = ROOT
+                )
+
+            oldDraftRoots.forEach { draftRoot ->
+                val draftRootId = draftRoot.id ?: return@forEach
+
+                // برای امنیت: اگر همین task الان در editor است، پاکش نکن.
+                if (draftRootId == currentEditingTaskId) {
+                    return@forEach
+                }
+
+                deleteTaskSubtree(draftRoot)
+            }
+        }
+    }
+
+
     private fun startAddTask(categoryId: Int) {
         _editingTaskId.value = null
         _taskEditBackStack.value = emptyList()
+        _isEditingDraftTask.value = false
         _taskDraft.value = TaskDraft(categoryId = categoryId)
         _scheduleDraft.value = ScheduleDraft()
         _scheduleConfirmedForNewTask.value = false
@@ -487,6 +525,7 @@ class TaskScreenViewModel @Inject constructor(
             }
 
             _editingTaskId.value = newDraftTaskId
+            _isEditingDraftTask.value = true
 
             _taskDraft.value = TaskDraft(
                 name = "",
@@ -524,6 +563,9 @@ class TaskScreenViewModel @Inject constructor(
     private fun startEditTask(taskId: Int) {
         viewModelScope.launch {
             val t = taskRepo.getTaskById(taskId) ?: return@launch
+
+            _isEditingDraftTask.value =
+                t.entityStatus == TaskEntityStatus.DRAFT
 
             val categoryId = t.categoryId ?: return@launch
             _menuCategoryId.value = categoryId
@@ -1902,7 +1944,43 @@ class TaskScreenViewModel @Inject constructor(
 
     fun finishEditTask() {
         _editingTaskId.value = null
+        _isEditingDraftTask.value = false
         _taskDraft.value = TaskDraft()
+    }
+
+    fun finishOrDeleteEmptyDraftTask() {
+        val taskId = _editingTaskId.value
+        val draftName = _taskDraft.value.name.trim()
+
+        finishEditTask()
+
+        if (taskId == null || draftName.isNotBlank()) {
+            return
+        }
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val task = taskRepo.getTaskById(taskId) ?: return@launch
+
+            if (task.entityStatus != TaskEntityStatus.DRAFT) {
+                return@launch
+            }
+
+            deleteTaskSubtree(task)
+        }
+    }
+
+    private suspend fun deleteTaskSubtree(
+        task: TaskEntity
+    ) {
+        val taskId = task.id ?: return
+
+        val children = taskChildRepo.getDirectChildTasks(taskId)
+
+        children.forEach { child ->
+            deleteTaskSubtree(child)
+        }
+
+        taskRepo.deleteTask(task)
     }
 
     //ساخت پیش‌فرض Start/End با زمان فعلی

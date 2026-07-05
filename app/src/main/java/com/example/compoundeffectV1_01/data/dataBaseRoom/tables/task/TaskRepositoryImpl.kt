@@ -35,6 +35,15 @@ class TaskRepositoryImpl @Inject constructor(
     override suspend fun getTaskById(id: Int): TaskEntity? =
         taskDao.getTaskById(id)
 
+    override suspend fun getOldDraftRootTasks(
+        cutoffEpochMillis: Long,
+        rootParentTaskId: Int
+    ): List<TaskEntity> =
+        taskDao.getOldDraftRootTasks(
+            cutoffEpochMillis = cutoffEpochMillis,
+            rootParentTaskId = rootParentTaskId
+        )
+
     override fun observeTasksWithScheduleByCategory(categoryId: Int): Flow<List<TaskWithSchedule>> =
         taskDao.observeTasksWithScheduleByCategory(categoryId)
 

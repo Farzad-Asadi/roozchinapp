@@ -26,6 +26,11 @@ interface TaskRepository {
 
     suspend fun getTaskById(id: Int): TaskEntity?
 
+    suspend fun getOldDraftRootTasks(
+        cutoffEpochMillis: Long,
+        rootParentTaskId: Int = -1
+    ): List<TaskEntity>
+
     fun observeTasksWithScheduleByCategory(categoryId: Int): Flow<List<TaskWithSchedule>>
 
     fun observeScheduledCountByCategory(categoryId: Int): Flow<Int>
