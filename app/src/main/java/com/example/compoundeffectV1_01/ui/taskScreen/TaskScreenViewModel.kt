@@ -16,6 +16,7 @@ import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskChildRe
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskChildRuleEntity
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskChildRuleType
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskEntity
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskEntityStatus
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskMode
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskRepository
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskWithSchedule
@@ -450,6 +451,74 @@ class TaskScreenViewModel @Inject constructor(
         _scheduleDraft.value = ScheduleDraft()
         _scheduleConfirmedForNewTask.value = false
         _pendingSchedulesForNewTask.value = emptyList()
+        _pendingRemindersForScheduleDraft.value = emptyList()
+        _pendingRemindersByScheduleKey.value = emptyMap()
+
+        viewModelScope.launch {
+            val category = withContext(Dispatchers.IO) {
+                categoryRepository.getCategoryById(categoryId)
+            } ?: return@launch
+
+            val now = System.currentTimeMillis()
+
+            val draftTask = TaskEntity(
+                id = null,
+                name = "",
+                color = category.color,
+                description = "",
+                durationOverlap = 0,
+                selected = false,
+                changed = false,
+                categoryId = categoryId,
+                isCompleted = false,
+                priority = 0,
+                isExtended = true,
+                parentTaskId = ROOT,
+                siblingIndex = nextRootSiblingIndexForDraftTask(categoryId),
+                taskMode = TaskMode.NORMAL,
+                pomodoroTargetUnits = 50,
+                pomodoroDoneUnits = 0,
+                entityStatus = TaskEntityStatus.DRAFT,
+                draftCreatedAtEpochMillis = now
+            )
+
+            val newDraftTaskId = withContext(Dispatchers.IO) {
+                taskRepo.insertTaskAndReturnId(draftTask)
+            }
+
+            _editingTaskId.value = newDraftTaskId
+
+            _taskDraft.value = TaskDraft(
+                name = "",
+                categoryId = categoryId,
+                priority = 0,
+                isCompleted = false,
+                note = "",
+                insertAtTop = false,
+                childLevel = 0,
+                taskMode = TaskMode.NORMAL,
+                pomodoroTargetUnits = 50,
+                pomodoroDoneUnits = 0
+            )
+        }
+    }
+
+    private suspend fun nextRootSiblingIndexForDraftTask(
+        categoryId: Int
+    ): Int {
+        val all = withContext(Dispatchers.IO) {
+            taskRepo.getTasksByCategory(categoryId)
+        }
+
+        return all
+            .filter { task ->
+                task.parentTaskId == ROOT
+            }
+            .maxOfOrNull { task ->
+                task.siblingIndex
+            }
+            ?.plus(1)
+            ?: 0
     }
 
     private fun startEditTask(taskId: Int) {
@@ -591,6 +660,8 @@ class TaskScreenViewModel @Inject constructor(
                 priority = d.priority,
                 parentTaskId = parentId,
                 siblingIndex = newSiblingIndex,
+                entityStatus = TaskEntityStatus.ACTIVE,
+                draftCreatedAtEpochMillis = null,
                 taskMode = d.taskMode,
                 pomodoroTargetUnits = d.pomodoroTargetUnits,
                 pomodoroDoneUnits = d.pomodoroDoneUnits,
@@ -748,7 +819,9 @@ class TaskScreenViewModel @Inject constructor(
                 pomodoroTargetUnits = d.pomodoroTargetUnits,
                 pomodoroDoneUnits = d.pomodoroDoneUnits,
 
-                )
+                entityStatus = TaskEntityStatus.ACTIVE,
+                draftCreatedAtEpochMillis = null
+            )
 
             withContext(Dispatchers.IO) { taskRepo.updateTask(updated) }
 

@@ -19,7 +19,11 @@ import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.Tas
             onDelete = ForeignKey.CASCADE
         )
     ],
-    indices = [Index("categoryId")]
+    indices = [
+        Index("categoryId"),
+        Index("entityStatus"),
+        Index(value = ["categoryId", "entityStatus"])
+    ]
 )
 data class TaskEntity(
     @PrimaryKey(autoGenerate = true)
@@ -40,6 +44,9 @@ data class TaskEntity(
 
     val parentTaskId: Int? = null,
     val siblingIndex: Int = 0,
+
+    val entityStatus: String = TaskEntityStatus.ACTIVE,
+    val draftCreatedAtEpochMillis: Long? = null,
 
     /** هدف کل به واحد پومودورو (مثلاً 1200) */
     val pomodoroTargetUnits: Int? = null,
@@ -65,3 +72,8 @@ data class TaskWithSchedule(
 
 
 enum class TaskMode { NORMAL, POMODORO }
+
+object TaskEntityStatus {
+    const val DRAFT = "DRAFT"
+    const val ACTIVE = "ACTIVE"
+}

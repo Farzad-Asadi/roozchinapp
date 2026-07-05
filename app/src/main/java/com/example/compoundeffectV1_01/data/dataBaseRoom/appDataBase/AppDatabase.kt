@@ -5,6 +5,8 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.appSystemInfo.AppSystemInfo
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.appSystemInfo.SystemDao
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.category.CategoryEntity
@@ -41,7 +43,7 @@ import com.example.compoundeffectV1_01.data.dataBaseRoom.typeConvertor.TypeConve
 
     ],
 
-    version = 1, exportSchema = false)
+    version = 2, exportSchema = false)
 @TypeConverters(
     TypeConverter::class,
     ScheduleConverters::class
@@ -64,6 +66,39 @@ abstract class AppDatabase : RoomDatabase() {
         @Volatile
         private var instance: AppDatabase? = null
 
+        private val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+            ALTER TABLE task
+            ADD COLUMN entityStatus TEXT NOT NULL DEFAULT 'ACTIVE'
+            """.trimIndent()
+                )
+
+                db.execSQL(
+                    """
+            ALTER TABLE task
+            ADD COLUMN draftCreatedAtEpochMillis INTEGER
+            """.trimIndent()
+                )
+
+                db.execSQL(
+                    """
+            CREATE INDEX IF NOT EXISTS index_task_entityStatus
+            ON task(entityStatus)
+            """.trimIndent()
+                )
+
+                db.execSQL(
+                    """
+            CREATE INDEX IF NOT EXISTS index_task_categoryId_entityStatus
+            ON task(categoryId, entityStatus)
+            """.trimIndent()
+                )
+            }
+        }
+
+
         fun getDatabase(context: Context): AppDatabase {
 
             return instance ?: synchronized(this) {
@@ -78,6 +113,7 @@ abstract class AppDatabase : RoomDatabase() {
                 AppDatabase::class.java,
                 "compound_effect.db"
             )
+                .addMigrations(MIGRATION_1_2)
 
             return builder.build()
         }

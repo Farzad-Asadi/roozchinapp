@@ -133,6 +133,7 @@ import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskChildRe
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskChildRuleEntity
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskChildRuleType
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskEntity
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskEntityStatus
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskMode
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.RepeatUnit
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.ScheduleMode
@@ -309,7 +310,11 @@ fun TaskScreen(
                 state.categories.firstOrNull { it.categoryId == selectedCategoryId }
                     ?: menuCategory
 
-            val isEdit = (editingTaskId != null)
+            val isDraftTask =
+                editingTaskEntity?.entityStatus == TaskEntityStatus.DRAFT
+
+            val isEdit =
+                editingTaskId != null && !isDraftTask
 
             AddEditeTaskScreen(
                 addTaskMod = !isEdit,
@@ -336,10 +341,10 @@ fun TaskScreen(
                 onChildLevelChange = viewModel::setTaskChildLevel,
                 onPickCategory = { showPickTaskCategory = true },
                 onConfirm = { action ->
-                    val editing = (editingTaskId != null)
+                    val hasDbTask = editingTaskId != null
                     val color = selectedCategory.color
 
-                    if (editing) {
+                    if (hasDbTask) {
                         viewModel.saveEditedTask(color)
 
                         when (action) {
@@ -349,12 +354,12 @@ fun TaskScreen(
                             }
 
                             ConfirmAction.SAVE_AND_CONTINUE -> {
-                                // توی حالت edit معمولاً Save هم می‌تونه Close باشه،
-                                // ولی اگر می‌خوای باز بمونه، همینجا هیچ کاری نکن.
+                                // فعلاً بعد از DB-backed draft، Save & Continue را در فاز بعدی تمیز می‌کنیم.
+                                // الان task ذخیره و ACTIVE می‌شود، ولی صفحه باز می‌ماند.
                             }
-
                         }
                     } else {
+                        // fallback قدیمی؛ در حالت عادی دیگر نباید وارد این شاخه شویم.
                         viewModel.createTaskForCategory(color)
 
                         when (action) {
@@ -364,7 +369,6 @@ fun TaskScreen(
                             }
 
                             ConfirmAction.SAVE_AND_CONTINUE -> {
-                                // می‌مونه توی صفحه برای ساخت تسک بعدی
                                 viewModel.resetTaskDraftKeepSomeDefaults()
                             }
                         }
