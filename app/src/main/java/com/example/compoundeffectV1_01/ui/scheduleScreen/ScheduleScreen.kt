@@ -511,6 +511,16 @@ fun ScheduleScreen(
     var timelineBodyOriginInRoot by remember { mutableStateOf(Offset.Zero) }
     var palletExpanded by rememberSaveable { mutableStateOf(false) }
 
+    var selectedPalletTabName by rememberSaveable {
+        mutableStateOf(PalletPanelTab.DAILY.name)
+    }
+
+    val selectedPalletTab = remember(selectedPalletTabName) {
+        runCatching {
+            PalletPanelTab.valueOf(selectedPalletTabName)
+        }.getOrDefault(PalletPanelTab.DAILY)
+    }
+
     var overlayLayerOriginInRoot by remember { mutableStateOf(Offset.Zero) }
 
     val palletContentWidth = 160.dp
@@ -1664,9 +1674,16 @@ fun ScheduleScreen(
             RightPallet(
                 palletItems = palletItems,
                 pomodoroCards = pomodoroPalletCards,
+                selectedTab = selectedPalletTab,
                 expanded = palletExpanded,
                 isDraggingFromPallet = isDraggingAnything,
                 onToggle = { palletExpanded = !palletExpanded },
+                onSelectTab = { tab ->
+                    selectedPalletTabName = tab.name
+                    if (!palletExpanded) {
+                        palletExpanded = true
+                    }
+                },
                 onDragStart = { item, sx, sy, downX, downY ->
                     palletExpanded = false
                     draggingPomodoro = null
@@ -3224,12 +3241,14 @@ private fun PomodoroChainMarker(
 private fun RightPallet(
     palletItems: List<ScheduleScreenItem>,
     pomodoroCards: List<PomodoroPalletCardItem>,
+    selectedTab: PalletPanelTab,
     todayFocusText: String,
     todayDonePomodoroCount: Int,
     todayScheduledPomodoroCount: Int,
     expanded: Boolean,
     isDraggingFromPallet: Boolean,
     onToggle: () -> Unit,
+    onSelectTab: (PalletPanelTab) -> Unit,
     onDragStart: (ScheduleScreenItem, Float, Float, Float, Float) -> Unit,
     onPomodoroDragStart: (PomodoroPalletCardItem, Float, Float, Float, Float) -> Unit,
     onDrag: (dx: Float, dy: Float) -> Unit,
@@ -3260,11 +3279,10 @@ private fun RightPallet(
             bottomStart = 18.dp
         )
 
-        Box(
+        Column(
             modifier = Modifier
                 .width(48.dp)
                 .fillMaxHeight()
-//                .padding(vertical = 8.dp, horizontal = 4.dp)
                 .graphicsLayer { alpha = if (isDraggingFromPallet) 0f else 1f }
                 .clip(palletShape)
                 .background(
@@ -3275,16 +3293,40 @@ private fun RightPallet(
                     color = MaterialTheme.colorScheme.outline.copy(alpha = 0.38f),
                     shape = palletShape
                 )
-                .clickable(enabled = !isDraggingFromPallet) { onToggle() },
-            contentAlignment = Alignment.Center
         ) {
-            Icon(
-                imageVector = if (expanded)
-                    Icons.AutoMirrored.Filled.ArrowForwardIos
-                else
-                    Icons.AutoMirrored.Filled.ArrowBackIos,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.78f)
+            PalletVerticalTabButton(
+                label = "روزانه",
+                selected = selectedTab == PalletPanelTab.DAILY,
+                expanded = expanded,
+                enabled = !isDraggingFromPallet,
+                modifier = Modifier.weight(1f),
+                onClick = {
+                    if (selectedTab == PalletPanelTab.DAILY) {
+                        onToggle()
+                    } else {
+                        onSelectTab(PalletPanelTab.DAILY)
+                    }
+                }
+            )
+
+            HorizontalDivider(
+                thickness = 0.8.dp,
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.28f)
+            )
+
+            PalletVerticalTabButton(
+                label = "آزاد",
+                selected = selectedTab == PalletPanelTab.ANYTIME,
+                expanded = expanded,
+                enabled = !isDraggingFromPallet,
+                modifier = Modifier.weight(1f),
+                onClick = {
+                    if (selectedTab == PalletPanelTab.ANYTIME) {
+                        onToggle()
+                    } else {
+                        onSelectTab(PalletPanelTab.ANYTIME)
+                    }
+                }
             )
         }
 
@@ -3323,7 +3365,10 @@ private fun RightPallet(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            text = "Pallet",
+                            text = when (selectedTab) {
+                                PalletPanelTab.DAILY -> "روزانه"
+                                PalletPanelTab.ANYTIME -> "آزاد"
+                            },
                             style = MaterialTheme.typography.titleMedium,
                             maxLines = 1
                         )
@@ -3354,34 +3399,118 @@ private fun RightPallet(
 
                     Spacer(Modifier.height(8.dp))
 
-                    LazyColumn {
-                        items(sortedPomodoroCards, key = { "pomo_${it.taskId}" }) { c ->
-                            PomodoroPalletCard(
-                                item = c,
-                                onDragStart = onPomodoroDragStart,
-                                onDrag = onDrag,
-                                onDragEnd = { onDragEnd(c.scheduleId) },
-                                onDragCancel = onDragCancel,
-                                onEdit = { onEditTask(c.taskId) },
-                                onDoneTodayInc = { onPomodoroDoneTodayInc(c.taskId) },
-                                onDoneTodayDec = { onPomodoroDoneTodayDec(c.taskId) }
-                            )
-                            HorizontalDivider(thickness = 0.5.dp)
+                    when (selectedTab) {
+                        PalletPanelTab.DAILY -> {
+                            LazyColumn {
+                                items(sortedPomodoroCards, key = { "pomo_${it.taskId}" }) { c ->
+                                    PomodoroPalletCard(
+                                        item = c,
+                                        onDragStart = onPomodoroDragStart,
+                                        onDrag = onDrag,
+                                        onDragEnd = { onDragEnd(c.scheduleId) },
+                                        onDragCancel = onDragCancel,
+                                        onEdit = { onEditTask(c.taskId) },
+                                        onDoneTodayInc = { onPomodoroDoneTodayInc(c.taskId) },
+                                        onDoneTodayDec = { onPomodoroDoneTodayDec(c.taskId) }
+                                    )
+                                    HorizontalDivider(thickness = 0.5.dp)
+                                }
+
+                                items(palletItems, key = { it.scheduleId }) { t ->
+                                    PalletTaskItem(
+                                        item = t,
+                                        onDragStart = onDragStart,
+                                        onDrag = onDrag,
+                                        onDragEnd = { onDragEnd(t.scheduleId) },
+                                        onDragCancel = onDragCancel,
+                                        onEdit = { onEditTask(t.taskId) }
+                                    )
+                                    HorizontalDivider(thickness = 0.5.dp)
+                                }
+                            }
                         }
-                        items(palletItems, key = { it.scheduleId }) { t ->
-                            PalletTaskItem(
-                                item = t,
-                                onDragStart = onDragStart,
-                                onDrag = onDrag,
-                                onDragEnd = { onDragEnd(t.scheduleId) },
-                                onDragCancel = onDragCancel,
-                                onEdit = { onEditTask(t.taskId) }
+
+                        PalletPanelTab.ANYTIME -> {
+                            AnytimePalletPlaceholder(
+                                modifier = Modifier.fillMaxSize()
                             )
-                            HorizontalDivider(thickness = 0.5.dp)
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun AnytimePalletPlaceholder(
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .padding(horizontal = 8.dp, vertical = 24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = "هنوز کاری برای پالت آزاد تعریف نشده.",
+            textAlign = TextAlign.Center,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun PalletVerticalTabButton(
+    label: String,
+    selected: Boolean,
+    expanded: Boolean,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    val selectedColor = MaterialTheme.colorScheme.primary
+    val normalColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f)
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(enabled = enabled) {
+                onClick()
+            }
+            .background(
+                if (selected) {
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
+                } else {
+                    Color.Transparent
+                }
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            maxLines = 1,
+            style = MaterialTheme.typography.labelMedium,
+            color = if (selected) selectedColor else normalColor,
+            modifier = Modifier.graphicsLayer {
+                rotationZ = -90f
+            }
+        )
+
+        if (selected) {
+            Icon(
+                imageVector = if (expanded) {
+                    Icons.AutoMirrored.Filled.ArrowForwardIos
+                } else {
+                    Icons.AutoMirrored.Filled.ArrowBackIos
+                },
+                contentDescription = null,
+                tint = if (selected) selectedColor else normalColor,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .offset(y = 32.dp)
+                    .size(15.dp)
+            )
         }
     }
 }
@@ -4607,6 +4736,11 @@ private fun snapZoom(z: Float): Float {
 }
 
 private enum class AutoScrollMode { MOVE, RESIZE_START, RESIZE_END }
+
+private enum class PalletPanelTab {
+    DAILY,
+    ANYTIME
+}
 
 private data class MinRange(val start: Int, val end: Int)
 

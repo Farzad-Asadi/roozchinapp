@@ -789,7 +789,10 @@ class TaskScreenViewModel @Inject constructor(
         }
     }
 
-    fun saveEditedTask(categoryColor: String) {
+    fun saveEditedTask(
+        categoryColor: String,
+        onSaved: () -> Unit = {}
+    ) {
         val taskId = _editingTaskId.value ?: return
         val d = _taskDraft.value
         if (d.name.isBlank()) return
@@ -865,10 +868,29 @@ class TaskScreenViewModel @Inject constructor(
                 draftCreatedAtEpochMillis = null
             )
 
-            withContext(Dispatchers.IO) { taskRepo.updateTask(updated) }
+            withContext(Dispatchers.IO) {
+                taskRepo.updateTask(updated)
+            }
 
             finishEditTask()
+            onSaved()
         }
+    }
+
+    fun saveEditedTaskAndStartNextDraft(
+        categoryColor: String
+    ) {
+        val nextCategoryId =
+            _taskDraft.value.categoryId
+                ?: _menuCategoryId.value
+                ?: return
+
+        saveEditedTask(
+            categoryColor = categoryColor,
+            onSaved = {
+                startAddTask(nextCategoryId)
+            }
+        )
     }
 
     private fun flattenTaskTreeWithLevelsAndVisibility(
