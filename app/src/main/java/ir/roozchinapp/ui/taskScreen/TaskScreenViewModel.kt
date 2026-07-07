@@ -1,0 +1,2305 @@
+package ir.roozchinapp.ui.taskScreen
+
+import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import dagger.hilt.android.lifecycle.HiltViewModel
+import ir.roozchinapp.data.dataBaseRoom.tables.category.CategoryEntity
+import ir.roozchinapp.data.dataBaseRoom.tables.category.CategoryRepository
+import ir.roozchinapp.data.dataBaseRoom.tables.reminder.BeforeAfter
+import ir.roozchinapp.data.dataBaseRoom.tables.reminder.ReminderMode
+import ir.roozchinapp.data.dataBaseRoom.tables.reminder.ReminderStrengthMode
+import ir.roozchinapp.data.dataBaseRoom.tables.reminder.StartEnd
+import ir.roozchinapp.data.dataBaseRoom.tables.reminder.TaskReminderEntity
+import ir.roozchinapp.data.dataBaseRoom.tables.reminder.TaskReminderRepository
+import ir.roozchinapp.data.dataBaseRoom.tables.task.TaskChildRepository
+import ir.roozchinapp.data.dataBaseRoom.tables.task.TaskChildResetScope
+import ir.roozchinapp.data.dataBaseRoom.tables.task.TaskChildRuleEntity
+import ir.roozchinapp.data.dataBaseRoom.tables.task.TaskChildRuleType
+import ir.roozchinapp.data.dataBaseRoom.tables.task.TaskChildStructure
+import ir.roozchinapp.data.dataBaseRoom.tables.task.TaskEntity
+import ir.roozchinapp.data.dataBaseRoom.tables.task.TaskEntityStatus
+import ir.roozchinapp.data.dataBaseRoom.tables.task.TaskMode
+import ir.roozchinapp.data.dataBaseRoom.tables.task.TaskRepository
+import ir.roozchinapp.data.dataBaseRoom.tables.task.TaskWithSchedule
+import ir.roozchinapp.data.dataBaseRoom.tables.taskSchedule.RepeatUnit
+import ir.roozchinapp.data.dataBaseRoom.tables.taskSchedule.ScheduleMode
+import ir.roozchinapp.data.dataBaseRoom.tables.taskSchedule.TaskSchedule
+import ir.roozchinapp.data.dataBaseRoom.tables.taskSchedule.TaskScheduleRepository
+import ir.roozchinapp.data.dataClasses.CategoryDraft
+import ir.roozchinapp.data.dataClasses.CategoryRenderItem
+import ir.roozchinapp.data.dataClasses.ChildLevelUi
+import ir.roozchinapp.data.dataClasses.FlattenResult
+import ir.roozchinapp.data.dataClasses.ReminderDraft
+import ir.roozchinapp.data.dataClasses.RemindersInputs
+import ir.roozchinapp.data.dataClasses.RepeatDraft
+import ir.roozchinapp.data.dataClasses.ScheduleDraft
+import ir.roozchinapp.data.dataClasses.TaskDraft
+import ir.roozchinapp.data.dataClasses.TaskMiniUi
+import ir.roozchinapp.data.dataClasses.TaskReminderUi
+import ir.roozchinapp.data.dataClasses.TaskRenderItem
+import ir.roozchinapp.data.dataClasses.TaskScheduleUi
+import ir.roozchinapp.data.dataClasses.TaskUiState
+import ir.roozchinapp.data.workManager.ReminderScheduler
+import ir.roozchinapp.ui.categoryScreen.ROOT
+import ir.roozchinapp.ui.navigation.AppRoutes
+import ir.roozchinapp.utils.ceilToNextQuarter
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.time.DayOfWeek
+import java.time.LocalDate
+import java.time.LocalTime
+import javax.inject.Inject
+
+@HiltViewModel
+class TaskScreenViewModel @Inject constructor(
+    savedStateHandle: SavedStateHandle,
+    private val categoryRepository: CategoryRepository,
+    private val taskRepo: TaskRepository,
+    private val taskChildRepo: TaskChildRepository,
+    private val scheduleRepo: TaskScheduleRepository,
+    private val reminderRepo: TaskReminderRepository,
+    private val reminderScheduler: ReminderScheduler,
+) : ViewModel() {
+
+    private val staleDraftMaxAgeMillis: Long =
+        24L * 60L * 60L * 1_000L
+
+
+    private var pendingReminderKeyCounter = -1
+    private fun newPendingReminderKey(): Int = pendingReminderKeyCounter--
+
+
+    // این دو تا برای سناریوی “درگ شروع شد/تمام شد”
+    private val _dragCollapsedRestoreCategory = MutableStateFlow<Int?>(null)
+    private val _dragCollapsedRestoreTask = MutableStateFlow<Int?>(null)
+    private val _collapsedIdsCategory = MutableStateFlow<Set<Int>>(emptySet())
+    private val _taskCollapsedIds = MutableStateFlow<Set<Int>>(emptySet())
+
+    private val _menuCategoryId = MutableStateFlow<Int?>(null)
+    val menuCategoryId = _menuCategoryId.asStateFlow()
+
+    // ✅ لیست تسک‌ها + schedule
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val tasksWithScheduleForMenu: StateFlow<List<TaskWithSchedule>> =
+        menuCategoryId
+            .flatMapLatest { id ->
+                if (id == null) flowOf(emptyList())
+                else taskRepo.observeTasksWithScheduleByCategory(id)
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    private val taskMiniUiForMenu: StateFlow<List<TaskMiniUi>> =
+        tasksWithScheduleForMenu
+            .map { list ->
+                list.mapNotNull { tws ->
+                    val t = tws.taskEntity
+                    val id = t.id ?: return@mapNotNull null
+
+                    TaskMiniUi(
+                        id = id,
+                        title = t.name,
+                        isDone = t.isCompleted,
+                        hasSchedule = (tws.schedule != null),
+                        parentTaskId = t.parentTaskId,
+                        siblingIndex = t.siblingIndex,
+                        priority = t.priority
+                    )
+
+                }
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val tasksForMenuCategory: StateFlow<List<TaskEntity>> =
+        _menuCategoryId
+            .flatMapLatest { id ->
+                if (id == null) flowOf(emptyList())
+                else taskRepo.observeTasksByCategory(id)
+            }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5_000),
+                initialValue = emptyList()
+            )
+
+    val allTaskEntities: StateFlow<List<TaskEntity>> =
+        taskRepo.observeAllTasks()
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5_000),
+                emptyList()
+            )
+
+    val allEnabledChildRules: StateFlow<List<TaskChildRuleEntity>> =
+        taskChildRepo.observeAllEnabledRules()
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5_000),
+                emptyList()
+            )
+
+
+    val uiState: StateFlow<TaskUiState> =
+        combine(
+            categoryRepository.observeAll(),
+            _collapsedIdsCategory,
+            tasksForMenuCategory,     // ✅ لیست خام Task ها
+            taskMiniUiForMenu,        // ✅ برای ساخت renderItems تسک‌ها
+            _taskCollapsedIds
+        ) { categories, catCollapsed, tasks, tasksMini, taskCollapsed ->
+
+            val catFlatten = flattenCategoryTreeWithLevelsAndVisibility(categories, catCollapsed)
+
+            val taskRender = flattenTaskTreeWithLevelsAndVisibility(
+                all = tasksMini,
+                collapsedIds = taskCollapsed,
+                rootParentId = ROOT,
+                maxDepth = 4
+            )
+
+
+            TaskUiState(
+                isLoading = false,
+                categories = categories,
+                renderItems = catFlatten.items,
+
+                taskEntities = tasks,                 // ✅ اینجا کامل شد
+                taskRenderItems = taskRender,  // ✅ اینم مثل قبل
+
+                levelById = catFlatten.levelById
+            )
+        }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = TaskUiState(
+                isLoading = true,
+                categories = emptyList(),
+                taskEntities = emptyList()
+            )
+        )
+
+
+    private val _draft = MutableStateFlow(CategoryDraft())
+    val draft = _draft.asStateFlow()
+
+
+    val parentPickerItems: StateFlow<FlattenResult> =
+        categoryRepository.observeAll()
+            .map { categories ->
+                flattenForPickerAllVisible(categories)
+            }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5_000),
+                initialValue = FlattenResult(emptyList(), emptyMap())
+            )
+
+    private val _taskDraft = MutableStateFlow(TaskDraft())
+    val taskDraft = _taskDraft.asStateFlow()
+
+
+    private val _editingTaskId = MutableStateFlow<Int?>(null)
+    val editingTaskId = _editingTaskId.asStateFlow()
+
+    private val _isEditingDraftTask = MutableStateFlow(false)
+    val isEditingDraftTask = _isEditingDraftTask.asStateFlow()
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val editingChildRule: StateFlow<TaskChildRuleEntity?> =
+        editingTaskId
+            .flatMapLatest { taskId ->
+                if (taskId == null) {
+                    flowOf(null)
+                } else {
+                    taskChildRepo.observeRulesByChildTaskId(taskId)
+                        .map { rules ->
+                            rules.firstOrNull { it.isEnabled }
+                        }
+                }
+            }
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5_000),
+                null
+            )
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val childRulesForEditingTask: StateFlow<List<TaskChildRuleEntity>> =
+        editingTaskId
+            .flatMapLatest { taskId ->
+                if (taskId == null) {
+                    flowOf(emptyList())
+                } else {
+                    taskChildRepo.observeRulesByParentTaskId(taskId)
+                }
+            }
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5_000),
+                emptyList()
+            )
+
+    private val _taskEditBackStack = MutableStateFlow<List<Int>>(emptyList())
+    val taskEditBackStack = _taskEditBackStack.asStateFlow()
+
+    private val _scheduleDraft = MutableStateFlow(ScheduleDraft())
+    val scheduleDraft = _scheduleDraft.asStateFlow()
+
+    private val _scheduleConfirmedForNewTask = MutableStateFlow(false)
+
+
+    // ✅ شمارش scheduled (دو روش)
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val scheduledCountForMenu: StateFlow<Int> =
+        menuCategoryId
+            .flatMapLatest { id ->
+                if (id == null) flowOf(0)
+                else taskRepo.observeScheduledCountByCategory(id)
+                // یا اگر اون Query رو نذاشتی:
+                // else taskRepository.observeTasksWithScheduleByCategory(id).map { list -> list.count { it.schedule != null } }
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+
+    val childLevelUi: StateFlow<ChildLevelUi> =
+        combine(
+            tasksForMenuCategory,
+            _taskDraft,
+            _editingTaskId
+        ) { tasks, draft, editingId ->
+
+            val selectedCatId = draft.categoryId
+            val sameCategory = selectedCatId != null && selectedCatId == _menuCategoryId.value
+            if (!sameCategory) return@combine ChildLevelUi(setOf(0), 0)
+            if (draft.insertAtTop) return@combine ChildLevelUi(setOf(0), 0)
+
+            val parentById = buildParentById(tasks)
+            val miniAll = buildTaskMiniAll(tasks)
+            val flat = flattenAllTasks(miniAll)
+
+            fun depthOfId(id: Int): Int = depthOf(id, parentById)
+
+            val insertionIndex =
+                if (editingId == null) flat.size
+                else flat.indexOfFirst { it.id == editingId }
+                    .let { if (it == -1) flat.size else it }
+
+            val prevId = flat.getOrNull(insertionIndex - 1)?.id
+            val prevDepth = if (prevId == null) -1 else depthOfId(prevId)
+
+            val cap = (prevDepth + 1).coerceIn(0, 3)
+
+            val allowed = (0..cap).toMutableSet()
+
+            // در edit سطح فعلی همیشه مجاز
+            if (editingId != null) allowed += depthOfId(editingId)
+
+            ChildLevelUi(
+                allowed = allowed,
+                maxAllowed = allowed.maxOrNull() ?: 0
+            )
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ChildLevelUi())
+
+
+    private val _editingScheduleKey = MutableStateFlow<Int?>(null)
+    val editingScheduleKey = _editingScheduleKey.asStateFlow()
+
+
+    private var pendingKeyCounter = -1
+
+    private val _pendingSchedulesForNewTask = MutableStateFlow<List<TaskScheduleUi>>(emptyList())
+    private val pendingSchedulesForNewTask = _pendingSchedulesForNewTask.asStateFlow()
+
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val schedulesUiForTaskDialog: StateFlow<List<TaskScheduleUi>> =
+        editingTaskId.flatMapLatest { tid ->
+            if (tid == null) {
+                pendingSchedulesForNewTask
+            } else {
+                scheduleRepo.observeByTaskId(tid).map { list ->
+                    list.map { sch ->
+                        TaskScheduleUi(
+                            key = sch.id!!,       // چون DB هست id دارد
+                            schedule = sch,
+                            isPending = false
+                        )
+                    }
+                }
+            }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    private val _reminderDraft = MutableStateFlow(ReminderDraft())
+    val reminderDraft = _reminderDraft.asStateFlow()
+
+    private val _editingReminderKey = MutableStateFlow<Int?>(null)
+    val editingReminderKey = _editingReminderKey.asStateFlow()
+
+    /**
+     * کدوم schedule داریم reminderهاش رو توی دیالوگ schedule مدیریت می‌کنیم؟
+     * - اگر schedule در DB باشد => scheduleId (مثبت)
+     * - اگر schedule pending برای task جدید باشد => scheduleKey (منفی)
+     * - اگر schedule هنوز confirm نشده باشد => null (یعنی “draft schedule”)
+     */
+    private val _activeScheduleKeyForReminder = MutableStateFlow<Int?>(null)
+
+    /**
+     * reminderهای مربوط به “schedule draft” (قبل confirm schedule)
+     * فقط در زمانی استفاده میشه که editingScheduleKey == null داخل دیالوگ schedule.
+     */
+    private val _pendingRemindersForScheduleDraft =
+        MutableStateFlow<List<TaskReminderUi>>(emptyList())
+
+    /**
+     * reminderهای مربوط به scheduleهای pending که برای task جدید ساخته شده‌اند.
+     * کلید: scheduleKey (همون key منفی TaskScheduleUi)
+     */
+    private val _pendingRemindersByScheduleKey =
+        MutableStateFlow<Map<Int, List<TaskReminderUi>>>(emptyMap())
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val remindersUiForScheduleDialog: StateFlow<List<TaskReminderUi>> =
+        combine(
+            editingTaskId,
+            editingScheduleKey,
+            _pendingRemindersForScheduleDraft,
+            _pendingRemindersByScheduleKey
+        ) { tid, schKey, draftList, pendingMap ->
+            RemindersInputs(tid, schKey, draftList, pendingMap)
+        }.flatMapLatest { input ->
+
+            val tid = input.tid
+            val schKey = input.schKey
+            val draftList = input.draftList
+            val pendingMap = input.pendingMap
+
+            // 1) schedule draft (هنوز confirm نشده)
+            if (schKey == null) return@flatMapLatest flowOf(draftList)
+
+            // 2) task جدید و schedule pending
+            if (tid == null) return@flatMapLatest flowOf(pendingMap[schKey].orEmpty())
+
+            // 3) DB (schKey اینجا scheduleId است)
+            reminderRepo.observeByScheduleId(schKey).map { list ->
+                list.map { e ->
+                    TaskReminderUi(
+                        key = e.id ?: 0,          // Int
+                        entity = e,
+                        isPending = false
+                    )
+                }
+            }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val childRulesForEditingParentTask: StateFlow<List<TaskChildRuleEntity>> =
+        editingTaskId
+            .flatMapLatest { taskId ->
+                if (taskId == null) {
+                    flowOf(emptyList())
+                } else {
+                    taskChildRepo.observeRulesByParentTaskId(taskId)
+                }
+            }
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5_000),
+                emptyList()
+            )
+
+    init {
+
+        cleanupStaleDraftTasks()
+
+        val categoryId =
+            savedStateHandle.get<Int>(AppRoutes.ARG_CATEGORY_ID)
+                ?: -1
+        val taskId =
+            savedStateHandle.get<Int>(AppRoutes.ARG_TASK_ID)
+                ?: -1
+
+        when {
+            taskId != -1 -> {
+                startEditTask(taskId)
+            }
+
+            categoryId != -1 -> {
+                _menuCategoryId.value = categoryId
+                startAddTask(categoryId)
+            }
+
+            else -> {
+                // fallback: چیزی پاس داده نشده
+            }
+        }
+    }
+
+
+    //کتگوری ها
+
+    fun setTaskCategoryId(categoryId: Int) {
+        _taskDraft.update { it.copy(categoryId = categoryId) }
+    }
+
+
+    //تسک ها
+
+    private fun cleanupStaleDraftTasks() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val currentEditingTaskId = _editingTaskId.value
+
+            val cutoffEpochMillis =
+                System.currentTimeMillis() - staleDraftMaxAgeMillis
+
+            val oldDraftRoots =
+                taskRepo.getOldDraftRootTasks(
+                    cutoffEpochMillis = cutoffEpochMillis,
+                    rootParentTaskId = ROOT
+                )
+
+            oldDraftRoots.forEach { draftRoot ->
+                val draftRootId = draftRoot.id ?: return@forEach
+
+                // برای امنیت: اگر همین task الان در editor است، پاکش نکن.
+                if (draftRootId == currentEditingTaskId) {
+                    return@forEach
+                }
+
+                deleteTaskSubtree(draftRoot)
+            }
+        }
+    }
+
+
+    private fun startAddTask(categoryId: Int) {
+        _editingTaskId.value = null
+        _taskEditBackStack.value = emptyList()
+        _isEditingDraftTask.value = false
+        _taskDraft.value = TaskDraft(categoryId = categoryId)
+        _scheduleDraft.value = ScheduleDraft()
+        _scheduleConfirmedForNewTask.value = false
+        _pendingSchedulesForNewTask.value = emptyList()
+        _pendingRemindersForScheduleDraft.value = emptyList()
+        _pendingRemindersByScheduleKey.value = emptyMap()
+
+        viewModelScope.launch {
+            val category = withContext(Dispatchers.IO) {
+                categoryRepository.getCategoryById(categoryId)
+            } ?: return@launch
+
+            val now = System.currentTimeMillis()
+
+            val draftTask = TaskEntity(
+                id = null,
+                name = "",
+                color = category.color,
+                description = "",
+                durationOverlap = 0,
+                selected = false,
+                changed = false,
+                categoryId = categoryId,
+                isCompleted = false,
+                priority = 0,
+                isExtended = true,
+                parentTaskId = ROOT,
+                siblingIndex = nextRootSiblingIndexForDraftTask(categoryId),
+                taskMode = TaskMode.NORMAL,
+                pomodoroTargetUnits = 50,
+                pomodoroDoneUnits = 0,
+                entityStatus = TaskEntityStatus.DRAFT,
+                draftCreatedAtEpochMillis = now,
+                childStructure = TaskChildStructure.SUBTASKS,
+                showInAnytimePallet = false
+            )
+
+            val newDraftTaskId = withContext(Dispatchers.IO) {
+                taskRepo.insertTaskAndReturnId(draftTask)
+            }
+
+            _editingTaskId.value = newDraftTaskId
+            _isEditingDraftTask.value = true
+
+            _taskDraft.value = TaskDraft(
+                name = "",
+                categoryId = categoryId,
+                priority = 0,
+                isCompleted = false,
+                note = "",
+                insertAtTop = false,
+                childLevel = 0,
+                childStructure = TaskChildStructure.SUBTASKS,
+                showInAnytimePallet = false,
+                taskMode = TaskMode.NORMAL,
+                pomodoroTargetUnits = 50,
+                pomodoroDoneUnits = 0
+            )
+        }
+    }
+
+    private suspend fun nextRootSiblingIndexForDraftTask(
+        categoryId: Int
+    ): Int {
+        val all = withContext(Dispatchers.IO) {
+            taskRepo.getTasksByCategory(categoryId)
+        }
+
+        return all
+            .filter { task ->
+                task.parentTaskId == ROOT
+            }
+            .maxOfOrNull { task ->
+                task.siblingIndex
+            }
+            ?.plus(1)
+            ?: 0
+    }
+
+    private fun startEditTask(taskId: Int) {
+        viewModelScope.launch {
+            val t = taskRepo.getTaskById(taskId) ?: return@launch
+
+            _isEditingDraftTask.value =
+                t.entityStatus == TaskEntityStatus.DRAFT
+
+            val categoryId = t.categoryId ?: return@launch
+            _menuCategoryId.value = categoryId
+            val all = withContext(Dispatchers.IO) { taskRepo.getTasksByCategory(categoryId) }
+            val parentById = buildParentById(all)
+            val depth = t.id?.let { depthOf(it, parentById) } ?: 0
+
+            _editingTaskId.value = taskId
+            _taskDraft.value = TaskDraft(
+                name = t.name,
+                categoryId = t.categoryId,
+                priority = t.priority,
+                isCompleted = t.isCompleted,
+                note = t.description,
+                insertAtTop = false,
+                childLevel = depth,
+                childStructure = t.childStructure,
+                showInAnytimePallet = t.showInAnytimePallet,
+                taskMode = t.taskMode,
+                pomodoroTargetUnits = t.pomodoroTargetUnits ?:50,
+                pomodoroDoneUnits = t.pomodoroDoneUnits
+            )
+
+            val sch = scheduleRepo.getByTaskId(taskId)
+            _scheduleDraft.value = sch?.toDraft() ?: ScheduleDraft()
+
+
+        }
+    }
+
+    fun setTaskName(v: String) = _taskDraft.update { it.copy(name = v) }
+    fun setTaskPriority(p: Int) = _taskDraft.update { it.copy(priority = p) }
+    fun setTaskCompleted(v: Boolean) = _taskDraft.update { it.copy(isCompleted = v) }
+    fun setTaskNote(v: String) = _taskDraft.update { it.copy(note = v) }
+    fun setTaskInsertAtTop(v: Boolean) = _taskDraft.update { it.copy(insertAtTop = v) }
+    fun setTaskChildLevel(v: Int) = _taskDraft.update { it.copy(childLevel = v.coerceIn(0, 3)) }
+
+    fun setTaskChildStructure(value: String) {
+        val safeValue =
+            when (value) {
+                TaskChildStructure.LIST_ITEMS -> TaskChildStructure.LIST_ITEMS
+                else -> TaskChildStructure.SUBTASKS
+            }
+
+        _taskDraft.update {
+            it.copy(childStructure = safeValue)
+        }
+    }
+
+    fun setTaskShowInAnytimePallet(value: Boolean) {
+        _taskDraft.update {
+            it.copy(showInAnytimePallet = value)
+        }
+    }
+
+    fun setTaskPomodoroEnabled(enabled: Boolean) = _taskDraft.update { cur ->
+        if (enabled) {
+            cur.copy(
+                taskMode = TaskMode.POMODORO,
+                pomodoroTargetUnits = cur.pomodoroTargetUnits ?: 0,
+                pomodoroDoneUnits = cur.pomodoroDoneUnits
+            )
+        } else {
+            cur.copy(
+                taskMode = TaskMode.NORMAL,
+                pomodoroTargetUnits = 50,
+                pomodoroDoneUnits = 0
+            )
+        }
+    }
+
+    fun setTaskPomodoroTargetUnits(v: Int?) = _taskDraft.update { cur ->
+        val target = v?.coerceAtLeast(0)
+        val done = cur.pomodoroDoneUnits.coerceAtLeast(0)
+        cur.copy(
+            pomodoroTargetUnits = target ?:50,
+            pomodoroDoneUnits = if (target != null) done.coerceAtMost(target) else done
+        )
+    }
+
+    fun setTaskPomodoroDoneUnits(v: Int) = _taskDraft.update { cur ->
+        val done = v.coerceAtLeast(0)
+        val target = cur.pomodoroTargetUnits
+        cur.copy(pomodoroDoneUnits = if (target != null) done.coerceAtMost(target) else done)
+    }
+
+    fun resetTaskDraftKeepSomeDefaults() {
+        val cur = _taskDraft.value
+        _taskDraft.value = TaskDraft(
+            name = "",
+            categoryId = cur.categoryId,
+            priority = cur.priority,
+            isCompleted = false,
+            note = "",
+            insertAtTop = cur.insertAtTop,
+            childLevel = cur.childLevel,
+            childStructure = cur.childStructure,
+            showInAnytimePallet = cur.showInAnytimePallet,
+            taskMode = cur.taskMode,
+            pomodoroTargetUnits = cur.pomodoroTargetUnits,
+            pomodoroDoneUnits = 0
+        )
+        _scheduleDraft.value = ScheduleDraft()
+        _scheduleConfirmedForNewTask.value = false
+    }
+
+    fun createTaskForCategory(categoryColor: String) {
+        val d = _taskDraft.value
+        if (d.name.isBlank()) return
+        val categoryId = d.categoryId ?: return
+
+        viewModelScope.launch {
+            val all = withContext(Dispatchers.IO) { taskRepo.getTasksByCategory(categoryId) }
+            val parentById = buildParentById(all)
+            val miniAll = buildTaskMiniAll(all)
+            val flat = flattenAllTasks(miniAll)
+
+            val insertionIndex = if (d.insertAtTop) 0 else flat.size
+
+            val desiredDepth = d.childLevel.coerceIn(0, 3)
+
+            val parentId = pickParentIdForDesiredDepth(
+                flat = flat,
+                parentById = parentById,
+                desiredDepth = desiredDepth,
+                insertionIndex = insertionIndex
+            ) ?: ROOT
+
+            // ✅ siblingIndex مثل category
+            val siblings = all
+                .filter { it.parentTaskId == parentId }
+
+            val newSiblingIndex =
+                if (d.insertAtTop) {
+                    // شیفت دادن بقیه
+                    withContext(Dispatchers.IO) {
+                        siblings.forEach { s ->
+                            val sid = s.id ?: return@forEach
+                            taskRepo.updateSiblingIndex(sid, s.siblingIndex + 1)
+                        }
+                    }
+                    0
+                } else {
+                    siblings.size
+                }
+
+            val newTaskEntity = TaskEntity(
+                id = null,
+                name = d.name.trim(),
+                color = categoryColor,
+                description = d.note,
+                durationOverlap = 0,
+                selected = false,
+                changed = false,
+                categoryId = categoryId,
+                isCompleted = d.isCompleted,
+                priority = d.priority,
+                parentTaskId = parentId,
+                siblingIndex = newSiblingIndex,
+                entityStatus = TaskEntityStatus.ACTIVE,
+                draftCreatedAtEpochMillis = null,
+                childStructure = d.childStructure,
+                showInAnytimePallet = d.showInAnytimePallet,
+                taskMode = d.taskMode,
+                pomodoroTargetUnits = d.pomodoroTargetUnits,
+                pomodoroDoneUnits = d.pomodoroDoneUnits,
+            )
+
+            val newId = withContext(Dispatchers.IO) {
+                taskRepo.insertTaskAndReturnId(newTaskEntity) // Long
+            }
+
+
+            val pendingSchedules = _pendingSchedulesForNewTask.value
+            val pendingRemindersMap = _pendingRemindersByScheduleKey.value
+
+
+            if (pendingSchedules.isNotEmpty()) {
+                withContext(Dispatchers.IO) {
+                    pendingSchedules.forEach { schUi ->
+                        val newScheduleId = scheduleRepo.insert(
+                            schUi.schedule.copy(taskId = newId)
+                        )
+
+                        val reminders = pendingRemindersMap[schUi.key].orEmpty()
+                        reminders.forEach { rUi ->
+                            val rid = reminderRepo.upsert(
+                                rUi.entity.copy(id = 0, scheduleId = newScheduleId)
+                            )
+                            try {
+                                reminderScheduler.reschedule(rid)   // ✅ این خط حیاتی است
+                            } catch (_: Throwable) {
+                            }
+                        }
+                    }
+                }
+                _pendingSchedulesForNewTask.value = emptyList()
+                _pendingRemindersByScheduleKey.value = emptyMap()
+            }
+
+
+
+            if (_scheduleConfirmedForNewTask.value) {
+                val sd = _scheduleDraft.value
+                fun LocalTime.toMinuteOfDay(): Int = hour * 60 + minute
+                val safeInterval = sd.repeat.interval.coerceIn(1, 99)
+                val isPomo = (sd.mode == ScheduleMode.POMODORO)
+
+
+
+                val schedule = TaskSchedule(
+                    id = null,
+                    taskId = newId,
+                    title = sd.title.trim().ifBlank { null },
+                    mode = sd.mode,
+                    dateEpochDay = sd.date.toEpochDay(),
+                    startMinuteOfDay = if (sd.mode == ScheduleMode.TIME_RANGE) {
+                        sd.start.toMinuteOfDay()
+                    } else {
+                        480    //ساعت 8 صبح
+                    },
+                    endMinuteOfDay = if (sd.mode == ScheduleMode.TIME_RANGE) {
+                        sd.end.toMinuteOfDay()
+                    } else {
+                        480 + sd.durationMinutes
+                    },
+                    // ✅ Pomodoro fields
+                    focusMinutes = if (isPomo) sd.focusMinutes else null,
+                    shortBreakMinutes = if (isPomo) sd.shortBreakMinutes else null,
+                    longBreakMinutes = if (isPomo) sd.longBreakMinutes else null,
+                    longBreakEvery = if (isPomo) sd.longBreakEvery else null,
+                    pomodoroUnitsPerDay = if (isPomo) sd.pomodoroUnitsPerDay else null,
+                    durationMinutes = if (sd.mode == ScheduleMode.AMOUNT_OF_TIME) sd.durationMinutes else null,
+                    inPallet = (sd.mode == ScheduleMode.AMOUNT_OF_TIME || isPomo),
+                    repeating = sd.repeat.enabled,
+                    repeatInterval = if (sd.repeat.enabled) safeInterval else null,
+                    repeatUnit = if (sd.repeat.enabled) sd.repeat.unit else null,
+                    weekdaysMask = if (sd.repeat.enabled && sd.repeat.unit == RepeatUnit.WEEK)
+                        sd.repeat.weekdaysMask.coerceIn(0, 127)
+                    else null
+
+                )
+
+                withContext(Dispatchers.IO) { scheduleRepo.upsert(schedule) }
+            }
+        }
+    }
+
+    fun saveEditedTask(
+        categoryColor: String,
+        onSaved: () -> Unit = {}
+    ) {
+        val taskId = _editingTaskId.value ?: return
+        val d = _taskDraft.value
+        if (d.name.isBlank()) return
+
+        viewModelScope.launch {
+            val current = taskRepo.getTaskById(taskId) ?: return@launch
+
+            val newCategoryId = d.categoryId ?: current.categoryId ?: return@launch
+            val categoryChanged = (newCategoryId != current.categoryId)
+
+            val childrenCount = withContext(Dispatchers.IO) { taskRepo.countChildren(taskId) }
+
+            val (finalParentId, finalSiblingIndex) =
+                if (categoryChanged) {
+                    val allNew =
+                        withContext(Dispatchers.IO) { taskRepo.getTasksByCategory(newCategoryId) }
+                    val rootSiblings = allNew.filter { it.parentTaskId == ROOT }
+                    ROOT to rootSiblings.size
+
+                } else {
+                    val categoryId = current.categoryId ?: return@launch
+                    val all =
+                        withContext(Dispatchers.IO) { taskRepo.getTasksByCategory(categoryId) }
+                    val parentById = buildParentById(all)
+                    val curDepth = current.id?.let { depthOf(it, parentById) } ?: 0
+
+                    // ✅ اگر بچه دارد، اجازه‌ی کم‌عمق‌تر شدن نده (مثل قبل)
+                    if (childrenCount > 0 && d.childLevel < curDepth) return@launch
+
+                    val miniAll = buildTaskMiniAll(all)
+                    val flat = flattenAllTasks(miniAll)
+
+                    // محل درج برای edit: قبل از خود آیتم
+                    val insertionIndex = flat.indexOfFirst { it.id == taskId }
+                        .let { if (it == -1) flat.size else it }
+
+                    val desiredDepth = d.childLevel.coerceIn(0, 3)
+
+
+                    val newParent = pickParentIdForDesiredDepth(
+                        flat = flat,
+                        parentById = parentById,
+                        desiredDepth = desiredDepth,
+                        insertionIndex = insertionIndex
+                    )
+
+
+                    if (newParent == current.parentTaskId) {
+                        // parent ثابت => siblingIndex رو دست نزن
+                        newParent to current.siblingIndex
+                    } else {
+                        val newSiblings = all.filter { it.parentTaskId == newParent }
+                        newParent to newSiblings.size
+                    }
+                }
+            val safeFinalParentId = finalParentId ?: ROOT
+            val updated = current.copy(
+                name = d.name.trim(),
+                description = d.note,
+                isCompleted = d.isCompleted,
+                priority = d.priority,
+                color = categoryColor,
+
+                categoryId = newCategoryId,
+                parentTaskId = safeFinalParentId,
+                siblingIndex = finalSiblingIndex,
+
+                taskMode = d.taskMode,
+                pomodoroTargetUnits = d.pomodoroTargetUnits,
+                pomodoroDoneUnits = d.pomodoroDoneUnits,
+
+                entityStatus = TaskEntityStatus.ACTIVE,
+                draftCreatedAtEpochMillis = null,
+
+                childStructure = d.childStructure,
+                showInAnytimePallet = d.showInAnytimePallet
+            )
+
+            withContext(Dispatchers.IO) {
+                taskRepo.updateTask(updated)
+            }
+
+            finishEditTask()
+            onSaved()
+        }
+    }
+
+    fun saveEditedTaskAndStartNextDraft(
+        categoryColor: String
+    ) {
+        val nextCategoryId =
+            _taskDraft.value.categoryId
+                ?: _menuCategoryId.value
+                ?: return
+
+        saveEditedTask(
+            categoryColor = categoryColor,
+            onSaved = {
+                startAddTask(nextCategoryId)
+            }
+        )
+    }
+
+    private fun flattenTaskTreeWithLevelsAndVisibility(
+        all: List<TaskMiniUi>,
+        collapsedIds: Set<Int>,
+        rootParentId: Int = ROOT,
+        maxDepth: Int = 4
+    ): List<TaskRenderItem> {
+
+        val byParent = all.groupBy { it.parentTaskId }
+        val items = mutableListOf<TaskRenderItem>()
+
+        fun dfs(parentId: Int, realDepth: Int, ancestorCollapsed: Boolean) {
+            if (realDepth > 50) return
+
+            val renderLevel = realDepth.coerceAtMost(maxDepth)
+            val children = byParent[parentId].orEmpty()
+                .sortedWith(compareBy<TaskMiniUi> { it.siblingIndex }.thenBy { it.id })
+
+            for (child in children) {
+                val id = child.id
+                val hasChildrenRaw = byParent[id].orEmpty().isNotEmpty()
+                val hasChildren = (renderLevel < maxDepth) && hasChildrenRaw
+
+                val selfCollapsed = collapsedIds.contains(id)
+                val visible = !ancestorCollapsed
+
+                items += TaskRenderItem(
+                    task = child,
+                    level = renderLevel,
+                    hasChildren = hasChildren,
+                    isExpanded = !selfCollapsed,
+                    isVisible = visible
+                )
+
+                dfs(id, realDepth + 1, ancestorCollapsed || selfCollapsed)
+            }
+        }
+
+        dfs(rootParentId, realDepth = 1, ancestorCollapsed = false)
+        return items
+    }
+
+    fun openChildTaskForEdit(childTaskId: Int) {
+        val currentTaskId = _editingTaskId.value ?: return
+        if (currentTaskId == childTaskId) return
+
+        _taskEditBackStack.update { stack ->
+            stack + currentTaskId
+        }
+
+        startEditTask(childTaskId)
+    }
+
+    fun navigateBackInsideTaskEditor(): Boolean {
+        val stack = _taskEditBackStack.value
+        val previousTaskId = stack.lastOrNull() ?: return false
+
+        _taskEditBackStack.value = stack.dropLast(1)
+
+        startEditTask(previousTaskId)
+
+        return true
+    }
+
+    fun clearTaskEditBackStack() {
+        _taskEditBackStack.value = emptyList()
+    }
+
+    fun createDirectChildTaskForEditingTask(
+        categoryColor: String,
+        childName: String,
+        ruleType: String = TaskChildRuleType.ONCE_PER_PARENT_OCCURRENCE,
+        timesPerDay: Int = 1,
+        timesPerOccurrence: Int = 1,
+        g5TargetCount: Int = 5,
+        onCreated: (Int) -> Unit = {}
+    ) {
+        val parentTaskId = _editingTaskId.value ?: return
+        val cleanName = childName.trim()
+
+        if (cleanName.isBlank()) return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val parent = taskRepo.getTaskById(parentTaskId) ?: return@launch
+            val categoryId = parent.categoryId ?: return@launch
+
+            val parentIsAlreadyChild =
+                parent.parentTaskId != null && parent.parentTaskId != ROOT
+
+            if (parentIsAlreadyChild) {
+                return@launch
+            }
+
+            val all = taskRepo.getTasksByCategory(categoryId)
+
+            val siblings = all.filter {
+                it.parentTaskId == parentTaskId
+            }
+
+            val newSiblingIndex =
+                (siblings.maxOfOrNull { it.siblingIndex } ?: -1) + 1
+
+            val child = TaskEntity(
+                id = null,
+                name = cleanName,
+                color = categoryColor,
+                description = "",
+                durationOverlap = 0,
+                selected = false,
+                changed = false,
+                categoryId = categoryId,
+                isCompleted = false,
+                priority = parent.priority,
+                parentTaskId = parentTaskId,
+                siblingIndex = newSiblingIndex,
+                taskMode = TaskMode.NORMAL,
+                pomodoroTargetUnits = 50,
+                pomodoroDoneUnits = 0,
+                entityStatus = TaskEntityStatus.ACTIVE,
+                draftCreatedAtEpochMillis = null,
+                childStructure = TaskChildStructure.SUBTASKS,
+                showInAnytimePallet = false
+            )
+
+            val newChildTaskId = taskRepo.insertTaskAndReturnId(child)
+
+            val safeRuleType = ruleType.ifBlank {
+                TaskChildRuleType.ONCE_PER_PARENT_OCCURRENCE
+            }
+
+            val safeTimesPerDay = timesPerDay.coerceAtLeast(1)
+            val safeTimesPerOccurrence = timesPerOccurrence.coerceAtLeast(1)
+            val safeG5TargetCount = g5TargetCount.coerceAtLeast(1)
+
+            taskChildRepo.upsertRule(
+                TaskChildRuleEntity(
+                    parentTaskId = parentTaskId,
+                    childTaskId = newChildTaskId,
+                    ruleType = safeRuleType,
+                    resetScope = resetScopeForChildRuleType(safeRuleType),
+                    sortOrder = newSiblingIndex,
+                    targetCount = when (safeRuleType) {
+                        TaskChildRuleType.N_TIMES_PER_DAY -> safeTimesPerDay
+                        TaskChildRuleType.N_TIMES_PER_PARENT_OCCURRENCE -> safeTimesPerOccurrence
+                        TaskChildRuleType.G5_LEARNING -> safeG5TargetCount
+                        else -> 1
+                    },
+                    timesPerDay = safeTimesPerDay,
+                    timesPerOccurrence = safeTimesPerOccurrence,
+                    g5TargetCount = safeG5TargetCount,
+                    showInTimelineCard = true,
+                    showInBottomSheet = true
+                )
+            )
+
+            withContext(Dispatchers.Main) {
+                onCreated(newChildTaskId)
+            }
+        }
+    }
+
+
+    fun setDirectChildTaskCompleted(
+        childTaskId: Int,
+        completed: Boolean
+    ) {
+        val parentTaskId = _editingTaskId.value ?: return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val child = taskRepo.getTaskById(childTaskId) ?: return@launch
+
+            if (child.parentTaskId != parentTaskId) {
+                return@launch
+            }
+
+            taskRepo.updateTask(
+                child.copy(
+                    isCompleted = completed
+                )
+            )
+        }
+    }
+
+    fun deleteDirectChildTask(
+        childTaskId: Int
+    ) {
+        val parentTaskId = _editingTaskId.value ?: return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val child = taskRepo.getTaskById(childTaskId) ?: return@launch
+
+            if (child.parentTaskId != parentTaskId) {
+                return@launch
+            }
+
+            val categoryId = child.categoryId ?: return@launch
+
+            taskRepo.deleteTask(child)
+
+            val remainingSiblings = taskRepo
+                .getTasksByCategory(categoryId)
+                .filter { it.parentTaskId == parentTaskId }
+                .sortedWith(
+                    compareBy<TaskEntity> { it.siblingIndex }
+                        .thenBy { it.id ?: 0 }
+                )
+
+            remainingSiblings.forEachIndexed { index, task ->
+                val id = task.id ?: return@forEachIndexed
+
+                if (task.siblingIndex != index) {
+                    taskRepo.updateSiblingIndex(
+                        id = id,
+                        siblingIndex = index
+                    )
+                }
+            }
+        }
+    }
+
+
+    //اسچدول ها
+    fun setScheduleTitle(v: String) = _scheduleDraft.update { it.copy(title = v) }
+    fun setScheduleMode(m: ScheduleMode) = _scheduleDraft.update { cur ->
+        when (m) {
+            ScheduleMode.TIME_RANGE -> cur.copy(mode = m)
+            ScheduleMode.AMOUNT_OF_TIME -> cur.copy(mode = m)
+            ScheduleMode.POMODORO -> cur.copy(
+                mode = m,
+                repeat = cur.repeat.copy(enabled = true, interval = 1, unit = RepeatUnit.WEEK),
+                durationMinutes = cur.focusMinutes + cur.shortBreakMinutes
+            )
+        }
+    }
+
+    fun setScheduleStart(t: LocalTime) = _scheduleDraft.update { it.copy(start = t) }
+    fun setScheduleEnd(t: LocalTime) = _scheduleDraft.update { it.copy(end = t) }
+    fun setScheduleDuration(min: Int) =
+        _scheduleDraft.update { it.copy(durationMinutes = min.coerceAtLeast(0)) }
+
+    fun confirmScheduleFromDialog() {
+        val sd = _scheduleDraft.value
+        fun LocalTime.toMinuteOfDay() = hour * 60 + minute
+
+        val tid = _editingTaskId.value
+        val key = _editingScheduleKey.value
+
+        val safeInterval = sd.repeat.interval.coerceIn(1, 99)
+        val safeMask = sd.repeat.weekdaysMask.coerceIn(0, 127)
+
+        val isPomo = (sd.mode == ScheduleMode.POMODORO)
+
+        val safeDurationMinutes = when (sd.mode) {
+            ScheduleMode.TIME_RANGE -> {
+                val startMin = sd.start.toMinuteOfDay()
+                val endMin = sd.end.toMinuteOfDay()
+                (endMin - startMin).coerceAtLeast(1)
+            }
+
+            ScheduleMode.POMODORO -> {
+                val focus = sd.focusMinutes.coerceAtLeast(1)
+                val shortBreak = sd.shortBreakMinutes.coerceAtLeast(0)
+                (focus + shortBreak).coerceAtLeast(1)
+            }
+
+            ScheduleMode.AMOUNT_OF_TIME -> {
+                sd.durationMinutes.coerceAtLeast(1)
+            }
+        }
+
+        val newSchedule = TaskSchedule(
+            id = if (tid != null) key else null,
+            taskId = tid ?: 0,
+            title = sd.title.trim().ifBlank { null },
+            mode = sd.mode,
+            dateEpochDay = sd.date.toEpochDay(),
+
+            startMinuteOfDay = if (sd.mode == ScheduleMode.TIME_RANGE) sd.start.toMinuteOfDay() else 480,
+            endMinuteOfDay = if (sd.mode == ScheduleMode.TIME_RANGE) {
+                sd.end.toMinuteOfDay()
+            } else {
+                480 + safeDurationMinutes
+            },
+
+            durationMinutes = when (sd.mode) {
+                ScheduleMode.TIME_RANGE -> null
+                ScheduleMode.AMOUNT_OF_TIME -> safeDurationMinutes
+                ScheduleMode.POMODORO -> safeDurationMinutes
+            },
+
+            // ✅ پالتی بودن: AMOUNT و POMODORO هر دو پالتی‌اند
+            inPallet = (sd.mode == ScheduleMode.AMOUNT_OF_TIME || sd.mode == ScheduleMode.POMODORO),
+
+            // ✅ Pomodoro fields
+            focusMinutes = if (isPomo) sd.focusMinutes else null,
+            shortBreakMinutes = if (isPomo) sd.shortBreakMinutes else null,
+            longBreakMinutes = if (isPomo) sd.longBreakMinutes else null,
+            longBreakEvery = if (isPomo) sd.longBreakEvery else null,
+            pomodoroUnitsPerDay = if (isPomo) sd.pomodoroUnitsPerDay else null,
+
+            repeating = sd.repeat.enabled,
+            repeatInterval = if (sd.repeat.enabled) safeInterval else null,
+            repeatUnit = if (sd.repeat.enabled) sd.repeat.unit else null,
+            weekdaysMask = if (sd.repeat.enabled && sd.repeat.unit == RepeatUnit.WEEK) safeMask else null
+        )
+
+
+        if (tid == null) {
+            // ===== pending mode =====
+            if (key == null) {
+                // add pending
+                val newKey = pendingKeyCounter--
+                _pendingSchedulesForNewTask.update {
+                    it + TaskScheduleUi(newKey, newSchedule, isPending = true)
+                }
+                // ✅ attach reminders of schedule-draft to that pending schedule key
+                val reminders = _pendingRemindersForScheduleDraft.value
+                if (reminders.isNotEmpty()) {
+                    _pendingRemindersByScheduleKey.update { it + (newKey to reminders) }
+                }
+                // ✅ draft list پاک شود برای دفعه بعد
+                _pendingRemindersForScheduleDraft.value = emptyList()
+            } else {
+                // edit pending
+                _pendingSchedulesForNewTask.update { list ->
+                    list.map { ui ->
+                        if (ui.key == key) ui.copy(schedule = newSchedule) else ui
+                    }
+                }
+            }
+            finishEditSchedule()
+        } else {
+            // ===== DB mode =====
+            viewModelScope.launch(Dispatchers.IO) {
+
+                val isCreatingNew = (key == null)  // ✅ مهم
+
+                val scheduleId = scheduleRepo.upsertAndReturnId(
+                    newSchedule.copy(taskId = tid, id = key) // (اختیاری برای شفافیت)
+                )
+
+                if (isCreatingNew) {
+                    val reminders = _pendingRemindersForScheduleDraft.value
+                    if (reminders.isNotEmpty()) {
+                        reminders.forEach { ui ->
+                            val rid =
+                                reminderRepo.upsert(ui.entity.copy(id = 0, scheduleId = scheduleId))
+                            try {
+                                reminderScheduler.reschedule(rid)
+                            } catch (_: Throwable) {
+                            }
+                        }
+                    }
+                }
+
+                withContext(Dispatchers.Main) {
+                    // ✅ فقط وقتی schedule جدید ساختی لازم است از draft به DB سوئیچ کنی
+                    if (isCreatingNew) {
+                        _editingScheduleKey.value = scheduleId
+                        _pendingRemindersForScheduleDraft.value = emptyList()
+                    }
+
+                    finishEditSchedule()
+                }
+            }
+
+        }
+    }
+
+    private fun TaskSchedule.toDraft(): ScheduleDraft {
+        fun minuteToLocalTime(min: Int) = LocalTime.of(min / 60, min % 60)
+
+        val enabled = repeating
+        val unit = repeatUnit ?: RepeatUnit.DAY
+
+        return ScheduleDraft(
+            title = title.orEmpty(),
+            mode = mode,
+            date = dateEpochDay?.let(LocalDate::ofEpochDay) ?: LocalDate.now(),
+            start = startMinuteOfDay?.let(::minuteToLocalTime) ?: LocalTime.of(20, 0),
+            end = endMinuteOfDay?.let(::minuteToLocalTime) ?: LocalTime.of(21, 0),
+            durationMinutes = when (mode) {
+                ScheduleMode.POMODORO -> {
+                    val focus = focusMinutes ?: 25
+                    val shortBreak = shortBreakMinutes ?: 5
+                    (durationMinutes ?: (focus + shortBreak)).coerceAtLeast(1)
+                }
+
+                else -> {
+                    durationMinutes ?: 0
+                }
+            },
+
+            focusMinutes = focusMinutes ?: 25,
+            shortBreakMinutes = shortBreakMinutes ?: 5,
+            longBreakMinutes = longBreakMinutes ?: 15,
+            longBreakEvery = longBreakEvery ?: 4,
+            pomodoroUnitsPerDay = pomodoroUnitsPerDay ?: 5,
+
+            repeat = RepeatDraft(
+                enabled = enabled,
+                interval = (repeatInterval ?: 1).coerceIn(1, 99),
+                unit = unit,
+                weekdaysMask = (weekdaysMask ?: 0).coerceIn(0, 127)
+            )
+        )
+    }
+
+    fun startEditScheduleByKey(key: Int) {
+        viewModelScope.launch {
+            _editingScheduleKey.value = key
+            _activeScheduleKeyForReminder.value = key // ✅ این scheduleKey (DB یا pending)
+
+
+            val tid = _editingTaskId.value
+            val schedule: TaskSchedule? =
+                if (tid == null) {
+                    // pending
+                    _pendingSchedulesForNewTask.value.firstOrNull { it.key == key }?.schedule
+                } else {
+                    // DB
+                    schedulesUiForTaskDialog.value.firstOrNull { it.key == key }?.schedule
+                    // یا اگر می‌خوای مطمئن‌تر: scheduleRepo.getById(key)
+                }
+
+            schedule ?: return@launch
+            _scheduleDraft.value = schedule.toDraft()
+
+
+            // ✅ اگر DB هست، reminderها از Flow میاد، نیازی به preload نیست
+            // ✅ اگر pending schedule هست، reminderها از pendingMap میاد
+            // ✅ اگر task pending و این schedule هیچ reminder نداشت، چیزی لازم نیست
+        }
+    }
+
+    fun finishEditSchedule() {
+        _editingScheduleKey.value = null
+        _scheduleDraft.value = ScheduleDraft()
+    }
+
+    fun deleteScheduleByKey(key: Int) {
+        val tid = _editingTaskId.value
+        if (tid == null) {
+            // pending delete
+            _pendingSchedulesForNewTask.update { list -> list.filterNot { it.key == key } }
+        } else {
+            // DB delete
+            viewModelScope.launch(Dispatchers.IO) {
+                val target = schedulesUiForTaskDialog.value.firstOrNull { it.key == key }?.schedule
+                if (target?.id != null) {
+                    val childScheduleList = scheduleRepo.getAllScheduleByPomodoroParentId(target.id)
+
+                    childScheduleList.forEach { sch ->
+                        sch.id?.let { scheduleRepo.deleteById(it) }
+                    }
+
+                    val reminders = reminderRepo.getByScheduleId(target.id)
+                    reminders.forEach { rUi ->
+                        try {
+                            reminderScheduler.cancel(rUi.id)   // ✅ این خط حیاتی است
+                        } catch (_: Throwable) {
+                        }
+                    }
+                    scheduleRepo.delete(target)
+                }
+            }
+        }
+    }
+
+    fun startAddSchedule() {
+        _editingScheduleKey.value = null      // یعنی Add schedule (نه edit)
+        val base = defaultScheduleDraftNow()
+
+        val isPomodoroTask = (_taskDraft.value.taskMode == TaskMode.POMODORO)
+        _scheduleDraft.value =
+            if (isPomodoroTask) {
+                base.copy(
+                    mode = ScheduleMode.POMODORO,
+                    // پومودورو یعنی «قانون تولید پالت»، پس تکرار هفته‌ای روشن
+                    repeat = RepeatDraft(
+                        enabled = true,
+                        interval = 1,
+                        unit = RepeatUnit.WEEK,
+                        weekdaysMask = base.repeat.weekdaysMask
+                    ),
+                    focusMinutes = 25,
+                    shortBreakMinutes = 5,
+                    longBreakMinutes = 15,
+                    longBreakEvery = 4,
+                    pomodoroUnitsPerDay = 5,
+                    durationMinutes = 30 // صرفاً برای سازگاری/نمایش؛ بعداً می‌تونه حذف شه
+                )
+            } else {
+                base
+            }
+
+        // ✅ داریم schedule جدید می‌سازیم => reminderها میرن تو draftList
+        _activeScheduleKeyForReminder.value = null
+        _pendingRemindersForScheduleDraft.value = emptyList()
+    }
+
+    fun setScheduleDate(d: LocalDate) = _scheduleDraft.update { it.copy(date = d) }
+    fun setRepeatEnabled(v: Boolean) {
+        _scheduleDraft.update { it.copy(repeat = it.repeat.copy(enabled = v)) }
+    }
+
+    fun setRepeatInterval(n: Int) {
+        _scheduleDraft.update {
+            it.copy(repeat = it.repeat.copy(interval = n.coerceIn(1, 99)))
+        }
+    }
+
+    fun setRepeatUnit(u: RepeatUnit) {
+        _scheduleDraft.update { d ->
+            val r = d.repeat
+            val newMask =
+                if (u == RepeatUnit.WEEK && r.weekdaysMask == 0) {
+                    // پیش‌فرض: امروز تیک بخورد
+                    1 shl todayBitIndex()
+                } else r.weekdaysMask
+
+            d.copy(repeat = r.copy(unit = u, weekdaysMask = newMask))
+        }
+    }
+
+    fun setRepeatWeekdaysMask(mask: Int) {
+        _scheduleDraft.update {
+            it.copy(
+                repeat = it.repeat.copy(
+                    weekdaysMask = mask.coerceIn(
+                        0,
+                        127
+                    )
+                )
+            )
+        }
+    }
+
+    fun setScheduleFocusMinutes(v: Int) =
+        _scheduleDraft.update { it.copy(focusMinutes = v.coerceIn(1, 240)) }
+
+    fun setScheduleShortBreakMinutes(v: Int) =
+        _scheduleDraft.update { it.copy(shortBreakMinutes = v.coerceIn(0, 60)) }
+
+    fun setScheduleLongBreakMinutes(v: Int) =
+        _scheduleDraft.update { it.copy(longBreakMinutes = v.coerceIn(0, 120)) }
+
+    fun setScheduleLongBreakEvery(v: Int) =
+        _scheduleDraft.update { it.copy(longBreakEvery = v.coerceIn(2, 12)) }
+
+    fun setSchedulePomodoroUnitsPerDay(v: Int) =
+        _scheduleDraft.update { it.copy(pomodoroUnitsPerDay = v.coerceIn(1, 20)) }
+
+    private fun todayBitIndex(): Int {
+        // اگر خواستی دقیق با تقویم خودت تنظیم می‌کنیم؛
+        // فعلاً یک نگاشت ساده:
+        val dow = LocalDate.now().dayOfWeek // MON..SUN
+        return when (dow) {
+            DayOfWeek.SATURDAY -> 0
+            DayOfWeek.SUNDAY -> 1
+            DayOfWeek.MONDAY -> 2
+            DayOfWeek.TUESDAY -> 3
+            DayOfWeek.WEDNESDAY -> 4
+            DayOfWeek.THURSDAY -> 5
+            DayOfWeek.FRIDAY -> 6
+        }
+    }
+
+
+    //reminder
+    fun setReminderMode(m: ReminderMode) = _reminderDraft.update { cur ->
+        when (m) {
+            ReminderMode.ALLOCATED -> cur.copy(mode = m)
+            ReminderMode.FIXED_TIME -> cur.copy(mode = m)
+            ReminderMode.POMODORO_REMINDER -> cur.copy(mode = m)
+        }
+    }
+
+    fun setReminderTitle(s: String) = _reminderDraft.update { it.copy(title = s) }
+    fun setReminderOffsetDays(v: Int) = _reminderDraft.update { it.copy(offsetDays = v) }
+    fun setReminderOffsetHours(v: Int) = _reminderDraft.update { it.copy(offsetHours = v) }
+    fun setReminderOffsetMinutes(v: Int) = _reminderDraft.update { it.copy(offsetMinutes = v) }
+    fun setReminderBeforeAfter(v: BeforeAfter) = _reminderDraft.update { it.copy(beforeAfter = v) }
+    fun setReminderAnchor(v: StartEnd) = _reminderDraft.update { it.copy(anchor = v) }
+    fun setReminderFixedTime(t: LocalTime) = _reminderDraft.update { it.copy(fixedTime = t) }
+    fun setReminderStrength(v: ReminderStrengthMode) =
+        _reminderDraft.update { it.copy(strength = v) }
+
+    fun setReminderVibrate(v: Boolean) = _reminderDraft.update { it.copy(vibrate = v) }
+    fun setReminderAlarmSoundUri(v: String?) = _reminderDraft.update { it.copy(alarmSoundUri = v) }
+    fun setReminderCaptchaEnabled(v: Boolean) =
+        _reminderDraft.update { it.copy(captchaEnabled = v) }
+
+    fun startAddReminder() {
+        _editingReminderKey.value = null
+
+        val base = ReminderDraft()
+        val isPomodoroSchedule = (_scheduleDraft.value.mode == ScheduleMode.POMODORO)
+        _reminderDraft.value =
+            if (isPomodoroSchedule) {
+                base.copy(mode = ReminderMode.POMODORO_REMINDER)
+            } else {
+                base
+            }
+    }
+
+    fun startEditReminderByKey(key: Int) {
+        viewModelScope.launch {
+            _editingReminderKey.value = key
+
+            val tid = _editingTaskId.value
+            val schKey = _editingScheduleKey.value // همون scheduleKey که schedule dialog روشه
+
+            val entity: TaskReminderEntity? =
+                when {
+                    // schedule draft (قبل confirm) => از draftList
+                    schKey == null -> _pendingRemindersForScheduleDraft.value.firstOrNull { it.key == key }?.entity
+
+                    // task جدید و schedule pending => از map
+                    tid == null -> _pendingRemindersByScheduleKey.value[schKey]?.firstOrNull { it.key == key }?.entity
+
+                    // DB
+                    else -> reminderRepo.getById(key)
+                }
+
+            entity ?: return@launch
+            _reminderDraft.value = entity.toDraft() // پایین helper می‌دیم
+        }
+    }
+
+    fun confirmReminderFromDialog() {
+        val tid = _editingTaskId.value
+        val schKey = _editingScheduleKey.value
+        val editingKey = _editingReminderKey.value
+
+        val draft = _reminderDraft.value
+
+        // تبدیل Draft به Entity (scheduleId را بعداً تعیین می‌کنیم)
+
+        fun buildEntity(scheduleId: Int): TaskReminderEntity =
+            draft.toEntity(
+                id = editingKey ?: 0,
+                scheduleId = scheduleId
+            )
+
+        // 1) schedule draft (هنوز confirm نشده)
+        if (schKey == null) {
+            val key = editingKey ?: newPendingReminderKey()
+            val ui = TaskReminderUi(
+                key = key,
+                entity = buildEntity(scheduleId = 0),
+                isPending = true
+            )
+
+            _pendingRemindersForScheduleDraft.update { list ->
+                if (editingKey == null) list + ui
+                else list.map { if (it.key == key) ui else it }
+            }
+
+            finishEditReminder()
+            return
+        }
+
+        // 2) task جدید و schedule pending
+        if (tid == null) {
+            val key = editingKey ?: newPendingReminderKey()
+            val ui = TaskReminderUi(
+                key = key,
+                entity = buildEntity(scheduleId = 0),
+                isPending = true
+            )
+
+            _pendingRemindersByScheduleKey.update { map ->
+                val cur = map[schKey].orEmpty()
+                val next =
+                    if (editingKey == null) cur + ui
+                    else cur.map { if (it.key == key) ui else it }
+                map + (schKey to next)
+            }
+
+            finishEditReminder()
+            return
+        }
+
+        // 3) DB
+        // 3) DB
+        viewModelScope.launch(Dispatchers.IO) {
+            val reminderId = reminderRepo.upsert(buildEntity(scheduleId = schKey))
+            reminderScheduler.reschedule(reminderId)
+
+            withContext(Dispatchers.Main) {
+                finishEditReminder()
+            }
+        }
+        return
+
+    }
+
+    fun deleteReminderByKey(key: Int) {
+        val tid = _editingTaskId.value
+        val schKey = _editingScheduleKey.value
+
+        // schedule draft
+        if (schKey == null) {
+            _pendingRemindersForScheduleDraft.update { it.filterNot { ui -> ui.key == key } }
+            return
+        }
+
+        // task جدید و schedule pending
+        if (tid == null) {
+            _pendingRemindersByScheduleKey.update { map ->
+                val cur = map[schKey].orEmpty()
+                map + (schKey to cur.filterNot { it.key == key })
+            }
+            return
+        }
+
+        // DB
+        viewModelScope.launch(Dispatchers.IO) {
+            reminderRepo.deleteById(key)
+            reminderScheduler.cancel(key)
+        }
+    }
+
+    fun finishEditReminder() {
+        _editingReminderKey.value = null
+        _reminderDraft.value = ReminderDraft()
+    }
+
+    private fun TaskReminderEntity.toDraft(): ReminderDraft {
+        val fixed = fixedMinuteOfDay?.let(::minuteOfDayToLocalTime) ?: LocalTime.of(11, 0)
+
+
+        return ReminderDraft(
+            mode = mode,
+            title = title ?: "",
+
+            // Allocated
+            offsetDays = offsetDays.coerceIn(0, 999),
+            offsetHours = offsetHours.coerceIn(0, 23),
+            offsetMinutes = offsetMinutes.coerceIn(0, 59),
+            beforeAfter = beforeAfter,
+            anchor = anchor,
+
+            // Fixed time
+            fixedTime = fixed,
+
+            //Pomodoro
+            onStartFocus = onStartFocus,
+            onStartBreak = onStartBreak,
+            onEndBreak = onEndBreak,
+
+            // Strength
+            strength = strength,
+            vibrate = vibrate,
+
+            // Sound
+            alarmSoundUri = alarmSoundUri,
+
+            // Captcha
+            captchaEnabled = captchaEnabled
+        )
+    }
+
+    private fun ReminderDraft.toEntity(
+        id: Int,
+        scheduleId: Int
+    ): TaskReminderEntity {
+
+        val safeStrength = strength
+        val safeCaptcha = (safeStrength == ReminderStrengthMode.ALARM_AND_CAPTCHA)
+
+
+        val safeOffsetDays = offsetDays.coerceIn(0, 999)
+        val safeOffsetHours = offsetHours.coerceIn(0, 23)
+        val safeOffsetMinutes = offsetMinutes.coerceIn(0, 59)
+
+        val fixedMinute = fixedTime.toMinuteOfDay()
+
+        return when (mode) {
+            ReminderMode.ALLOCATED -> {
+                TaskReminderEntity(
+                    id = id,
+                    scheduleId = scheduleId,
+                    title = title,
+                    mode = mode,
+
+                    // allocated
+                    offsetDays = safeOffsetDays,
+                    offsetHours = safeOffsetHours,
+                    offsetMinutes = safeOffsetMinutes,
+                    beforeAfter = beforeAfter,
+                    anchor = anchor,
+
+                    // fixed
+                    fixedMinuteOfDay = null,
+
+
+
+                    // strength
+                    strength = safeStrength,
+                    vibrate = vibrate,
+
+                    // sound
+                    alarmSoundUri = alarmSoundUri,
+
+                    // captcha
+                    captchaEnabled = safeCaptcha
+                )
+            }
+
+            ReminderMode.FIXED_TIME -> {
+                TaskReminderEntity(
+                    id = id,
+                    scheduleId = scheduleId,
+                    title = title,
+                    mode = mode,
+
+                    // allocated (می‌تونیم صفر نگه داریم تا نال نباشه)
+                    offsetDays = 0,
+                    offsetHours = 0,
+                    offsetMinutes = 0,
+                    beforeAfter = BeforeAfter.BEFORE,
+                    anchor = StartEnd.START,
+
+                    // fixed
+                    fixedMinuteOfDay = fixedMinute,
+
+                    // strength
+                    strength = safeStrength,
+                    vibrate = vibrate,
+
+                    // sound
+                    alarmSoundUri = alarmSoundUri,
+
+                    // captcha
+                    captchaEnabled = safeCaptcha
+                )
+            }
+
+            ReminderMode.POMODORO_REMINDER -> {
+                //فعلا فقط جهت بیلد شدن
+                TaskReminderEntity(
+                    id = id,
+                    scheduleId = scheduleId,
+                    title = title,
+                    mode = mode,
+
+                    // allocated
+                    offsetDays = safeOffsetDays,
+                    offsetHours = safeOffsetHours,
+                    offsetMinutes = safeOffsetMinutes,
+                    beforeAfter = beforeAfter,
+                    anchor = anchor,
+
+                    // fixed
+                    fixedMinuteOfDay = null,
+
+                    //Pomodoro
+                    onStartFocus = onStartFocus,
+                    onStartBreak = onStartBreak,
+                    onEndBreak = onEndBreak,
+
+                    // strength
+                    strength = safeStrength,
+                    vibrate = vibrate,
+
+                    // sound
+                    alarmSoundUri = alarmSoundUri,
+
+                    // captcha
+                    captchaEnabled = safeCaptcha
+                )
+            }
+
+        }
+    }
+
+
+    private fun buildTaskMiniAll(
+        taskEntities: List<TaskEntity>,
+        schedules: Map<Int, Boolean> = emptyMap()
+    ): List<TaskMiniUi> =
+        taskEntities.mapNotNull { t ->
+            val id = t.id ?: return@mapNotNull null
+            TaskMiniUi(
+                id = id,
+                title = t.name,
+                isDone = t.isCompleted,
+                hasSchedule = schedules[id] == true,
+                parentTaskId = t.parentTaskId,
+                siblingIndex = t.siblingIndex,
+                priority = t.priority
+            )
+        }
+
+    private fun flattenAllTasks(allMini: List<TaskMiniUi>): List<TaskMiniUi> {
+        val byParent = allMini.groupBy { it.parentTaskId }
+        val out = mutableListOf<TaskMiniUi>()
+
+        fun dfs(parentId: Int) {
+            val children = byParent[parentId].orEmpty()
+                .sortedWith(compareBy<TaskMiniUi> { it.siblingIndex }.thenBy { it.id })
+            for (c in children) {
+                out += c
+                dfs(c.id)
+            }
+        }
+        dfs(ROOT)
+        return out
+    }
+
+    private fun pickParentIdForDesiredDepth(
+        flat: List<TaskMiniUi>,
+        parentById: Map<Int, Int?>,
+        desiredDepth: Int,
+        insertionIndex: Int
+    ): Int? {
+        if (desiredDepth <= 0) return null
+
+        // parent depth = desiredDepth - 1
+        val parentDepth = desiredDepth - 1
+
+        fun depthOfLocal(id: Int): Int {
+            var d = 0
+            var cur = parentById[id] ?: ROOT
+            var guard = 0
+            while (cur != ROOT && guard < 200) {
+                d++
+                cur = parentById[id] ?: ROOT
+                guard++
+            }
+            return d
+        }
+
+        // فقط آیتم‌های قبل از محل درج
+        val before = flat.take(insertionIndex.coerceIn(0, flat.size))
+
+        // آخرین آیتمی که depthش == parentDepth
+        val parent = before.lastOrNull { depthOfLocal(it.id) == parentDepth } ?: return null
+        return parent.id
+    }
+
+
+    private fun buildParentById(taskEntities: List<TaskEntity>): Map<Int, Int> =
+        taskEntities.mapNotNull { t ->
+            val id = t.id ?: return@mapNotNull null
+            id to (t.parentTaskId ?: ROOT)
+        }.toMap()
+
+    private fun depthOf(id: Int, parentById: Map<Int, Int>): Int {
+        var depth = 0
+        var cur = parentById[id] ?: ROOT
+        var guard = 0
+        while (cur != ROOT && guard < 100) {
+            depth++
+            cur = parentById[cur] ?: ROOT
+            guard++
+        }
+        return depth.coerceIn(0, 3)
+    }
+
+
+    private fun flattenCategoryTreeWithLevelsAndVisibility(
+        all: List<CategoryEntity>,
+        collapsedIds: Set<Int>,
+        rootParentId: Int = -1,
+        maxDepth: Int = 4
+    ): FlattenResult {
+
+        val byParent = all.groupBy { it.parentCategoryId }
+        val items = mutableListOf<CategoryRenderItem>()
+        val levelById = mutableMapOf<Int, Int>()
+
+        fun dfs(parentId: Int?, realDepth: Int, ancestorCollapsed: Boolean) {
+            // ✅ توقف فقط برای امنیت (در صورت داده خراب/سیکل)
+            if (realDepth > 50) return
+
+            val renderLevel = realDepth.coerceAtMost(maxDepth)
+
+            val children = (byParent[parentId] ?: emptyList())
+                .sortedBy { it.siblingIndex }
+
+            for (child in children) {
+                val id = child.categoryId
+                val hasChildrenRaw = (byParent[id] ?: emptyList()).isNotEmpty()
+
+                // ✅ دکمه expand فقط تا سطح ۴ (مثل قبل)
+                val hasChildren = (renderLevel < maxDepth) && hasChildrenRaw
+
+                val selfCollapsed = id != null && collapsedIds.contains(id)
+                val isExpanded = id != null && !selfCollapsed
+
+                if (id != null) levelById[id] = renderLevel
+
+                val visible = !ancestorCollapsed
+
+                items.add(
+                    CategoryRenderItem(
+                        category = child,
+                        level = renderLevel,         // ✅ level نمایشی
+                        hasChildren = hasChildren,
+                        isExpanded = isExpanded,
+                        isVisible = visible
+                    )
+                )
+
+                // ✅ ادامه بده، حتی اگر depth واقعی از ۴ رد شد
+                dfs(
+                    parentId = id,
+                    realDepth = realDepth + 1,
+                    ancestorCollapsed = ancestorCollapsed || selfCollapsed
+                )
+            }
+        }
+
+        dfs(rootParentId, realDepth = 1, ancestorCollapsed = false)
+        return FlattenResult(items, levelById)
+    }
+
+    private fun flattenForPickerAllVisible(
+        all: List<CategoryEntity>,
+        rootParentId: Int = -1,
+        maxDepth: Int = 4
+    ): FlattenResult {
+
+        val byParent = all.groupBy { it.parentCategoryId }
+        val items = mutableListOf<CategoryRenderItem>()
+        val levelById = mutableMapOf<Int, Int>()
+
+        fun dfs(parentId: Int?, realDepth: Int) {
+            if (realDepth > 50) return // گارد امنیتی
+
+            val renderLevel = realDepth.coerceAtMost(maxDepth)
+
+            val children = (byParent[parentId] ?: emptyList())
+                .sortedBy { it.siblingIndex }
+
+            for (child in children) {
+                val id = child.categoryId
+                val hasChildrenRaw = (byParent[id] ?: emptyList()).isNotEmpty()
+                val hasChildren = (renderLevel < maxDepth) && hasChildrenRaw
+
+                if (id != null) levelById[id] = renderLevel
+
+                items.add(
+                    CategoryRenderItem(
+                        category = child,
+                        level = renderLevel,
+                        hasChildren = hasChildren,
+                        isExpanded = true,  // در picker مهم نیست
+                        isVisible = true    // ✅ همیشه visible
+                    )
+                )
+
+                dfs(id, realDepth + 1)
+            }
+        }
+
+        dfs(rootParentId, realDepth = 1)
+        return FlattenResult(items, levelById)
+    }
+
+
+    private suspend fun reorderSiblings(parentId: Int?) {
+        val siblings = uiState.value.categories
+            .filter { it.parentCategoryId == parentId }
+            .sortedBy { it.siblingIndex }
+
+        siblings.forEachIndexed { idx, e ->
+            if (e.siblingIndex != idx) {
+                categoryRepository.updateCategory(e.copy(siblingIndex = idx))
+            }
+        }
+    }
+
+    fun finishEditTask() {
+        _editingTaskId.value = null
+        _isEditingDraftTask.value = false
+        _taskDraft.value = TaskDraft()
+    }
+
+    fun finishOrDeleteEmptyDraftTask() {
+        val taskId = _editingTaskId.value
+        val draftName = _taskDraft.value.name.trim()
+
+        finishEditTask()
+
+        if (taskId == null || draftName.isNotBlank()) {
+            return
+        }
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val task = taskRepo.getTaskById(taskId) ?: return@launch
+
+            if (task.entityStatus != TaskEntityStatus.DRAFT) {
+                return@launch
+            }
+
+            deleteTaskSubtree(task)
+        }
+    }
+
+    private suspend fun deleteTaskSubtree(
+        task: TaskEntity
+    ) {
+        val taskId = task.id ?: return
+
+        val children = taskChildRepo.getDirectChildTasks(taskId)
+
+        children.forEach { child ->
+            deleteTaskSubtree(child)
+        }
+
+        taskRepo.deleteTask(task)
+    }
+
+    //ساخت پیش‌فرض Start/End با زمان فعلی
+    private fun defaultScheduleDraftNow(): ScheduleDraft {
+        val now = LocalTime.now()
+        val start = now.ceilToNextQuarter()
+        val end = start.plusMinutes(60)
+
+        return ScheduleDraft(
+            title = "",
+            mode = ScheduleMode.TIME_RANGE,
+            date = LocalDate.now(),
+            start = start,
+            end = end,
+            durationMinutes = 0,
+
+            // ✅ تکرار پیش‌فرض خاموش
+            repeat = RepeatDraft(
+                enabled = false,
+                interval = 1,
+                unit = RepeatUnit.DAY,
+                weekdaysMask = 127
+            )
+        )
+    }
+
+    private fun LocalTime.toMinuteOfDay(): Int = hour * 60 + minute
+
+    private fun minuteOfDayToLocalTime(min: Int): LocalTime {
+        val safe = min.coerceIn(0, 23 * 60 + 59)
+        return LocalTime.of(safe / 60, safe % 60)
+    }
+
+    fun setOnStartFocusEnabled(b: Boolean) {
+        _reminderDraft.update { it.copy(onStartFocus = b) }
+    }
+
+    fun setOnStartBreakEnabled(b: Boolean) {
+        _reminderDraft.update { it.copy(onStartBreak = b) }
+    }
+
+    fun setOnEndBreakEnabled(b: Boolean) {
+        _reminderDraft.update { it.copy(onEndBreak = b) }
+    }
+
+    fun ensureDefaultChildRulesForEditingTask() {
+        val parentTaskId = _editingTaskId.value ?: return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            taskChildRepo.ensureDefaultOccurrenceRulesForDirectChildren(
+                parentTaskId = parentTaskId
+            )
+        }
+    }
+
+    fun saveChildRuleForEditingTask(
+        childTaskId: Int,
+        ruleType: String,
+        timesPerDay: Int,
+        timesPerOccurrence: Int,
+        g5TargetCount: Int,
+        sortOrder: Int
+    ) {
+        val parentTaskId = _editingTaskId.value ?: return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val existing = taskChildRepo.getRule(
+                parentTaskId = parentTaskId,
+                childTaskId = childTaskId
+            )
+
+            val now = System.currentTimeMillis()
+
+            val resetScope = resetScopeForChildRuleType(ruleType)
+
+            val cleanTimesPerDay = timesPerDay.coerceAtLeast(1)
+            val cleanTimesPerOccurrence = timesPerOccurrence.coerceAtLeast(1)
+            val cleanG5TargetCount = g5TargetCount.coerceAtLeast(1)
+
+            val base = existing ?: TaskChildRuleEntity(
+                parentTaskId = parentTaskId,
+                childTaskId = childTaskId,
+                ruleType = ruleType,
+                resetScope = resetScope,
+                sortOrder = sortOrder,
+                createdAtEpochMillis = now,
+                updatedAtEpochMillis = now
+            )
+
+            val updated = base.copy(
+                ruleType = ruleType,
+                resetScope = resetScope,
+
+                timesPerDay = cleanTimesPerDay,
+                timesPerOccurrence = cleanTimesPerOccurrence,
+                g5TargetCount = cleanG5TargetCount,
+
+                targetCount = when (ruleType) {
+                    TaskChildRuleType.N_TIMES_PER_DAY -> cleanTimesPerDay
+                    TaskChildRuleType.N_TIMES_PER_PARENT_OCCURRENCE -> cleanTimesPerOccurrence
+                    TaskChildRuleType.G5_LEARNING -> cleanG5TargetCount
+                    else -> 1
+                },
+
+                sortOrder = existing?.sortOrder ?: sortOrder,
+                isRequired = true,
+                isEnabled = true,
+                updatedAtEpochMillis = now
+            )
+
+            taskChildRepo.upsertRule(updated)
+        }
+    }
+
+
+
+
+
+
+
+
+
+
+    fun ensureDefaultRuleForEditingChildTask() {
+        val childTaskId = _editingTaskId.value ?: return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val child = taskRepo.getTaskById(childTaskId) ?: return@launch
+            val parentTaskId = child.parentTaskId
+
+            if (parentTaskId == ROOT) return@launch
+
+            if (parentTaskId != null) {
+                taskChildRepo.ensureDefaultOccurrenceRulesForDirectChildren(
+                    parentTaskId = parentTaskId
+                )
+            }
+        }
+    }
+
+    fun saveRuleForEditingChildTask(
+        ruleType: String,
+        timesPerDay: Int,
+        timesPerOccurrence: Int,
+        g5TargetCount: Int
+    ) {
+        val childTaskId = _editingTaskId.value ?: return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val child = taskRepo.getTaskById(childTaskId) ?: return@launch
+            val parentTaskId = child.parentTaskId
+
+            if (parentTaskId == ROOT) return@launch
+
+            val existing = parentTaskId?.let {
+                taskChildRepo.getRule(
+                    parentTaskId = it,
+                    childTaskId = childTaskId
+                )
+            }
+
+            val now = System.currentTimeMillis()
+
+            val cleanTimesPerDay = timesPerDay.coerceAtLeast(1)
+            val cleanTimesPerOccurrence = timesPerOccurrence.coerceAtLeast(1)
+            val cleanG5TargetCount = g5TargetCount.coerceAtLeast(1)
+
+            val resetScope = resetScopeForChildRuleType(ruleType)
+
+            val base = existing ?: parentTaskId?.let {
+                TaskChildRuleEntity(
+                    parentTaskId = it,
+                    childTaskId = childTaskId,
+                    ruleType = ruleType,
+                    resetScope = resetScope,
+                    sortOrder = child.siblingIndex,
+                    createdAtEpochMillis = now,
+                    updatedAtEpochMillis = now
+                )
+            }
+
+            val updated = base?.copy(
+                ruleType = ruleType,
+                resetScope = resetScope,
+                targetCount = when (ruleType) {
+                    TaskChildRuleType.N_TIMES_PER_DAY -> cleanTimesPerDay
+                    TaskChildRuleType.N_TIMES_PER_PARENT_OCCURRENCE -> cleanTimesPerOccurrence
+                    TaskChildRuleType.G5_LEARNING -> cleanG5TargetCount
+                    else -> 1
+                },
+                timesPerDay = cleanTimesPerDay,
+                timesPerOccurrence = cleanTimesPerOccurrence,
+                g5TargetCount = cleanG5TargetCount,
+                isRequired = true,
+                isEnabled = true,
+                updatedAtEpochMillis = now
+            )
+
+            if (updated != null) {
+                val shouldCancelOpenRequirements =
+                    existing != null &&
+                            (
+                                    existing.ruleType != updated.ruleType ||
+                                            existing.timesPerDay != updated.timesPerDay ||
+                                            existing.timesPerOccurrence != updated.timesPerOccurrence ||
+                                            existing.g5TargetCount != updated.g5TargetCount ||
+                                            existing.targetCount != updated.targetCount ||
+                                            existing.resetScope != updated.resetScope
+                                    )
+
+                taskChildRepo.upsertRule(updated)
+
+                if (shouldCancelOpenRequirements) {
+                    existing?.id?.let { taskChildRepo.cancelOpenRequirementsByRuleId(it) }
+                }
+            }
+        }
+    }
+
+    private fun resetScopeForChildRuleType(
+        ruleType: String
+    ): String {
+        return when (ruleType) {
+            TaskChildRuleType.ONCE_PER_PARENT_LIFETIME ->
+                TaskChildResetScope.PARENT_LIFETIME
+
+            TaskChildRuleType.ONCE_PER_DAY,
+            TaskChildRuleType.N_TIMES_PER_DAY ->
+                TaskChildResetScope.DAY
+
+            TaskChildRuleType.ONCE_PER_PARENT_OCCURRENCE,
+            TaskChildRuleType.N_TIMES_PER_PARENT_OCCURRENCE ->
+                TaskChildResetScope.PARENT_OCCURRENCE
+
+            TaskChildRuleType.G5_LEARNING ->
+                TaskChildResetScope.LEARNING_CYCLE
+
+            TaskChildRuleType.MANUAL_LIST_ITEM ->
+                TaskChildResetScope.LIST_SESSION
+
+            TaskChildRuleType.MANUAL_RESET ->
+                TaskChildResetScope.MANUAL
+
+            else ->
+                TaskChildResetScope.PARENT_OCCURRENCE
+        }
+    }
+
+
+    fun ensureDefaultChildRulesForEditingParentTask() {
+        val parentTaskId = _editingTaskId.value ?: return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            taskChildRepo.ensureDefaultOccurrenceRulesForDirectChildren(
+                parentTaskId = parentTaskId
+            )
+        }
+    }
+
+}
+
+

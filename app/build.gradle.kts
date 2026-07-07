@@ -11,11 +11,11 @@ plugins {
 
 
 android {
-    namespace = "com.example.compoundeffectV1_01"
+    namespace = "ir.roozchinapp"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.example.compoundeffectV1_01"
+        applicationId = "ir.roozchinapp"
         minSdk = 26
         targetSdk = 34
         versionCode = 1

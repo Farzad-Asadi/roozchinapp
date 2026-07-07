@@ -21,6 +21,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "CompoundEffectV1_01"
+rootProject.name = "roozchinapp"
 include(":app")
  

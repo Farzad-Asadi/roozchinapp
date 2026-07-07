@@ -1,0 +1,35 @@
+package ir.roozchinapp.data.dataBaseRoom.tables.appSystemInfo
+
+import androidx.room.Dao
+import androidx.room.Delete
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
+
+
+@Dao
+interface SystemDao {
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertAppSystemInfo(appSystemInfo: AppSystemInfo)
+
+    @Delete
+    suspend fun deleteAppSystemInfo(appSystemInfo: AppSystemInfo)
+
+    @Query("Update app_system_info Set dashboardHourHeight =:dashboardHourHeight,dashboardZoomState =:dashboardZoomState Where id = 1")
+    suspend fun updateAppSystemInfo(dashboardHourHeight: Float,dashboardZoomState: Float)
+
+    @Query("SELECT * FROM app_system_info ")
+    suspend fun getAllAppSystemInfo(): List<AppSystemInfo>
+
+
+
+    //region Backup / Restore
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSystemInfosForRestore(systemInfos: List<AppSystemInfo>)
+
+    @Query("DELETE FROM app_system_info")
+    suspend fun deleteAllSystemInfosForRestore()
+
+//endregion
+}
