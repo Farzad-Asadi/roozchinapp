@@ -15,6 +15,7 @@ import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskChildRe
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskChildResetScope
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskChildRuleEntity
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskChildRuleType
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskChildStructure
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskEntity
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskEntityStatus
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskMode
@@ -517,7 +518,9 @@ class TaskScreenViewModel @Inject constructor(
                 pomodoroTargetUnits = 50,
                 pomodoroDoneUnits = 0,
                 entityStatus = TaskEntityStatus.DRAFT,
-                draftCreatedAtEpochMillis = now
+                draftCreatedAtEpochMillis = now,
+                childStructure = TaskChildStructure.SUBTASKS,
+                showInAnytimePallet = false
             )
 
             val newDraftTaskId = withContext(Dispatchers.IO) {
@@ -535,6 +538,8 @@ class TaskScreenViewModel @Inject constructor(
                 note = "",
                 insertAtTop = false,
                 childLevel = 0,
+                childStructure = TaskChildStructure.SUBTASKS,
+                showInAnytimePallet = false,
                 taskMode = TaskMode.NORMAL,
                 pomodoroTargetUnits = 50,
                 pomodoroDoneUnits = 0
@@ -582,6 +587,8 @@ class TaskScreenViewModel @Inject constructor(
                 note = t.description,
                 insertAtTop = false,
                 childLevel = depth,
+                childStructure = t.childStructure,
+                showInAnytimePallet = t.showInAnytimePallet,
                 taskMode = t.taskMode,
                 pomodoroTargetUnits = t.pomodoroTargetUnits ?:50,
                 pomodoroDoneUnits = t.pomodoroDoneUnits
@@ -600,6 +607,25 @@ class TaskScreenViewModel @Inject constructor(
     fun setTaskNote(v: String) = _taskDraft.update { it.copy(note = v) }
     fun setTaskInsertAtTop(v: Boolean) = _taskDraft.update { it.copy(insertAtTop = v) }
     fun setTaskChildLevel(v: Int) = _taskDraft.update { it.copy(childLevel = v.coerceIn(0, 3)) }
+
+    fun setTaskChildStructure(value: String) {
+        val safeValue =
+            when (value) {
+                TaskChildStructure.LIST_ITEMS -> TaskChildStructure.LIST_ITEMS
+                else -> TaskChildStructure.SUBTASKS
+            }
+
+        _taskDraft.update {
+            it.copy(childStructure = safeValue)
+        }
+    }
+
+    fun setTaskShowInAnytimePallet(value: Boolean) {
+        _taskDraft.update {
+            it.copy(showInAnytimePallet = value)
+        }
+    }
+
     fun setTaskPomodoroEnabled(enabled: Boolean) = _taskDraft.update { cur ->
         if (enabled) {
             cur.copy(
@@ -641,6 +667,8 @@ class TaskScreenViewModel @Inject constructor(
             note = "",
             insertAtTop = cur.insertAtTop,
             childLevel = cur.childLevel,
+            childStructure = cur.childStructure,
+            showInAnytimePallet = cur.showInAnytimePallet,
             taskMode = cur.taskMode,
             pomodoroTargetUnits = cur.pomodoroTargetUnits,
             pomodoroDoneUnits = 0
@@ -704,6 +732,8 @@ class TaskScreenViewModel @Inject constructor(
                 siblingIndex = newSiblingIndex,
                 entityStatus = TaskEntityStatus.ACTIVE,
                 draftCreatedAtEpochMillis = null,
+                childStructure = d.childStructure,
+                showInAnytimePallet = d.showInAnytimePallet,
                 taskMode = d.taskMode,
                 pomodoroTargetUnits = d.pomodoroTargetUnits,
                 pomodoroDoneUnits = d.pomodoroDoneUnits,
@@ -865,7 +895,10 @@ class TaskScreenViewModel @Inject constructor(
                 pomodoroDoneUnits = d.pomodoroDoneUnits,
 
                 entityStatus = TaskEntityStatus.ACTIVE,
-                draftCreatedAtEpochMillis = null
+                draftCreatedAtEpochMillis = null,
+
+                childStructure = d.childStructure,
+                showInAnytimePallet = d.showInAnytimePallet
             )
 
             withContext(Dispatchers.IO) {
@@ -1009,7 +1042,11 @@ class TaskScreenViewModel @Inject constructor(
                 siblingIndex = newSiblingIndex,
                 taskMode = TaskMode.NORMAL,
                 pomodoroTargetUnits = 50,
-                pomodoroDoneUnits = 0
+                pomodoroDoneUnits = 0,
+                entityStatus = TaskEntityStatus.ACTIVE,
+                draftCreatedAtEpochMillis = null,
+                childStructure = TaskChildStructure.SUBTASKS,
+                showInAnytimePallet = false
             )
 
             val newChildTaskId = taskRepo.insertTaskAndReturnId(child)

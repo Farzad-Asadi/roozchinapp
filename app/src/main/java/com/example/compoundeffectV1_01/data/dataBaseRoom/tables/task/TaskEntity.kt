@@ -22,7 +22,9 @@ import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.Tas
     indices = [
         Index("categoryId"),
         Index("entityStatus"),
-        Index(value = ["categoryId", "entityStatus"])
+        Index(value = ["categoryId", "entityStatus"]),
+        Index("showInAnytimePallet"),
+        Index(value = ["entityStatus", "showInAnytimePallet"])
     ]
 )
 data class TaskEntity(
@@ -47,6 +49,9 @@ data class TaskEntity(
 
     val entityStatus: String = TaskEntityStatus.ACTIVE,
     val draftCreatedAtEpochMillis: Long? = null,
+
+    val childStructure: String = TaskChildStructure.SUBTASKS,
+    val showInAnytimePallet: Boolean = false,
 
     /** هدف کل به واحد پومودورو (مثلاً 1200) */
     val pomodoroTargetUnits: Int? = null,
@@ -76,4 +81,9 @@ enum class TaskMode { NORMAL, POMODORO }
 object TaskEntityStatus {
     const val DRAFT = "DRAFT"
     const val ACTIVE = "ACTIVE"
+}
+
+object TaskChildStructure {
+    const val SUBTASKS = "SUBTASKS"
+    const val LIST_ITEMS = "LIST_ITEMS"
 }

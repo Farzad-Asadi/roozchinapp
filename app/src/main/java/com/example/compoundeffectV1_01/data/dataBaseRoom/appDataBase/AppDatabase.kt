@@ -43,7 +43,7 @@ import com.example.compoundeffectV1_01.data.dataBaseRoom.typeConvertor.TypeConve
 
     ],
 
-    version = 2, exportSchema = false)
+    version = 3, exportSchema = false)
 @TypeConverters(
     TypeConverter::class,
     ScheduleConverters::class
@@ -98,6 +98,38 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+            ALTER TABLE task
+            ADD COLUMN childStructure TEXT NOT NULL DEFAULT 'SUBTASKS'
+            """.trimIndent()
+                )
+
+                db.execSQL(
+                    """
+            ALTER TABLE task
+            ADD COLUMN showInAnytimePallet INTEGER NOT NULL DEFAULT 0
+            """.trimIndent()
+                )
+
+                db.execSQL(
+                    """
+            CREATE INDEX IF NOT EXISTS index_task_showInAnytimePallet
+            ON task(showInAnytimePallet)
+            """.trimIndent()
+                )
+
+                db.execSQL(
+                    """
+            CREATE INDEX IF NOT EXISTS index_task_entityStatus_showInAnytimePallet
+            ON task(entityStatus, showInAnytimePallet)
+            """.trimIndent()
+                )
+            }
+        }
+
 
         fun getDatabase(context: Context): AppDatabase {
 
@@ -113,7 +145,10 @@ abstract class AppDatabase : RoomDatabase() {
                 AppDatabase::class.java,
                 "compound_effect.db"
             )
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(
+                    MIGRATION_1_2,
+                    MIGRATION_2_3
+                )
 
             return builder.build()
         }

@@ -6,6 +6,7 @@ import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.Reminde
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.ReminderStrengthMode
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.StartEnd
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.reminder.TaskReminderEntity
+import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskChildStructure
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskEntity
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.task.TaskMode
 import com.example.compoundeffectV1_01.data.dataBaseRoom.tables.taskSchedule.RepeatUnit
@@ -82,6 +83,9 @@ data class TaskDraft(
     // ✅ جدیدها برای دیالوگ
     val insertAtTop: Boolean = false, // false=آخر لیست، true=اول لیست
     val childLevel: Int = 0,           // 0..3 (0 یعنی هیچ)
+
+    val childStructure: String = TaskChildStructure.SUBTASKS,
+    val showInAnytimePallet: Boolean = false,
 
     // ✅ Pomodoro
     val taskMode: TaskMode = TaskMode.NORMAL,
