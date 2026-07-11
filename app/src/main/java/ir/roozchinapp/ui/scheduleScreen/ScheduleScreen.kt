@@ -138,6 +138,8 @@ import ir.roozchinapp.data.dataBaseRoom.tables.task.TaskChildRequirementContextT
 import ir.roozchinapp.data.dataBaseRoom.tables.task.TaskChildRequirementStatus
 import ir.roozchinapp.data.dataBaseRoom.tables.task.TaskChildRequirementSummaryUi
 import ir.roozchinapp.data.dataBaseRoom.tables.task.TaskChildRequirementUi
+import ir.roozchinapp.data.dataBaseRoom.tables.task.TaskChildStructure
+import ir.roozchinapp.data.dataBaseRoom.tables.task.TaskEntity
 import ir.roozchinapp.data.dataBaseRoom.tables.taskSchedule.RepeatUnit
 import ir.roozchinapp.data.dataBaseRoom.tables.taskSchedule.ScheduleMode
 import ir.roozchinapp.ui.navigation.AppRoutes
@@ -173,6 +175,8 @@ fun ScheduleScreen(
     viewModel: ScheduleScreenViewModel = hiltViewModel()
 ) {
     val allItems by viewModel.allItems.collectAsState()
+
+    val anytimePalletTasks by viewModel.anytimePalletTasks.collectAsState()
 
     val runningPomodoroScheduleId by viewModel.runningPomodoroScheduleId.collectAsState()
 
@@ -1756,6 +1760,7 @@ fun ScheduleScreen(
             RightPallet(
                 palletItems = palletItems,
                 pomodoroCards = pomodoroPalletCards,
+                anytimeTasks = anytimePalletTasks,
                 selectedTab = selectedPalletTab,
                 expanded = palletExpanded,
                 isDraggingFromPallet = isDraggingAnything,
@@ -3323,6 +3328,7 @@ private fun PomodoroChainMarker(
 private fun RightPallet(
     palletItems: List<ScheduleScreenItem>,
     pomodoroCards: List<PomodoroPalletCardItem>,
+    anytimeTasks: List<TaskEntity>,
     selectedTab: PalletPanelTab,
     todayFocusText: String,
     todayDonePomodoroCount: Int,
@@ -3513,13 +3519,111 @@ private fun RightPallet(
                         }
 
                         PalletPanelTab.ANYTIME -> {
-                            AnytimePalletPlaceholder(
+                            AnytimePalletTaskList(
+                                tasks = anytimeTasks,
+                                onEditTask = onEditTask,
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun AnytimePalletTaskList(
+    tasks: List<TaskEntity>,
+    onEditTask: (taskId: Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    if (tasks.isEmpty()) {
+        AnytimePalletPlaceholder(
+            modifier = modifier
+        )
+        return
+    }
+
+    LazyColumn(
+        modifier = modifier
+    ) {
+        items(
+            items = tasks,
+            key = { task -> task.id ?: task.hashCode() }
+        ) { task ->
+            AnytimePalletTaskCard(
+                task = task,
+                onEditTask = onEditTask
+            )
+
+            HorizontalDivider(thickness = 0.5.dp)
+        }
+    }
+}
+
+@Composable
+private fun AnytimePalletTaskCard(
+    task: TaskEntity,
+    onEditTask: (taskId: Int) -> Unit
+) {
+    val taskId = task.id
+    val shape = RoundedCornerShape(16.dp)
+    val borderColor = colorFromHex(task.color)
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp)
+            .border(
+                width = 1.5.dp,
+                color = borderColor,
+                shape = shape
+            )
+            .clickable(enabled = taskId != null) {
+                if (taskId != null) {
+                    onEditTask(taskId)
+                }
+            },
+        shape = shape,
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 9.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp)
+        ) {
+            Text(
+                text = task.name,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Right,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    textDirection = TextDirection.ContentOrRtl
+                ),
+                color = if (task.isCompleted) {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                }
+            )
+
+            Text(
+                text = when (task.childStructure) {
+                    TaskChildStructure.LIST_ITEMS -> "آیتم‌های لیست"
+                    else -> "کارهای فرعی"
+                },
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Right,
+                maxLines = 1,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }

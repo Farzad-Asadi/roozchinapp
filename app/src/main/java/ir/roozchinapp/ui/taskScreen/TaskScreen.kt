@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -61,10 +62,13 @@ import androidx.compose.material.icons.filled.Pattern
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.SubdirectoryArrowRight
+import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.Today
 import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -117,6 +121,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -131,6 +136,7 @@ import ir.roozchinapp.data.dataBaseRoom.tables.reminder.TaskReminderEntity
 import ir.roozchinapp.data.dataBaseRoom.tables.task.TaskChildResetScope
 import ir.roozchinapp.data.dataBaseRoom.tables.task.TaskChildRuleEntity
 import ir.roozchinapp.data.dataBaseRoom.tables.task.TaskChildRuleType
+import ir.roozchinapp.data.dataBaseRoom.tables.task.TaskChildStructure
 import ir.roozchinapp.data.dataBaseRoom.tables.task.TaskEntity
 import ir.roozchinapp.data.dataBaseRoom.tables.task.TaskMode
 import ir.roozchinapp.data.dataBaseRoom.tables.taskSchedule.RepeatUnit
@@ -332,6 +338,8 @@ fun TaskScreen(
                 onDeleteChildTask = viewModel::deleteDirectChildTask,
                 onInsertAtTopChange = viewModel::setTaskInsertAtTop,
                 onChildLevelChange = viewModel::setTaskChildLevel,
+                onChildStructureChange = viewModel::setTaskChildStructure,
+                onShowInAnytimePalletChange = viewModel::setTaskShowInAnytimePallet,
                 onPickCategory = { showPickTaskCategory = true },
                 onConfirm = { action ->
                     val hasDbTask = editingTaskId != null
@@ -531,6 +539,8 @@ private fun AddEditeTaskScreen(
     onNoteChange: (String) -> Unit,
     onInsertAtTopChange: (Boolean) -> Unit,   // ✅ جدید
     onChildLevelChange: (Int) -> Unit,        // ✅ جدید
+    onChildStructureChange: (String) -> Unit,
+    onShowInAnytimePalletChange: (Boolean) -> Unit,
     onConfirm: (ConfirmAction) -> Unit,       // ✅ جدید
     onOpenSchedule: () -> Unit,
     onPickCategory: () -> Unit,
@@ -600,6 +610,22 @@ private fun AddEditeTaskScreen(
 
     var newChildRuleType by rememberSaveable {
         mutableStateOf(TaskChildRuleType.ONCE_PER_PARENT_OCCURRENCE)
+    }
+
+    LaunchedEffect(draft.childStructure) {
+        if (draft.childStructure == TaskChildStructure.LIST_ITEMS) {
+            newChildRuleType = TaskChildRuleType.MANUAL_LIST_ITEM
+        } else if (newChildRuleType == TaskChildRuleType.MANUAL_LIST_ITEM) {
+            newChildRuleType = TaskChildRuleType.ONCE_PER_PARENT_OCCURRENCE
+        }
+    }
+
+    LaunchedEffect(draft.showInAnytimePallet) {
+        if (!draft.showInAnytimePallet &&
+            draft.childStructure != TaskChildStructure.SUBTASKS
+        ) {
+            onChildStructureChange(TaskChildStructure.SUBTASKS)
+        }
     }
 
     var newChildTimesPerDay by rememberSaveable {
@@ -758,7 +784,7 @@ private fun AddEditeTaskScreen(
         )
 
 
-        // Completed & Pomodoro
+        // Anytime pallet & Pomodoro
         AddEditeDialogRow(
             onClick = null,
             content = {
@@ -767,21 +793,33 @@ private fun AddEditeTaskScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
 
-                    // ---- Completed (left) ----
+                    // ---- Anytime pallet (left) ----
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .weight(1f)
-                            .clickable { onCompletedToggle(!draft.isCompleted) }
+                            .clickable {
+                                onShowInAnytimePalletChange(!draft.showInAnytimePallet)
+                            }
                             .padding(vertical = 6.dp)
                     ) {
                         Icon(
-                            imageVector = if (draft.isCompleted) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
+                            imageVector = if (draft.showInAnytimePallet) {
+                                Icons.Filled.CheckCircle
+                            } else {
+                                Icons.Filled.RadioButtonUnchecked
+                            },
                             contentDescription = null,
-                            tint = if (draft.isCompleted) Color(0xFF2E7D32) else Color.Gray
+                            tint = if (draft.showInAnytimePallet) {
+                                Color(0xFF2E7D32)
+                            } else {
+                                Color.Gray
+                            }
                         )
+
                         Spacer(Modifier.width(8.dp))
-                        Text(if (draft.isCompleted) "Completed" else "Uncompleted")
+
+                        Text("پالت آزاد")
                     }
 
                     VerticalDivider(Modifier.height(34.dp))
@@ -789,6 +827,7 @@ private fun AddEditeTaskScreen(
 
                     // ---- Pomodoro (right) ----
                     val isPomodoro = draft.taskMode == TaskMode.POMODORO
+
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
@@ -797,16 +836,68 @@ private fun AddEditeTaskScreen(
                             .padding(vertical = 6.dp)
                     ) {
                         Icon(
-                            imageVector = if (isPomodoro) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
+                            imageVector = if (isPomodoro) {
+                                Icons.Filled.CheckCircle
+                            } else {
+                                Icons.Filled.RadioButtonUnchecked
+                            },
                             contentDescription = null,
-                            tint = if (isPomodoro) Color(0xFF2E7D32) else Color.Gray
+                            tint = if (isPomodoro) {
+                                Color(0xFF2E7D32)
+                            } else {
+                                Color.Gray
+                            }
                         )
+
                         Spacer(Modifier.width(8.dp))
+
                         Text("Pomodoro")
                     }
                 }
             },
         )
+
+        if (!isEditingChildTask && draft.showInAnytimePallet) {
+            AddEditeDialogRow(
+                onClick = null,
+                content = {
+                    Icon(Icons.Filled.SubdirectoryArrowRight, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+
+                    Column(
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(
+                            text = "زیرآیتم‌ها",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+
+                        Spacer(Modifier.height(8.dp))
+
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            TaskStructureChip(
+                                label = "کارهای فرعی",
+                                selected = draft.childStructure == TaskChildStructure.SUBTASKS,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                onChildStructureChange(TaskChildStructure.SUBTASKS)
+                            }
+
+                            TaskStructureChip(
+                                label = "آیتم‌های لیست",
+                                selected = draft.childStructure == TaskChildStructure.LIST_ITEMS,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                onChildStructureChange(TaskChildStructure.LIST_ITEMS)
+                            }
+                        }
+                    }
+                }
+            )
+        }
 
         //Pomodoro Row
         if (draft.taskMode == TaskMode.POMODORO) {
@@ -1037,19 +1128,22 @@ private fun AddEditeTaskScreen(
                         modifier = Modifier.weight(1f)
                     ) {
                         Text(
-                            text = "Child tasks",
+                            text = childSectionTitle(draft.childStructure),
                             style = MaterialTheme.typography.bodyLarge
                         )
 
                         if (childTasks.isNotEmpty()) {
                             Text(
-                                text = "${childTasks.size} child${if (childTasks.size > 1) "ren" else ""}",
+                                text = when (draft.childStructure) {
+                                    TaskChildStructure.LIST_ITEMS -> "${childTasks.size} item${if (childTasks.size > 1) "s" else ""}"
+                                    else -> "${childTasks.size} child${if (childTasks.size > 1) "ren" else ""}"
+                                },
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         } else {
                             Text(
-                                text = "No child task yet",
+                                text = childSectionEmptyText(draft.childStructure),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -1060,7 +1154,12 @@ private fun AddEditeTaskScreen(
                         onClick = {
                             newChildTaskName = ""
 
-                            newChildRuleType = TaskChildRuleType.ONCE_PER_PARENT_OCCURRENCE
+                            newChildRuleType =
+                                if (draft.childStructure == TaskChildStructure.LIST_ITEMS) {
+                                    TaskChildRuleType.MANUAL_LIST_ITEM
+                                } else {
+                                    TaskChildRuleType.ONCE_PER_PARENT_OCCURRENCE
+                                }
                             newChildTimesPerDay = 1
                             newChildTimesPerOccurrence = 1
                             newChildG5TargetCount = 5
@@ -1070,7 +1169,7 @@ private fun AddEditeTaskScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Filled.Add,
-                            contentDescription = "Add child task"
+                            contentDescription = addChildContentDescription(draft.childStructure)
                         )
                     }
 
@@ -1297,7 +1396,7 @@ private fun AddEditeTaskScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     AddEditeDialogTopBar(
-                        title = "New child task",
+                        title = newChildDialogTitle(draft.childStructure),
                         onNavigationClick = {
                             showAddChildTaskDialog = false
                             newChildTaskName = ""
@@ -1404,7 +1503,7 @@ private fun AddEditeTaskScreen(
                         onValueChange = { value ->
                             newChildTaskName = value
                         },
-                        hint = "Child task name",
+                        hint = newChildNameHint(draft.childStructure),
                         showDivider = newChildTaskNameSuggestions.isEmpty()
                     )
 
@@ -1460,7 +1559,13 @@ private fun AddEditeTaskScreen(
             )
 
             ChildRuleEditorDialog(
-                title = newChildTaskName.ifBlank { "Child rule" },
+                title = newChildTaskName.ifBlank {
+                    if (draft.childStructure == TaskChildStructure.LIST_ITEMS) {
+                        "Item rule"
+                    } else {
+                        "Child rule"
+                    }
+                },
                 rule = rulePreview,
                 onDismiss = {
                     showNewChildRuleDialog = false
@@ -1520,6 +1625,101 @@ private fun AddEditeTaskScreen(
 
     }
 
+}
+
+private fun childSectionTitle(
+    childStructure: String
+): String {
+    return when (childStructure) {
+        TaskChildStructure.LIST_ITEMS -> "آیتم‌های لیست"
+        else -> "Child tasks"
+    }
+}
+
+private fun childSectionEmptyText(
+    childStructure: String
+): String {
+    return when (childStructure) {
+        TaskChildStructure.LIST_ITEMS -> "No item yet"
+        else -> "No child task yet"
+    }
+}
+
+private fun newChildDialogTitle(
+    childStructure: String
+): String {
+    return when (childStructure) {
+        TaskChildStructure.LIST_ITEMS -> "New item"
+        else -> "New child task"
+    }
+}
+
+private fun newChildNameHint(
+    childStructure: String
+): String {
+    return when (childStructure) {
+        TaskChildStructure.LIST_ITEMS -> "Item name"
+        else -> "Child task name"
+    }
+}
+
+private fun addChildContentDescription(
+    childStructure: String
+): String {
+    return when (childStructure) {
+        TaskChildStructure.LIST_ITEMS -> "Add list item"
+        else -> "Add child task"
+    }
+}
+
+
+
+@Composable
+private fun TaskStructureChip(
+    label: String,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    val shape = RoundedCornerShape(999.dp)
+
+    Box(
+        modifier = modifier
+            .height(36.dp)
+            .clip(shape)
+            .background(
+                if (selected) {
+                    MaterialTheme.colorScheme.primaryContainer
+                } else {
+                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+                },
+                shape = shape
+            )
+            .border(
+                width = if (selected) 1.5.dp else 0.8.dp,
+                color = if (selected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
+                },
+                shape = shape
+            )
+            .clickable { onClick() }
+            .padding(horizontal = 12.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.labelMedium,
+            color = if (selected) {
+                MaterialTheme.colorScheme.onPrimaryContainer
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            }
+        )
+    }
 }
 
 @Composable
@@ -2478,7 +2678,7 @@ private fun AddEditeDialogRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(66.dp)
+            .heightIn(min = 66.dp)
             .then(clickableModifier)
             .padding(start = startPadding.dp, end = 14.dp),
         verticalAlignment = Alignment.CenterVertically

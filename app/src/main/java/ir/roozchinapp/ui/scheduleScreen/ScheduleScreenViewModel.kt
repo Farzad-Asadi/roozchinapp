@@ -12,6 +12,7 @@ import ir.roozchinapp.data.dataBaseRoom.tables.reminder.TaskReminderRepository
 import ir.roozchinapp.data.dataBaseRoom.tables.task.TaskChildRepository
 import ir.roozchinapp.data.dataBaseRoom.tables.task.TaskChildRequirementSummaryUi
 import ir.roozchinapp.data.dataBaseRoom.tables.task.TaskChildRequirementUi
+import ir.roozchinapp.data.dataBaseRoom.tables.task.TaskEntity
 import ir.roozchinapp.data.dataBaseRoom.tables.task.TaskMode
 import ir.roozchinapp.data.dataBaseRoom.tables.task.TaskRepository
 import ir.roozchinapp.data.dataBaseRoom.tables.taskSchedule.RepeatUnit
@@ -148,6 +149,27 @@ class ScheduleScreenViewModel @Inject constructor(
 
     val pomodoroDailyAdjustments =
         taskRepo.observePomodoroDailyAdjustments()
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5_000),
+                emptyList()
+            )
+
+    val anytimePalletTasks: StateFlow<List<TaskEntity>> =
+        taskRepo.observeAllTasks()
+            .map { tasks ->
+                tasks
+                    .filter { task ->
+                        task.showInAnytimePallet &&
+                                (task.parentTaskId == null || task.parentTaskId == -1)
+                    }
+                    .sortedWith(
+                        compareBy<TaskEntity> { it.isCompleted }
+                            .thenByDescending { it.priority }
+                            .thenBy { it.name.lowercase() }
+                            .thenBy { it.id ?: 0 }
+                    )
+            }
             .stateIn(
                 viewModelScope,
                 SharingStarted.WhileSubscribed(5_000),
