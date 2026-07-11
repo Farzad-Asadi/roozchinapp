@@ -208,8 +208,25 @@ fun ScheduleScreen(
     }
 
     val numDays = 5
-    val startDate = remember { LocalDate.now() } // یا هر startDate که تایم‌لاین‌ات دارد
-    val endDate = remember(startDate) { startDate.plusDays((numDays - 1).toLong()) }
+
+    var scheduleAnchorEpochDay by rememberSaveable {
+        mutableStateOf(LocalDate.now().toEpochDay())
+    }
+
+    val today = remember(scheduleAnchorEpochDay) {
+        LocalDate.ofEpochDay(scheduleAnchorEpochDay)
+    }
+
+    val startDate = today
+
+    val endDate = remember(startDate) {
+        startDate.plusDays((numDays - 1).toLong())
+    }
+
+
+
+
+
 
     LaunchedEffect(startDate, endDate) {
         viewModel.setTaskChildVisibleRange(
@@ -219,7 +236,7 @@ fun ScheduleScreen(
     }
 
 
-    val today = remember { LocalDate.now() }
+
 
     val timelineItems = remember(timelineItemsReal, startDate, endDate, overrideKeys) {
         val existingKeys = HashSet<String>(timelineItemsReal.size * 2)
@@ -300,13 +317,13 @@ fun ScheduleScreen(
 
 
     // ✅ rule های پومودورو (برای expectedToday و config)
-    val pomodoroPARENTRulesToday = remember(allItems) {
+    val pomodoroPARENTRulesToday = remember(allItems, today) {
         allItems.filter { it.mode == ScheduleMode.POMODORO && it.repeating }
-            .filter { ruleIsActiveToday(it, today) } // تابع پایین رو اضافه می‌کنیم
+            .filter { ruleIsActiveToday(it, today) }
     }
 
     // ✅ پومودوهای تایم‌لاینِ امروز (برای scheduledToday)
-    val todayTimelinePomodoros = remember(allItems) {
+    val todayTimelinePomodoros = remember(allItems, today) {
         allItems.filter { !it.inPallet && it.mode == ScheduleMode.POMODORO }
             .filter { it.start.toLocalDate() == today }
     }
@@ -838,6 +855,72 @@ fun ScheduleScreen(
 
     val alarmManager = remember(context) {
         context.getSystemService(AlarmManager::class.java)
+    }
+
+    fun refreshScheduleDateIfNeeded() {
+        val realTodayEpochDay = LocalDate.now().toEpochDay()
+
+        if (realTodayEpochDay == scheduleAnchorEpochDay) {
+            return
+        }
+
+        scheduleAnchorEpochDay = realTodayEpochDay
+
+        selectedScheduleId = null
+        draggingFromPallet = null
+        draggingPomodoro = null
+        pomodoroAdjust = null
+
+        pendingMove.clear()
+        pendingMoveVersion++
+
+        didAutoScroll = false
+        pendingBringDayIntoView = null
+
+        pendingScrollTo = null
+        pendingScrollByPx = 0f
+    }
+
+    val scheduleLifecycleOwner = context.findLifecycleOwner()
+
+    DisposableEffect(scheduleLifecycleOwner) {
+        if (scheduleLifecycleOwner == null) {
+            onDispose { }
+        } else {
+            val observer = LifecycleEventObserver { _, event ->
+                when (event) {
+                    Lifecycle.Event.ON_START,
+                    Lifecycle.Event.ON_RESUME -> {
+                        refreshScheduleDateIfNeeded()
+                    }
+
+                    else -> Unit
+                }
+            }
+
+            scheduleLifecycleOwner.lifecycle.addObserver(observer)
+
+            // همین لحظه هم یک بار چک کن.
+            refreshScheduleDateIfNeeded()
+
+            onDispose {
+                scheduleLifecycleOwner.lifecycle.removeObserver(observer)
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            val now = LocalDateTime.now()
+
+            val millisUntilNextMinute =
+                ((60 - now.second) * 1_000L - now.nano / 1_000_000L)
+                    .coerceAtLeast(250L)
+
+            delay(millisUntilNextMinute)
+
+            refreshScheduleDateIfNeeded()
+        }
     }
 
     fun hasNotificationPermission(): Boolean {
@@ -3489,7 +3572,7 @@ private fun PalletVerticalTabButton(
         Text(
             text = label,
             maxLines = 1,
-            style = MaterialTheme.typography.labelMedium,
+            style = MaterialTheme.typography.labelLarge,
             color = if (selected) selectedColor else normalColor,
             modifier = Modifier.graphicsLayer {
                 rotationZ = -90f
