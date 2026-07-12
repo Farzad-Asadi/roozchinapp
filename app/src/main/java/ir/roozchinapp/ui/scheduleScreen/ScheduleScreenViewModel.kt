@@ -1514,6 +1514,39 @@ class ScheduleScreenViewModel @Inject constructor(
             taskScheduleRepo.setSchedulePalletState(scheduleId, true)
         }
     }
+
+    fun createTimelineScheduleFromAnytimeTask(
+        taskId: Int,
+        date: LocalDate,
+        startMin: Int,
+        endMin: Int
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val task = taskRepo.getTaskById(taskId) ?: return@launch
+
+            val safeStart = startMin.coerceIn(0, 24 * 60 - 5)
+            val safeEnd = endMin.coerceIn(safeStart + 5, 24 * 60)
+
+            taskScheduleRepo.insert(
+                TaskSchedule(
+                    id = null,
+                    taskId = task.id ?: return@launch,
+                    title = null,
+                    mode = ScheduleMode.TIME_RANGE,
+                    dateEpochDay = date.toEpochDay(),
+                    startMinuteOfDay = safeStart,
+                    endMinuteOfDay = safeEnd,
+                    durationMinutes = null,
+                    inPallet = false,
+                    repeating = false,
+                    repeatInterval = null,
+                    repeatUnit = null,
+                    weekdaysMask = null
+                )
+            )
+        }
+    }
+
     fun dropScheduleFromPalletToTimeLine(
         scheduleId: Int,
         date: LocalDate,

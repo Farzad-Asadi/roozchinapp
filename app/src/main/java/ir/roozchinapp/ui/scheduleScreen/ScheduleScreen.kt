@@ -669,6 +669,8 @@ fun ScheduleScreen(
 
     var draggingFromPallet by remember { mutableStateOf<ScheduleScreenItem?>(null) }
 
+    var draggingAnytimeTask by remember { mutableStateOf<TaskEntity?>(null) }
+
     val overlayItem = draggingFromPallet
     val overlayWidth = dayWidthDp - 12.dp
 
@@ -785,7 +787,10 @@ fun ScheduleScreen(
 
 
 
-    val isDraggingAnything = (draggingFromPallet != null || draggingPomodoro != null)
+    val isDraggingAnything =
+        draggingFromPallet != null ||
+                draggingPomodoro != null ||
+                draggingAnytimeTask != null
 
     fun requestScrollToCurrentTimeLine() {
         if (isPinchZooming || isDraggingAnything) {
@@ -887,6 +892,8 @@ fun ScheduleScreen(
         draggingFromPallet = null
         draggingPomodoro = null
         pomodoroAdjust = null
+
+        draggingAnytimeTask = null
 
         pendingMove.clear()
         pendingMoveVersion++
@@ -1694,7 +1701,7 @@ fun ScheduleScreen(
             }
 
             // ✅ Drag overlay: same visual as pallet card
-            if (draggingFromPallet != null || draggingPomodoro != null) {
+            if (draggingFromPallet != null || draggingPomodoro != null || draggingAnytimeTask != null) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -1725,6 +1732,13 @@ fun ScheduleScreen(
                     draggingFromPallet?.let { item ->
                         PalletTaskItemVisual(
                             item = item,
+                            modifier = overlayModifier
+                        )
+                    }
+
+                    draggingAnytimeTask?.let { task ->
+                        AnytimePalletTaskCardVisual(
+                            task = task,
                             modifier = overlayModifier
                         )
                     }
@@ -1808,6 +1822,17 @@ fun ScheduleScreen(
                     grabOffsetX = downX
                     grabOffsetY = downY
                 },
+                onAnytimeDragStart = { task, sx, sy, downX, downY ->
+                    palletExpanded = false
+                    draggingFromPallet = null
+                    draggingPomodoro = null
+                    draggingAnytimeTask = task
+
+                    dragX = sx
+                    dragY = sy
+                    grabOffsetX = downX
+                    grabOffsetY = downY
+                },
                 onDrag = { dx, dy ->
                     dragX += dx
                     dragY += dy
@@ -1835,6 +1860,30 @@ fun ScheduleScreen(
                         minuteOfDay.coerceIn(0, 24 * 60 - minDur),
                         dropSnapStep
                     )
+
+                    // ✅ اگر task آزاد drag شده بود، یک schedule جدید بساز.
+                    // خود task در پالت آزاد باقی می‌ماند.
+                    val anytimeTask = draggingAnytimeTask
+                    if (anytimeTask != null) {
+                        val taskId = anytimeTask.id
+
+                        if (taskId != null) {
+                            val defaultDurationMin = 60
+                            val endMin = (startMin + defaultDurationMin).coerceAtMost(24 * 60)
+
+                            viewModel.createTimelineScheduleFromAnytimeTask(
+                                taskId = taskId,
+                                date = date,
+                                startMin = startMin,
+                                endMin = endMin
+                            )
+                        }
+
+                        draggingFromPallet = null
+                        draggingPomodoro = null
+                        draggingAnytimeTask = null
+                        return@RightPallet
+                    }
 
                     // ✅ اگر پومودورو کارت درگ می‌شد
                     val pomo = draggingPomodoro
@@ -1882,6 +1931,7 @@ fun ScheduleScreen(
 
                         draggingFromPallet = null
                         draggingPomodoro = null
+                        draggingAnytimeTask = null
                         return@RightPallet
                     }
 
@@ -1908,11 +1958,13 @@ fun ScheduleScreen(
 
                     draggingFromPallet = null
                     draggingPomodoro = null
+                    draggingAnytimeTask = null
                     return@RightPallet
                 },
                 onDragCancel = {
                     draggingFromPallet = null
                     draggingPomodoro = null
+                    draggingAnytimeTask = null
                 },
                 onEditTask = { taskId ->
                     palletExpanded = false
@@ -3356,6 +3408,7 @@ private fun RightPallet(
     onSelectTab: (PalletPanelTab) -> Unit,
     onDragStart: (ScheduleScreenItem, Float, Float, Float, Float) -> Unit,
     onPomodoroDragStart: (PomodoroPalletCardItem, Float, Float, Float, Float) -> Unit,
+    onAnytimeDragStart: (TaskEntity, Float, Float, Float, Float) -> Unit,
     onDrag: (dx: Float, dy: Float) -> Unit,
     onDragEnd: (scheduleId: Int) -> Unit,
     onDragCancel: () -> Unit,
@@ -3539,6 +3592,10 @@ private fun RightPallet(
                             AnytimePalletTaskList(
                                 tasks = anytimeTasks,
                                 onEditTask = onEditTask,
+                                onDragStart = onAnytimeDragStart,
+                                onDrag = onDrag,
+                                onDragEnd = { onDragEnd(-1) },
+                                onDragCancel = onDragCancel,
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
@@ -3553,6 +3610,10 @@ private fun RightPallet(
 private fun AnytimePalletTaskList(
     tasks: List<TaskEntity>,
     onEditTask: (taskId: Int) -> Unit,
+    onDragStart: (TaskEntity, Float, Float, Float, Float) -> Unit,
+    onDrag: (dx: Float, dy: Float) -> Unit,
+    onDragEnd: () -> Unit,
+    onDragCancel: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     if (tasks.isEmpty()) {
@@ -3571,7 +3632,11 @@ private fun AnytimePalletTaskList(
         ) { task ->
             AnytimePalletTaskCard(
                 task = task,
-                onEditTask = onEditTask
+                onEditTask = onEditTask,
+                onDragStart = onDragStart,
+                onDrag = onDrag,
+                onDragEnd = onDragEnd,
+                onDragCancel = onDragCancel
             )
 
             HorizontalDivider(thickness = 0.5.dp)
@@ -3580,28 +3645,21 @@ private fun AnytimePalletTaskList(
 }
 
 @Composable
-private fun AnytimePalletTaskCard(
+private fun AnytimePalletTaskCardVisual(
     task: TaskEntity,
-    onEditTask: (taskId: Int) -> Unit
+    modifier: Modifier = Modifier
 ) {
-    val taskId = task.id
     val shape = RoundedCornerShape(16.dp)
     val borderColor = colorFromHex(task.color)
 
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
+        modifier = modifier
             .padding(vertical = 6.dp)
             .border(
                 width = 1.5.dp,
                 color = borderColor,
                 shape = shape
-            )
-            .clickable(enabled = taskId != null) {
-                if (taskId != null) {
-                    onEditTask(taskId)
-                }
-            },
+            ),
         shape = shape,
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         colors = CardDefaults.cardColors(
@@ -3640,6 +3698,67 @@ private fun AnytimePalletTaskCard(
                 maxLines = 1,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun AnytimePalletTaskCard(
+    task: TaskEntity,
+    onEditTask: (taskId: Int) -> Unit,
+    onDragStart: (TaskEntity, Float, Float, Float, Float) -> Unit,
+    onDrag: (dx: Float, dy: Float) -> Unit,
+    onDragEnd: () -> Unit,
+    onDragCancel: () -> Unit
+) {
+    val taskId = task.id
+    var coords by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    var menuExpanded by remember { mutableStateOf(false) }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .onGloballyPositioned { coords = it }
+            .pointerInput(taskId) {
+                detectDragGesturesAfterLongPress(
+                    onDragStart = { downPos ->
+                        val c = coords ?: return@detectDragGesturesAfterLongPress
+                        val r = c.localToRoot(downPos)
+                        onDragStart(task, r.x, r.y, downPos.x, downPos.y)
+                    },
+                    onDrag = { change, dragAmount ->
+                        change.consume()
+                        onDrag(dragAmount.x, dragAmount.y)
+                    },
+                    onDragEnd = onDragEnd,
+                    onDragCancel = onDragCancel
+                )
+            }
+            .clickable {
+                menuExpanded = true
+            }
+    ) {
+        AnytimePalletTaskCardVisual(
+            task = task,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        DropdownMenu(
+            expanded = menuExpanded,
+            onDismissRequest = { menuExpanded = false }
+        ) {
+            DropdownMenuItem(
+                text = { Text("Edit") },
+                leadingIcon = {
+                    Icon(Icons.Filled.Edit, contentDescription = null)
+                },
+                onClick = {
+                    menuExpanded = false
+                    if (taskId != null) {
+                        onEditTask(taskId)
+                    }
+                }
             )
         }
     }

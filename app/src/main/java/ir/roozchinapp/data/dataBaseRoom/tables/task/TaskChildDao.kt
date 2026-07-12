@@ -352,6 +352,18 @@ interface TaskChildDao {
         parentTaskId: Int
     ): List<TaskEntity>
 
+
+    @Query("""
+    SELECT * FROM task
+    WHERE id = :taskId
+    LIMIT 1
+""")
+    suspend fun getTaskByIdForChildRules(
+        taskId: Int
+    ): TaskEntity?
+
+
+
     @Query("""
     SELECT * FROM task_child_rule
     WHERE parentTaskId = :parentTaskId
@@ -368,6 +380,25 @@ interface TaskChildDao {
     suspend fun ensureDefaultOccurrenceRulesForDirectChildren(
         parentTaskId: Int
     ) {
+        val parentTask = getTaskByIdForChildRules(parentTaskId)
+
+        val isListParent =
+            parentTask?.childStructure == TaskChildStructure.LIST_ITEMS
+
+        val defaultRuleType =
+            if (isListParent) {
+                TaskChildRuleType.MANUAL_LIST_ITEM
+            } else {
+                TaskChildRuleType.ONCE_PER_PARENT_OCCURRENCE
+            }
+
+        val defaultResetScope =
+            if (isListParent) {
+                TaskChildResetScope.LIST_SESSION
+            } else {
+                TaskChildResetScope.PARENT_OCCURRENCE
+            }
+
         val children = getDirectChildTasks(parentTaskId)
 
         for ((index, child) in children.withIndex()) {
@@ -383,8 +414,8 @@ interface TaskChildDao {
                     TaskChildRuleEntity(
                         parentTaskId = parentTaskId,
                         childTaskId = childId,
-                        ruleType = TaskChildRuleType.ONCE_PER_PARENT_OCCURRENCE,
-                        resetScope = TaskChildResetScope.PARENT_OCCURRENCE,
+                        ruleType = defaultRuleType,
+                        resetScope = defaultResetScope,
                         isRequired = true,
                         isEnabled = true,
                         sortOrder = index,
@@ -392,6 +423,23 @@ interface TaskChildDao {
                         timesPerOccurrence = 1,
                         showInTimelineCard = true,
                         showInBottomSheet = true
+                    )
+                )
+            } else if (
+                isListParent &&
+                existingRule.ruleType == TaskChildRuleType.ONCE_PER_PARENT_OCCURRENCE &&
+                existingRule.resetScope == TaskChildResetScope.PARENT_OCCURRENCE
+            ) {
+                // اگر task بعداً از حالت زیرتسک عادی به آیتم‌های لیست تبدیل شد،
+                // ruleهای default قبلی را با مدل لیستی هماهنگ کن.
+                upsertRule(
+                    existingRule.copy(
+                        ruleType = TaskChildRuleType.MANUAL_LIST_ITEM,
+                        resetScope = TaskChildResetScope.LIST_SESSION,
+                        sortOrder = index,
+                        showInTimelineCard = true,
+                        showInBottomSheet = true,
+                        updatedAtEpochMillis = System.currentTimeMillis()
                     )
                 )
             }
@@ -486,7 +534,11 @@ interface TaskChildDao {
                 }
 
                 TaskChildRuleType.MANUAL_LIST_ITEM -> {
-                    slotCount = 0
+                    contextType = occurrenceContextType
+                    effectiveScheduleId = scheduleId
+                    effectiveParentRuleScheduleId = parentRuleScheduleId
+                    effectiveOccurrenceDateEpochDay = occurrenceDateEpochDay
+                    slotCount = 1
                 }
             }
 
