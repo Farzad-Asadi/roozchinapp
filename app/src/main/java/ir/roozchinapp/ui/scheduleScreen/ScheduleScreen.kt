@@ -506,6 +506,10 @@ fun ScheduleScreen(
 
     var didAutoScroll by remember { mutableStateOf(false) }
 
+    var currentTimeAutoScrollRequest by rememberSaveable {
+        mutableIntStateOf(0)
+    }
+
     val timelineInitialReady = hasAppliedSavedVerticalZoom && didAutoScroll
 
     var pendingScrollTo by remember { mutableStateOf<Int?>(null) }
@@ -783,6 +787,15 @@ fun ScheduleScreen(
 
     val isDraggingAnything = (draggingFromPallet != null || draggingPomodoro != null)
 
+    fun requestScrollToCurrentTimeLine() {
+        if (isPinchZooming || isDraggingAnything) {
+            return
+        }
+
+        didAutoScroll = false
+        currentTimeAutoScrollRequest++
+    }
+
     val overlayScheduleItem = draggingFromPallet
     val overlayPomodoroItem = draggingPomodoro
 
@@ -883,6 +896,8 @@ fun ScheduleScreen(
 
         pendingScrollTo = null
         pendingScrollByPx = 0f
+
+        currentTimeAutoScrollRequest++
     }
 
     val scheduleLifecycleOwner = context.findLifecycleOwner()
@@ -896,6 +911,7 @@ fun ScheduleScreen(
                     Lifecycle.Event.ON_START,
                     Lifecycle.Event.ON_RESUME -> {
                         refreshScheduleDateIfNeeded()
+                        requestScrollToCurrentTimeLine()
                     }
 
                     else -> Unit
@@ -906,6 +922,7 @@ fun ScheduleScreen(
 
             // همین لحظه هم یک بار چک کن.
             refreshScheduleDateIfNeeded()
+            requestScrollToCurrentTimeLine()
 
             onDispose {
                 scheduleLifecycleOwner.lifecycle.removeObserver(observer)
@@ -1028,6 +1045,7 @@ fun ScheduleScreen(
     }
 
     LaunchedEffect(
+        currentTimeAutoScrollRequest,
         hasAppliedSavedVerticalZoom,
         vScroll.maxValue,
         hScroll.maxValue,
@@ -1041,16 +1059,12 @@ fun ScheduleScreen(
         if (!hasAppliedSavedVerticalZoom) return@LaunchedEffect
         if (gridViewportHeightPx <= 0f) return@LaunchedEffect
 
-        // اگر به هر دلیل محتوا قابل اسکرول نبود، صفحه را قفل نکن.
-        // در این حالت چیزی برای auto-scroll عمودی وجود ندارد.
         if (vScroll.maxValue <= 0) {
             didAutoScroll = true
             return@LaunchedEffect
         }
 
-        // مهم:
-        // اولین بار که maxValue و viewportHeight آماده می‌شوند، هنوز layout نهایی کاملاً settle نشده.
-        // چند فریم صبر می‌کنیم تا Scaffold, ScrollState, Grid و Overlay همه در جای نهایی باشند.
+        // چند فریم صبر می‌کنیم تا layout نهایی شود.
         repeat(3) {
             withFrameNanos { }
         }
@@ -1066,10 +1080,13 @@ fun ScheduleScreen(
             val now = LocalDateTime.now()
             val minutesNow = now.hour * 60 + now.minute
 
-            val yPx = hourHeightPx * (minutesNow / 60f)
-            val viewportCenterPx = gridViewportHeightPx / 2f
+            val currentLineYpx = hourHeightPx * (minutesNow / 60f)
 
-            return (yPx - viewportCenterPx)
+            // 0.50 یعنی دقیقاً وسط.
+            // 0.42 یعنی کمی بالاتر از وسط؛ برای دیدن ادامه‌ی ساعات بعدی بهتر است.
+            val currentLineAnchorInViewport = gridViewportHeightPx * 0.42f
+
+            return (currentLineYpx - currentLineAnchorInViewport)
                 .coerceIn(0f, vScroll.maxValue.toFloat())
                 .roundToInt()
         }
@@ -1096,7 +1113,7 @@ fun ScheduleScreen(
             hScroll.scrollTo(targetX)
         }
 
-        // یک فریم بعد، اگر maxValue یا اندازه viewport بعد از اعمال scroll اصلاح شد، دوباره دقیق کن
+        // یک فریم بعد، اگر maxValue یا viewport اصلاح شد، دوباره دقیق کن.
         withFrameNanos { }
 
         // پاس اصلاحی

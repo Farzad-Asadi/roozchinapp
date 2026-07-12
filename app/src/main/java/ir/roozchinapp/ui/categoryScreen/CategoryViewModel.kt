@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -51,6 +52,27 @@ class CategoryViewModel @Inject constructor(
     private val _dragCollapsedRestoreTask = MutableStateFlow<Int?>(null)
     private val _collapsedIdsCategory = MutableStateFlow<Set<Int>>(emptySet())
     private val _taskCollapsedIds = MutableStateFlow<Set<Int>>(emptySet())
+
+    init {
+        viewModelScope.launch {
+            categoryRepository.observeAll()
+                .map { categories ->
+                    categories
+                        .asSequence()
+                        .filter { category ->
+                            category.categoryId != null && !category.isExtended
+                        }
+                        .mapNotNull { category ->
+                            category.categoryId
+                        }
+                        .toSet()
+                }
+                .distinctUntilChanged()
+                .collect { savedCollapsedIds ->
+                    _collapsedIdsCategory.value = savedCollapsedIds
+                }
+        }
+    }
 
     private val _menuCategoryId = MutableStateFlow<Int?>(null)
     val menuCategoryId = _menuCategoryId.asStateFlow()
