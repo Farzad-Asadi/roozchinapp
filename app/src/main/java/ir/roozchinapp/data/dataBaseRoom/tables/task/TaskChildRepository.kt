@@ -113,6 +113,14 @@ interface TaskChildRepository {
         completed: Boolean
     )
 
+    suspend fun getRequirementById(
+        requirementId: Int
+    ): TaskChildRequirementEntity?
+
+    suspend fun getRuleById(
+        ruleId: Int
+    ): TaskChildRuleEntity?
+
     fun observeRequirementSummariesByDateRange(
         startEpochDay: Long,
         endEpochDay: Long

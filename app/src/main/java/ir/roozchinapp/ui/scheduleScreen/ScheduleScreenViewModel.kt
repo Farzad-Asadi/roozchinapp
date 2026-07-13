@@ -12,6 +12,7 @@ import ir.roozchinapp.data.dataBaseRoom.tables.reminder.TaskReminderRepository
 import ir.roozchinapp.data.dataBaseRoom.tables.task.TaskChildRepository
 import ir.roozchinapp.data.dataBaseRoom.tables.task.TaskChildRequirementSummaryUi
 import ir.roozchinapp.data.dataBaseRoom.tables.task.TaskChildRequirementUi
+import ir.roozchinapp.data.dataBaseRoom.tables.task.TaskChildRuleType
 import ir.roozchinapp.data.dataBaseRoom.tables.task.TaskEntity
 import ir.roozchinapp.data.dataBaseRoom.tables.task.TaskMode
 import ir.roozchinapp.data.dataBaseRoom.tables.task.TaskRepository
@@ -352,10 +353,25 @@ class ScheduleScreenViewModel @Inject constructor(
         completed: Boolean
     ) {
         viewModelScope.launch(Dispatchers.IO) {
+            val requirement = taskChildRepo.getRequirementById(requirementId)
+
             taskChildRepo.toggleRequirementCompletedById(
                 requirementId = requirementId,
                 completed = completed
             )
+
+            if (requirement == null) {
+                return@launch
+            }
+
+            val rule = taskChildRepo.getRuleById(requirement.ruleId)
+
+            if (rule?.ruleType == TaskChildRuleType.MANUAL_LIST_ITEM) {
+                taskRepo.setCompletedForIds(
+                    ids = listOf(requirement.childTaskId),
+                    done = completed
+                )
+            }
         }
     }
 

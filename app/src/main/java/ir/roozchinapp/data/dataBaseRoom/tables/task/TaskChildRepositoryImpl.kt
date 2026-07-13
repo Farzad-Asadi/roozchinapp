@@ -173,6 +173,16 @@ class TaskChildRepositoryImpl @Inject constructor(
             completed = completed
         )
 
+    override suspend fun getRequirementById(
+        requirementId: Int
+    ): TaskChildRequirementEntity? =
+        taskChildDao.getRequirementById(requirementId)
+
+    override suspend fun getRuleById(
+        ruleId: Int
+    ): TaskChildRuleEntity? =
+        taskChildDao.getRuleById(ruleId)
+
     override fun observeRequirementSummariesByDateRange(
         startEpochDay: Long,
         endEpochDay: Long
