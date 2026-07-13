@@ -94,6 +94,7 @@ import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -113,6 +114,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
@@ -123,6 +125,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -919,10 +922,28 @@ private fun AddEditeTaskScreen(
         AddEditeDialogRow(
             onClick = { showAddNote = true },
             content = {
-                Icon(Icons.AutoMirrored.Filled.Note, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("Add note", modifier = Modifier.weight(1f))
+                val hasNote = draft.note.isNotBlank()
 
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.Note,
+                    contentDescription = null,
+                    tint = if (hasNote) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        LocalContentColor.current
+                    }
+                )
+
+                Spacer(Modifier.width(8.dp))
+
+                Text(
+                    text = if (hasNote) "Note" else "Add note",
+                    modifier = Modifier.weight(1f)
+                )
+
+                if (hasNote) {
+                    NoteAvailableIndicator()
+                }
             },
         )
 
@@ -1333,11 +1354,16 @@ private fun AddEditeTaskScreen(
 
         if (showAddNote) {
             AddEditDescriptionDialog(
-                title = "Add Note",
+                title = if (draft.note.isBlank()) {
+                    "افزودن یادداشت"
+                } else {
+                    "ویرایش یادداشت"
+                },
                 value = draft.note,
                 onValueChange = onNoteChange,
                 onDismiss = { showAddNote = false },
-                onConfirm = { showAddNote = false }
+                onConfirm = { showAddNote = false },
+                confirmEnabled = true
             )
         }
 
@@ -1718,6 +1744,30 @@ private fun TaskStructureChip(
             } else {
                 MaterialTheme.colorScheme.onSurfaceVariant
             }
+        )
+    }
+}
+
+@Composable
+private fun NoteAvailableIndicator(
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .size(16.dp)
+            .background(
+                color = Color(0x3300E676),
+                shape = CircleShape
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .size(9.dp)
+                .background(
+                    color = Color(0xFF00C853),
+                    shape = CircleShape
+                )
         )
     }
 }
@@ -2446,9 +2496,8 @@ private fun AddEditDescriptionDialog(
     onValueChange: (String) -> Unit,
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
-    confirmEnabled: Boolean = value.isNotBlank()
+    confirmEnabled: Boolean = true
 ) {
-
     DimmedDialog(
         onDismiss = onDismiss,
         shape = RoundedCornerShape(28.dp),
@@ -2456,13 +2505,9 @@ private fun AddEditDescriptionDialog(
             .fillMaxWidth(0.92f)
             .fillMaxHeight(0.85f)
     ) {
-
         Column(
-            modifier = Modifier
-                .fillMaxSize()
+            modifier = Modifier.fillMaxSize()
         ) {
-
-            // 🔹 Top Bar عمومی
             AddEditeDialogTopBar(
                 title = title,
                 onNavigationClick = onDismiss,
@@ -2471,39 +2516,52 @@ private fun AddEditDescriptionDialog(
                         onClick = onConfirm,
                         enabled = confirmEnabled
                     ) {
-                        Icon(Icons.Filled.Check, contentDescription = null)
+                        Icon(
+                            imageVector = Icons.Filled.Check,
+                            contentDescription = "ذخیره یادداشت"
+                        )
                     }
                 }
             )
 
-            // 🔹 متن بزرگ (تقریباً کل دیالوگ)
-            TextField(
-                value = value,
-                onValueChange = onValueChange,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)           // 👈 کل فضای باقی‌مانده را می‌گیرد
-                    .padding(20.dp),
-                placeholder = {
-                    Text(
-                        "Write description...",
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+            CompositionLocalProvider(
+                LocalLayoutDirection provides LayoutDirection.Rtl
+            ) {
+                TextField(
+                    value = value,
+                    onValueChange = onValueChange,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .padding(20.dp),
+                    placeholder = {
+                        Text(
+                            text = "یادداشت خود را بنویسید...",
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.Right,
+                            color = MaterialTheme.colorScheme.onSurface.copy(
+                                alpha = 0.4f
+                            )
+                        )
+                    },
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(
+                        textAlign = TextAlign.Right,
+                        textDirection = TextDirection.ContentOrRtl
+                    ),
+                    singleLine = false,
+                    maxLines = Int.MAX_VALUE,
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        disabledContainerColor = Color.Transparent,
+                        errorContainerColor = Color.Transparent,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        disabledIndicatorColor = Color.Transparent,
+                        errorIndicatorColor = Color.Transparent
                     )
-                },
-                textStyle = MaterialTheme.typography.bodyLarge,
-                singleLine = false,
-                maxLines = Int.MAX_VALUE,
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    disabledContainerColor = Color.Transparent,
-                    errorContainerColor = Color.Transparent,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                    disabledIndicatorColor = Color.Transparent,
-                    errorIndicatorColor = Color.Transparent
                 )
-            )
+            }
         }
     }
 }
