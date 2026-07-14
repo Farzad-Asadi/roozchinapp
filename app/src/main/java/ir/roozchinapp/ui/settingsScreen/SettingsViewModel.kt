@@ -22,6 +22,7 @@ class SettingsViewModel @Inject constructor(
                 when (route) {
                     AppRoutes.CATEGORY -> AppRoutes.CATEGORY
                     AppRoutes.SCHEDULE -> AppRoutes.SCHEDULE
+                    AppRoutes.ANALYTICS -> AppRoutes.ANALYTICS
                     else -> AppRoutes.CATEGORY
                 }
             }
@@ -35,6 +36,7 @@ class SettingsViewModel @Inject constructor(
         val cleanRoute = when (route) {
             AppRoutes.CATEGORY -> AppRoutes.CATEGORY
             AppRoutes.SCHEDULE -> AppRoutes.SCHEDULE
+            AppRoutes.ANALYTICS -> AppRoutes.ANALYTICS
             else -> AppRoutes.CATEGORY
         }
 

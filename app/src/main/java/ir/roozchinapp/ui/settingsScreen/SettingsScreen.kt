@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.ChevronRight
@@ -84,6 +85,18 @@ fun SettingsScreen(
                 selected = defaultStartDestination == AppRoutes.SCHEDULE,
                 onClick = {
                     viewModel.setDefaultStartDestination(AppRoutes.SCHEDULE)
+                }
+            )
+
+            DefaultStartOptionRow(
+                icon = Icons.Filled.Analytics,
+                title = "آمار",
+                subtitle = "شروع برنامه از صفحه تحلیل پومودورو",
+                selected = defaultStartDestination == AppRoutes.ANALYTICS,
+                onClick = {
+                    viewModel.setDefaultStartDestination(
+                        AppRoutes.ANALYTICS
+                    )
                 }
             )
 

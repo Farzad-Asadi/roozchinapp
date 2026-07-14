@@ -21,6 +21,7 @@ class MainScreenViewModel @Inject constructor(
                 when (route) {
                     AppRoutes.CATEGORY -> AppRoutes.CATEGORY
                     AppRoutes.SCHEDULE -> AppRoutes.SCHEDULE
+                    AppRoutes.ANALYTICS -> AppRoutes.ANALYTICS
                     else -> AppRoutes.CATEGORY
                 }
             }

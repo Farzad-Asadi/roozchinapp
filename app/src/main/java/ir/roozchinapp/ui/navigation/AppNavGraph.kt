@@ -1,6 +1,7 @@
 package ir.roozchinapp.ui.navigation
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Settings
@@ -13,6 +14,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import androidx.navigation.navigation
+import ir.roozchinapp.ui.analyticsScreen.AnalyticsScreen
 import ir.roozchinapp.ui.backupRestore.CompoundBackupRestoreScreen
 import ir.roozchinapp.ui.categoryScreen.CategoryScreen
 import ir.roozchinapp.ui.scheduleScreen.ScheduleScreen
@@ -40,6 +42,10 @@ fun AppNavGraph(
             }
             composable(AppRoutes.SCHEDULE) {
                 ScheduleScreen(navController = navController)
+            }
+
+            composable(AppRoutes.ANALYTICS) {
+                AnalyticsScreen()
             }
             composable(
                 route = AppRoutes.TASK_ROUTE,
@@ -79,15 +85,10 @@ fun AppNavGraph(
 
 
 
-
-
-
-
-
-
 object AppRoutes {
     const val CATEGORY = "category"
     const val SCHEDULE = "schedule"
+    const val ANALYTICS = "analytics"
     const val TASK = "task"
 
     const val ARG_CATEGORY_ID = "categoryId"
@@ -112,9 +113,6 @@ object AppGraphRoutes {
 
 
 
-
-
-
 //برای آیتم‌های باتم‌بار
 data class AppBottomBarDestination(
     val route: String,
@@ -131,6 +129,11 @@ val bottomBarDestinations = listOf(
         route = AppRoutes.CATEGORY,
         label = "Category",
         icon = Icons.Filled.Category
+    ),
+    AppBottomBarDestination(
+        route = AppRoutes.ANALYTICS,
+        label = "آمار",
+        icon = Icons.Filled.Analytics
     ),
     AppBottomBarDestination(
         route = AppRoutes.SETTINGS,
