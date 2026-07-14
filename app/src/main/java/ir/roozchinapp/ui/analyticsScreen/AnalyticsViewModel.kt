@@ -538,6 +538,6 @@ private fun analyticsDateLabel(
             }
 
         AnalyticsPeriod.MONTH ->
-            date.toString()
+            "${date.monthValue}/${date.dayOfMonth}"
     }
 }

@@ -166,9 +166,10 @@ private fun AnalyticsScreenContent(
                 )
             }
 
-            AnalyticsChartPlaceholder(
+            PomodoroAnalyticsChart(
                 selectedPeriod = uiState.selectedPeriod,
-                pointCount = uiState.points.size
+                summary = uiState.summary,
+                points = uiState.points
             )
 
             uiState.errorMessage?.let { message ->
@@ -306,48 +307,7 @@ private fun AnalyticsMetricCard(
     }
 }
 
-@Composable
-private fun AnalyticsChartPlaceholder(
-    selectedPeriod: AnalyticsPeriod,
-    pointCount: Int
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(
-            containerColor =
-            MaterialTheme.colorScheme.surfaceContainerHigh
-        )
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Text(
-                text = "نمودار ${selectedPeriod.displayTitle()}",
-                style = MaterialTheme.typography.titleMedium
-            )
 
-            HorizontalDivider()
-
-            Text(
-                text = if (pointCount == 0) {
-                    "در مرحله بعد داده‌های واقعی پومودورو و نمودار این بخش متصل می‌شوند."
-                } else {
-                    "$pointCount نقطه آماری برای نمایش آماده است."
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 34.dp),
-                textAlign = TextAlign.Center,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
 
 private fun AnalyticsPeriod.displayTitle(): String {
     return when (this) {
