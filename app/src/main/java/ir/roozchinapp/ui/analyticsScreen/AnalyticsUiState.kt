@@ -28,6 +28,26 @@ data class PomodoroAnalyticsPoint(
     val completedFocusMinutes: Int
 )
 
+data class PomodoroTaskAnalyticsItem(
+    val taskId: Int,
+    val taskName: String,
+    val taskColorHex: String,
+
+    val plannedCount: Int,
+    val scheduledCount: Int,
+    val completedCount: Int,
+    val extraCompletedCount: Int,
+
+    val plannedFocusMinutes: Int,
+    val completedFocusMinutes: Int,
+
+    /**
+     * مقدار بین صفر تا صد.
+     * پومودوروهای مازاد درصد را بیشتر از صد نمی‌کنند.
+     */
+    val completionPercent: Float
+)
+
 data class AnalyticsUiState(
     val selectedPeriod: AnalyticsPeriod = AnalyticsPeriod.TODAY,
 
@@ -35,6 +55,9 @@ data class AnalyticsUiState(
         PomodoroAnalyticsSummary(),
 
     val points: List<PomodoroAnalyticsPoint> =
+        emptyList(),
+
+    val taskItems: List<PomodoroTaskAnalyticsItem> =
         emptyList(),
 
     val isLoading: Boolean = false,

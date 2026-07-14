@@ -172,6 +172,11 @@ private fun AnalyticsScreenContent(
                 points = uiState.points
             )
 
+            PomodoroTaskAnalyticsSection(
+                selectedPeriod = uiState.selectedPeriod,
+                items = uiState.taskItems
+            )
+
             uiState.errorMessage?.let { message ->
                 Text(
                     text = message,

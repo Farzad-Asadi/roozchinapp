@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import ir.roozchinapp.data.dataBaseRoom.tables.task.PomodoroDailyAdjustmentEntity
+import ir.roozchinapp.data.dataBaseRoom.tables.task.TaskEntity
 import ir.roozchinapp.data.dataBaseRoom.tables.task.TaskRepository
 import ir.roozchinapp.data.dataBaseRoom.tables.taskSchedule.PomodoroAnalyticsOccurrenceRow
 import ir.roozchinapp.data.dataBaseRoom.tables.taskSchedule.RepeatUnit
@@ -58,13 +59,15 @@ class AnalyticsViewModel @Inject constructor(
                     taskRepository.observePomodoroDailyAdjustmentsBetween(
                         startEpochDay = range.startDate.toEpochDay(),
                         endEpochDay = range.endDate.toEpochDay()
-                    )
-                ) { rules, occurrences, adjustments ->
+                    ),
+                    taskRepository.observeAllTasks()
+                ) { rules, occurrences, adjustments, tasks ->
                     buildAnalyticsUiState(
                         range = range,
                         rules = rules,
                         occurrences = occurrences,
-                        adjustments = adjustments
+                        adjustments = adjustments,
+                        tasks = tasks
                     )
                 }
                     .onStart {
@@ -124,8 +127,46 @@ private data class TaskDateKey(
 private data class DayAnalyticsResult(
     val point: PomodoroAnalyticsPoint,
     val fulfilledCount: Int,
-    val extraCompletedCount: Int
+    val extraCompletedCount: Int,
+    val taskTotalsById: Map<Int, TaskAnalyticsTotals>
 )
+
+private data class TaskAnalyticsTotals(
+    val plannedCount: Int = 0,
+    val scheduledCount: Int = 0,
+    val completedCount: Int = 0,
+    val fulfilledCount: Int = 0,
+    val extraCompletedCount: Int = 0,
+    val plannedFocusMinutes: Int = 0,
+    val completedFocusMinutes: Int = 0
+)
+
+private operator fun TaskAnalyticsTotals.plus(
+    other: TaskAnalyticsTotals
+): TaskAnalyticsTotals {
+    return TaskAnalyticsTotals(
+        plannedCount =
+        plannedCount + other.plannedCount,
+
+        scheduledCount =
+        scheduledCount + other.scheduledCount,
+
+        completedCount =
+        completedCount + other.completedCount,
+
+        fulfilledCount =
+        fulfilledCount + other.fulfilledCount,
+
+        extraCompletedCount =
+        extraCompletedCount + other.extraCompletedCount,
+
+        plannedFocusMinutes =
+        plannedFocusMinutes + other.plannedFocusMinutes,
+
+        completedFocusMinutes =
+        completedFocusMinutes + other.completedFocusMinutes
+    )
+}
 
 private fun buildAnalyticsRange(
     period: AnalyticsPeriod,
@@ -154,7 +195,8 @@ private fun buildAnalyticsUiState(
     range: AnalyticsRange,
     rules: List<TaskSchedule>,
     occurrences: List<PomodoroAnalyticsOccurrenceRow>,
-    adjustments: List<PomodoroDailyAdjustmentEntity>
+    adjustments: List<PomodoroDailyAdjustmentEntity>,
+    tasks: List<TaskEntity>
 ): AnalyticsUiState {
 
     val occurrencesByDate =
@@ -185,6 +227,84 @@ private fun buildAnalyticsUiState(
                 adjustmentByTaskDate = adjustmentByTaskDate
             )
         }
+
+    val taskById =
+        tasks.mapNotNull { task ->
+            val taskId = task.id ?: return@mapNotNull null
+            taskId to task
+        }.toMap()
+
+    val aggregatedTaskTotals =
+        linkedMapOf<Int, TaskAnalyticsTotals>()
+
+    dayResults.forEach { dayResult ->
+        dayResult.taskTotalsById.forEach { (taskId, dayTotals) ->
+            val previousTotals =
+                aggregatedTaskTotals[taskId]
+                    ?: TaskAnalyticsTotals()
+
+            aggregatedTaskTotals[taskId] =
+                previousTotals + dayTotals
+        }
+    }
+
+    val taskItems =
+        aggregatedTaskTotals
+            .map { (taskId, totals) ->
+                val task = taskById[taskId]
+
+                val completionPercent =
+                    if (totals.plannedCount > 0) {
+                        totals.fulfilledCount
+                            .toFloat()
+                            .div(totals.plannedCount.toFloat())
+                            .times(100f)
+                            .coerceIn(0f, 100f)
+                    } else {
+                        0f
+                    }
+
+                PomodoroTaskAnalyticsItem(
+                    taskId = taskId,
+                    taskName =
+                    task?.name
+                        ?.takeIf { it.isNotBlank() }
+                        ?: "تسک شماره $taskId",
+
+                    taskColorHex =
+                    task?.color
+                        ?.takeIf { it.isNotBlank() }
+                        ?: "#9E9E9E",
+
+                    plannedCount = totals.plannedCount,
+                    scheduledCount = totals.scheduledCount,
+                    completedCount = totals.completedCount,
+                    extraCompletedCount =
+                    totals.extraCompletedCount,
+
+                    plannedFocusMinutes =
+                    totals.plannedFocusMinutes,
+
+                    completedFocusMinutes =
+                    totals.completedFocusMinutes,
+
+                    completionPercent = completionPercent
+                )
+            }
+            .filter { item ->
+                item.plannedCount > 0 ||
+                        item.scheduledCount > 0 ||
+                        item.completedCount > 0
+            }
+            .sortedWith(
+                compareByDescending<PomodoroTaskAnalyticsItem> {
+                    it.completedFocusMinutes
+                }.thenByDescending {
+                    it.completedCount
+                }.thenBy {
+                    it.taskName
+                }
+            )
 
     val plannedCount =
         dayResults.sumOf { it.point.plannedCount }
@@ -230,6 +350,7 @@ private fun buildAnalyticsUiState(
             completionPercent = completionPercent
         ),
         points = dayResults.map { it.point },
+        taskItems = taskItems,
         isLoading = false,
         errorMessage = null
     )
@@ -287,6 +408,9 @@ private fun buildDayAnalytics(
 
     var totalPlannedFocusMinutes = 0
     var totalCompletedFocusMinutes = 0
+
+    val taskTotalsById =
+        linkedMapOf<Int, TaskAnalyticsTotals>()
 
     allTaskIds.forEach { taskId ->
         val taskRules =
@@ -375,6 +499,19 @@ private fun buildDayAnalytics(
                 0
             )
 
+        taskTotalsById[taskId] =
+            TaskAnalyticsTotals(
+                plannedCount = plannedForTask,
+                scheduledCount = scheduledForTask,
+                completedCount = completedForTask,
+                fulfilledCount = fulfilledForTask,
+                extraCompletedCount = extraForTask,
+                plannedFocusMinutes =
+                plannedFocusForTask,
+                completedFocusMinutes =
+                completedFocusForTask
+            )
+
         totalPlanned += plannedForTask
         totalScheduled += scheduledForTask
         totalCompleted += completedForTask
@@ -395,12 +532,17 @@ private fun buildDayAnalytics(
             plannedCount = totalPlanned,
             scheduledCount = totalScheduled,
             completedCount = totalCompleted,
-            plannedFocusMinutes = totalPlannedFocusMinutes,
-            completedFocusMinutes = totalCompletedFocusMinutes
+            plannedFocusMinutes =
+            totalPlannedFocusMinutes,
+            completedFocusMinutes =
+            totalCompletedFocusMinutes
         ),
         fulfilledCount = totalFulfilled,
-        extraCompletedCount = totalExtra
+        extraCompletedCount = totalExtra,
+        taskTotalsById = taskTotalsById
     )
+
+
 }
 
 private fun datesBetween(
