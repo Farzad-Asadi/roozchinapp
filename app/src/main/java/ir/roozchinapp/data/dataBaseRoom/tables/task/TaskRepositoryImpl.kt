@@ -107,4 +107,13 @@ class TaskRepositoryImpl @Inject constructor(
 
     override fun observeAllTasks(): Flow<List<TaskEntity>> =
         taskDao.observeAllTasks()
+
+    override fun observePomodoroDailyAdjustmentsBetween(
+        startEpochDay: Long,
+        endEpochDay: Long
+    ): Flow<List<PomodoroDailyAdjustmentEntity>> =
+        taskDao.observePomodoroDailyAdjustmentsBetween(
+            startEpochDay = startEpochDay,
+            endEpochDay = endEpochDay
+        )
 }

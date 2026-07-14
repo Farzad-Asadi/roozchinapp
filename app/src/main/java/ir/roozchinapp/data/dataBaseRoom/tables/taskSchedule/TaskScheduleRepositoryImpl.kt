@@ -24,6 +24,18 @@ class TaskScheduleRepositoryImpl @Inject constructor(
 
     override suspend fun deleteAllForTask(taskId: Int) = dao.deleteAllForTask(taskId)
 
+    override fun observePomodoroRules(): Flow<List<TaskSchedule>> =
+        dao.observePomodoroRules()
+
+    override fun observePomodoroOccurrencesBetween(
+        startEpochDay: Long,
+        endEpochDay: Long
+    ): Flow<List<PomodoroAnalyticsOccurrenceRow>> =
+        dao.observePomodoroOccurrencesBetween(
+            startEpochDay = startEpochDay,
+            endEpochDay = endEpochDay
+        )
+
 
     override suspend fun insert(schedule: TaskSchedule): Int =
         dao.insert(schedule).toInt()

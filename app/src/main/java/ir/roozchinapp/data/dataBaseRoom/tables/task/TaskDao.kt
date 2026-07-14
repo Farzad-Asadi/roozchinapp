@@ -206,6 +206,17 @@ WHERE id = :taskId
     fun observePomodoroDailyAdjustments(): Flow<List<PomodoroDailyAdjustmentEntity>>
 
     @Query("""
+    SELECT *
+    FROM pomodoro_daily_adjustment
+    WHERE dateEpochDay BETWEEN :startEpochDay AND :endEpochDay
+    ORDER BY dateEpochDay ASC, taskId ASC
+""")
+    fun observePomodoroDailyAdjustmentsBetween(
+        startEpochDay: Long,
+        endEpochDay: Long
+    ): Flow<List<PomodoroDailyAdjustmentEntity>>
+
+    @Query("""
     SELECT delta FROM pomodoro_daily_adjustment
     WHERE taskId = :taskId AND dateEpochDay = :dateEpochDay
     LIMIT 1

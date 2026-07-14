@@ -21,6 +21,13 @@ interface TaskScheduleRepository {
     suspend fun updateStartMinute(scheduleId: Int, startMin: Int)
     fun observeAllSchedulesWithTask(): Flow<List<ScheduleItemsRow>>
 
+    fun observePomodoroRules(): Flow<List<TaskSchedule>>
+
+    fun observePomodoroOccurrencesBetween(
+        startEpochDay: Long,
+        endEpochDay: Long
+    ): Flow<List<PomodoroAnalyticsOccurrenceRow>>
+
     suspend fun deleteById(scheduleId: Int)
     suspend fun countByTaskId(taskId: Int): Int
     suspend fun getById(id: Int): TaskSchedule?

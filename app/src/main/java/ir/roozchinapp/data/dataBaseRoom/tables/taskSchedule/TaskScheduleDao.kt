@@ -223,6 +223,40 @@ WHERE id = :scheduleId
     suspend fun getAllScheduleByPomodoroParentId(pomodoroParentId : Int) : List<TaskSchedule>
 
 
+    @Query("""
+    SELECT *
+    FROM task_schedule
+    WHERE mode = :mode
+      AND repeating = 1
+      AND inPallet = 1
+    ORDER BY taskId ASC, id ASC
+""")
+    fun observePomodoroRules(
+        mode: ScheduleMode = ScheduleMode.POMODORO
+    ): Flow<List<TaskSchedule>>
+
+
+    @Query("""
+    SELECT
+        taskId AS taskId,
+        dateEpochDay AS dateEpochDay,
+        inPallet AS inPallet,
+        focusMinutes AS focusMinutes,
+        pomodoroFocusDoneApplied AS pomodoroFocusDoneApplied
+    FROM task_schedule
+    WHERE mode = :mode
+      AND repeating = 0
+      AND dateEpochDay IS NOT NULL
+      AND dateEpochDay BETWEEN :startEpochDay AND :endEpochDay
+    ORDER BY dateEpochDay ASC, taskId ASC, id ASC
+""")
+    fun observePomodoroOccurrencesBetween(
+        startEpochDay: Long,
+        endEpochDay: Long,
+        mode: ScheduleMode = ScheduleMode.POMODORO
+    ): Flow<List<PomodoroAnalyticsOccurrenceRow>>
+
+
     //region Backup / Restore
 
     @Query("SELECT * FROM task_schedule")

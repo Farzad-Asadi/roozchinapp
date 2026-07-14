@@ -62,6 +62,11 @@ interface TaskRepository {
 
     fun observePomodoroDailyAdjustments(): Flow<List<PomodoroDailyAdjustmentEntity>>
 
+    fun observePomodoroDailyAdjustmentsBetween(
+        startEpochDay: Long,
+        endEpochDay: Long
+    ): Flow<List<PomodoroDailyAdjustmentEntity>>
+
     suspend fun adjustManualPomodoroDone(
         taskId: Int,
         dateEpochDay: Long,
