@@ -61,6 +61,10 @@ fun MainScreen(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
+    val isTaskScreenRoute =
+        currentRoute == AppRoutes.TASK_ROUTE ||
+                currentRoute?.startsWith("${AppRoutes.TASK}?") == true
+
     val savedDefaultStartDestination by mainViewModel.defaultStartDestination.collectAsState()
 
     var initialStartDestination by remember {
@@ -101,12 +105,26 @@ fun MainScreen(
                 destinations = bottomBarDestinations,
                 currentRoute = currentRoute,
                 onClick = { dest ->
-                    if (currentRoute != dest.route) {
-                        navController.navigate(dest.route) {
-                            launchSingleTop = true
-                            restoreState = true
-                            popUpTo(navController.graph.startDestinationId) {
-                                saveState = true
+                    when {
+                        isTaskScreenRoute &&
+                                dest.route == AppRoutes.SCHEDULE -> {
+
+                            navController.currentBackStackEntry
+                                ?.savedStateHandle
+                                ?.set(
+                                    AppRoutes.KEY_EXIT_TASK_TO_SCHEDULE,
+                                    true
+                                )
+                        }
+
+                        currentRoute != dest.route -> {
+                            navController.navigate(dest.route) {
+                                launchSingleTop = true
+                                restoreState = true
+
+                                popUpTo(navController.graph.startDestinationId) {
+                                    saveState = true
+                                }
                             }
                         }
                     }

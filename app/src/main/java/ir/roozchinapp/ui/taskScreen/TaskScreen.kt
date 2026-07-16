@@ -178,6 +178,9 @@ import kotlin.math.roundToInt
 fun TaskScreen(
     onClickBack: () -> Unit,
     onOpenTask: (Int) -> Unit,
+    exitToScheduleRequested: Boolean,
+    onExitToScheduleRequestHandled: () -> Unit,
+    onExitToSchedule: () -> Unit,
     viewModel: TaskScreenViewModel = hiltViewModel()
 ) {
 
@@ -293,14 +296,34 @@ fun TaskScreen(
     var showScheduleDialog by rememberSaveable { mutableStateOf(false) }
     var showReminderDialog by rememberSaveable { mutableStateOf(false) }
 
-    // 1) Back سیستم (gesture/btn) هم مثل دکمه Back خودت رفتار کنه
+    fun finishTaskEditorAndExit(
+        exitAction: () -> Unit
+    ) {
+        viewModel.finishOrDeleteEmptyDraftTask()
+        viewModel.clearTaskEditBackStack()
+        exitAction()
+    }
+
+// Back سیستم و دکمه Back داخل صفحه
     BackHandler {
-        val handledInsideEditor = viewModel.navigateBackInsideTaskEditor()
+        val handledInsideEditor =
+            viewModel.navigateBackInsideTaskEditor()
 
         if (!handledInsideEditor) {
-            viewModel.finishOrDeleteEmptyDraftTask()
-            viewModel.clearTaskEditBackStack()
-            onClickBack()
+            finishTaskEditorAndExit(
+                exitAction = onClickBack
+            )
+        }
+    }
+
+// کلیک روی تب Schedule در BottomBar
+    LaunchedEffect(exitToScheduleRequested) {
+        if (exitToScheduleRequested) {
+            onExitToScheduleRequestHandled()
+
+            finishTaskEditorAndExit(
+                exitAction = onExitToSchedule
+            )
         }
     }
 
@@ -327,12 +350,13 @@ fun TaskScreen(
                 categoryColorHex = selectedCategory.color,
                 draft = taskDraft,
                 onClickBack = {
-                    val handledInsideEditor = viewModel.navigateBackInsideTaskEditor()
+                    val handledInsideEditor =
+                        viewModel.navigateBackInsideTaskEditor()
 
                     if (!handledInsideEditor) {
-                        viewModel.finishOrDeleteEmptyDraftTask()
-                        viewModel.clearTaskEditBackStack()
-                        onClickBack()
+                        finishTaskEditorAndExit(
+                            exitAction = onClickBack
+                        )
                     }
                 },
                 onNameChange = viewModel::setTaskName,

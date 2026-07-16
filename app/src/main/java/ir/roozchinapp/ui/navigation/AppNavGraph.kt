@@ -6,6 +6,8 @@ import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.navigation.NavHostController
@@ -59,12 +61,54 @@ fun AppNavGraph(
                         defaultValue = -1
                     }
                 )
-            ) {
-                TaskScreen(
-                    onClickBack = { navController.popBackStack() },
-                    onOpenTask = { taskId ->
-                        navController.navigate(AppRoutes.taskEdit(taskId))
+            ) { backStackEntry ->
+
+                val exitToScheduleRequested by
+                backStackEntry.savedStateHandle
+                    .getStateFlow(
+                        AppRoutes.KEY_EXIT_TASK_TO_SCHEDULE,
+                        false
+                    )
+                    .collectAsState()
+
+                val returnToSchedule: () -> Unit = {
+                    val scheduleWasInBackStack =
+                        navController.popBackStack(
+                            AppRoutes.SCHEDULE,
+                            false
+                        )
+
+                    if (!scheduleWasInBackStack) {
+                        navController.navigate(AppRoutes.SCHEDULE) {
+                            launchSingleTop = true
+                            restoreState = false
+
+                            popUpTo(navController.graph.startDestinationId) {
+                                saveState = false
+                            }
+                        }
                     }
+                }
+
+                TaskScreen(
+                    onClickBack = returnToSchedule,
+
+                    onOpenTask = { taskId ->
+                        navController.navigate(
+                            AppRoutes.taskEdit(taskId)
+                        )
+                    },
+
+                    exitToScheduleRequested =
+                    exitToScheduleRequested,
+
+                    onExitToScheduleRequestHandled = {
+                        backStackEntry.savedStateHandle[
+                            AppRoutes.KEY_EXIT_TASK_TO_SCHEDULE
+                        ] = false
+                    },
+
+                    onExitToSchedule = returnToSchedule
                 )
             }
             composable(AppRoutes.BACKUP_RESTORE) {
@@ -90,6 +134,9 @@ object AppRoutes {
     const val SCHEDULE = "schedule"
     const val ANALYTICS = "analytics"
     const val TASK = "task"
+
+    const val KEY_EXIT_TASK_TO_SCHEDULE =
+        "exit_task_to_schedule"
 
     const val ARG_CATEGORY_ID = "categoryId"
     const val ARG_TASK_ID = "taskId"
