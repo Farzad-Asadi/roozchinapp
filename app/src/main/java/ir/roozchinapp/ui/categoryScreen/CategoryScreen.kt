@@ -96,6 +96,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
@@ -1817,7 +1818,13 @@ private fun CategoryRow(
                     modifier = Modifier.size(30.dp)
                 )
             },
-            headlineContent = { Text(item.category.name) },
+            headlineContent = {
+                Text(text = item.category.name,
+                    style = MaterialTheme.typography.labelLarge.copy(
+                        textDirection = TextDirection.ContentOrRtl
+                    ))
+
+                              },
             trailingContent = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     val canHaveChildren = computedLevel < 4

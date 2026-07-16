@@ -2778,7 +2778,9 @@ private fun TimelineItemBox(
 
                 Text(
                     text = item.title,
-                    style = MaterialTheme.typography.labelLarge,
+                    style = MaterialTheme.typography.labelLarge.copy(
+                        textDirection = TextDirection.ContentOrRtl
+                    ),
                     maxLines = 1
                 )
             }
@@ -5315,7 +5317,12 @@ private fun RunningPomodoroPanel(
             verticalArrangement = Arrangement.spacedBy(6.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(state.title, style = MaterialTheme.typography.titleMedium)
+            Text(
+                text = state.title,
+                style = MaterialTheme.typography.titleMedium.copy(
+                    textDirection = TextDirection.ContentOrRtl
+                )
+            )
 
 
 

@@ -90,81 +90,21 @@ private fun AnalyticsScreenContent(
                 .fillMaxSize()
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(
+                    horizontal = 14.dp,
+                    vertical = 10.dp
+                ),
+            verticalArrangement =
+            Arrangement.spacedBy(12.dp)
         ) {
             AnalyticsPeriodSelector(
                 selectedPeriod = uiState.selectedPeriod,
                 onSelectPeriod = onSelectPeriod
             )
 
-            Text(
-                text = "خلاصه پومودورو",
-                style = MaterialTheme.typography.titleMedium
+            PomodoroSummarySection(
+                summary = uiState.summary
             )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                AnalyticsMetricCard(
-                    title = "برنامه",
-                    value = uiState.summary.plannedCount.toString(),
-                    modifier = Modifier.weight(1f)
-                )
-
-                AnalyticsMetricCard(
-                    title = "زمان‌بندی‌شده",
-                    value = uiState.summary.scheduledCount.toString(),
-                    modifier = Modifier.weight(1f)
-                )
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                AnalyticsMetricCard(
-                    title = "انجام‌شده",
-                    value = uiState.summary.completedCount.toString(),
-                    modifier = Modifier.weight(1f)
-                )
-
-                AnalyticsMetricCard(
-                    title = "تحقق برنامه",
-                    value = "${uiState.summary.completionPercent.roundToInt()}٪",
-                    modifier = Modifier.weight(1f)
-                )
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                AnalyticsMetricCard(
-                    title = "تمرکز برنامه‌ریزی‌شده",
-                    value = formatFocusMinutes(
-                        uiState.summary.plannedFocusMinutes
-                    ),
-                    modifier = Modifier.weight(1f)
-                )
-
-                AnalyticsMetricCard(
-                    title = "تمرکز انجام‌شده",
-                    value = formatFocusMinutes(
-                        uiState.summary.completedFocusMinutes
-                    ),
-                    modifier = Modifier.weight(1f)
-                )
-            }
-
-            if (uiState.summary.extraCompletedCount > 0) {
-                AnalyticsMetricCard(
-                    title = "پومودوروی مازاد",
-                    value = uiState.summary.extraCompletedCount.toString(),
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
 
             PomodoroAnalyticsChart(
                 selectedPeriod = uiState.selectedPeriod,
@@ -203,14 +143,17 @@ private fun AnalyticsTopBar() {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
+                .padding(
+                    horizontal = 16.dp,
+                    vertical = 11.dp
+                ),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 imageVector = Icons.Filled.Analytics,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(26.dp)
+                modifier = Modifier.size(24.dp)
             )
 
             Spacer(Modifier.size(12.dp))
@@ -259,7 +202,10 @@ private fun AnalyticsPeriodSelector(
                     .clickable {
                         onSelectPeriod(period)
                     }
-                    .padding(horizontal = 8.dp, vertical = 11.dp),
+                    .padding(
+                        horizontal = 6.dp,
+                        vertical = 9.dp
+                    ),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -278,35 +224,176 @@ private fun AnalyticsPeriodSelector(
 }
 
 @Composable
-private fun AnalyticsMetricCard(
+private fun PomodoroSummarySection(
+    summary: PomodoroAnalyticsSummary,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement =
+        Arrangement.spacedBy(8.dp)
+    ) {
+        Text(
+            text = "خلاصه پومودورو",
+            style = MaterialTheme.typography.titleSmall
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement =
+            Arrangement.spacedBy(8.dp)
+        ) {
+            CompactAnalyticsMetricCard(
+                title = "برنامه",
+                value = summary.plannedCount.toString(),
+                modifier = Modifier.weight(1f)
+            )
+
+            CompactAnalyticsMetricCard(
+                title = "زمان‌بندی",
+                value = summary.scheduledCount.toString(),
+                modifier = Modifier.weight(1f)
+            )
+
+            CompactAnalyticsMetricCard(
+                title = "انجام",
+                value = summary.completedCount.toString(),
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement =
+            Arrangement.spacedBy(8.dp)
+        ) {
+            CompactAnalyticsMetricCard(
+                title = "تحقق",
+                value =
+                "${summary.completionPercent.roundToInt()}٪",
+                modifier = Modifier.weight(1f)
+            )
+
+            CompactAnalyticsMetricCard(
+                title = "تمرکز برنامه",
+                value = formatFocusMinutes(
+                    summary.plannedFocusMinutes
+                ),
+                modifier = Modifier.weight(1f)
+            )
+
+            CompactAnalyticsMetricCard(
+                title = "تمرکز انجام",
+                value = formatFocusMinutes(
+                    summary.completedFocusMinutes
+                ),
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        if (summary.extraCompletedCount > 0) {
+            ExtraPomodoroSummaryCard(
+                count = summary.extraCompletedCount
+            )
+        }
+    }
+}
+
+@Composable
+private fun CompactAnalyticsMetricCard(
     title: String,
     value: String,
     modifier: Modifier = Modifier
 ) {
     Card(
         modifier = modifier,
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(
             containerColor =
-            MaterialTheme.colorScheme.surfaceContainerHigh
+            MaterialTheme.colorScheme
+                .surfaceContainerHigh
         )
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+                .padding(
+                    horizontal = 6.dp,
+                    vertical = 8.dp
+                ),
+            horizontalAlignment =
+            Alignment.CenterHorizontally,
+            verticalArrangement =
+            Arrangement.spacedBy(2.dp)
         ) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                modifier = Modifier.fillMaxWidth(),
+                maxLines = 1,
+                textAlign = TextAlign.Center,
+                style =
+                MaterialTheme.typography.labelSmall,
+                color =
+                MaterialTheme.colorScheme
+                    .onSurfaceVariant
             )
 
             Text(
                 text = value,
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface
+                modifier = Modifier.fillMaxWidth(),
+                maxLines = 1,
+                textAlign = TextAlign.Center,
+                style =
+                MaterialTheme.typography.titleMedium,
+                color =
+                MaterialTheme.colorScheme.onSurface
+            )
+        }
+    }
+}
+
+@Composable
+private fun ExtraPomodoroSummaryCard(
+    count: Int,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor =
+            MaterialTheme.colorScheme
+                .primaryContainer
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(
+                    horizontal = 12.dp,
+                    vertical = 7.dp
+                ),
+            horizontalArrangement =
+            Arrangement.SpaceBetween,
+            verticalAlignment =
+            Alignment.CenterVertically
+        ) {
+            Text(
+                text = "پومودوروی مازاد",
+                style =
+                MaterialTheme.typography.labelMedium,
+                color =
+                MaterialTheme.colorScheme
+                    .onPrimaryContainer
+            )
+
+            Text(
+                text = "+$count",
+                style =
+                MaterialTheme.typography.titleSmall,
+                color =
+                MaterialTheme.colorScheme
+                    .onPrimaryContainer
             )
         }
     }
@@ -325,19 +412,25 @@ private fun AnalyticsPeriod.displayTitle(): String {
 private fun formatFocusMinutes(
     totalMinutes: Int
 ): String {
-    val safeMinutes = totalMinutes.coerceAtLeast(0)
+    val safeMinutes =
+        totalMinutes.coerceAtLeast(0)
 
-    val hours = safeMinutes / 60
-    val minutes = safeMinutes % 60
+    val hours =
+        safeMinutes / 60
 
-    return when {
-        hours > 0 && minutes > 0 ->
-            "$hours ساعت و $minutes دقیقه"
+    val minutes =
+        safeMinutes % 60
 
-        hours > 0 ->
-            "$hours ساعت"
-
-        else ->
-            "$minutes دقیقه"
+    return buildString {
+        append(hours)
+        append(":")
+        append(
+            minutes
+                .toString()
+                .padStart(
+                    length = 2,
+                    padChar = '0'
+                )
+        )
     }
 }

@@ -37,6 +37,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.automirrored.filled.Note
 import androidx.compose.material.icons.filled.Add
@@ -47,6 +48,7 @@ import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.Event
@@ -717,9 +719,13 @@ private fun AddEditeTaskScreen(
                 )
                 Spacer(Modifier.width(14.dp))
                 Text(
-                    categoryName,
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.weight(1f)
+                    text = categoryName,
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        textDirection = TextDirection.ContentOrRtl
+                    ),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
 
                 Spacer(Modifier.weight(1f))
@@ -1049,7 +1055,7 @@ private fun AddEditeTaskScreen(
                         modifier = Modifier.weight(1f)
                     ) {
                         Text(
-                            text = "Child rule",
+                            text = "قانون اجرا",
                             style = MaterialTheme.typography.bodyLarge
                         )
 
@@ -1314,7 +1320,7 @@ private fun AddEditeTaskScreen(
 
         if (showEditingChildRuleDialog) {
             ChildRuleEditorDialog(
-                title = draft.name.ifBlank { "Child task" },
+                title = draft.name.ifBlank { "کار فرعی" },
                 rule = editingChildRule,
                 onDismiss = {
                     showEditingChildRuleDialog = false
@@ -1376,8 +1382,7 @@ private fun AddEditeTaskScreen(
             )
 
             fun submitChildTask(
-                closeDialog: Boolean,
-                openFullEditor: Boolean
+                closeDialog: Boolean
             ) {
                 val cleanName = newChildTaskName.trim()
 
@@ -1389,19 +1394,15 @@ private fun AddEditeTaskScreen(
                     newChildTimesPerDay,
                     newChildTimesPerOccurrence,
                     newChildG5TargetCount
-                ) { createdChildTaskId ->
-                    if (openFullEditor) {
-                        onClickChildTask(createdChildTaskId)
-                    }
+                ) {
+                    // بعد از ساخت Child Task، کار دیگری لازم نیست.
                 }
 
                 childTasksExpanded = true
+                newChildTaskName = ""
 
-                if (closeDialog || openFullEditor) {
+                if (closeDialog) {
                     showAddChildTaskDialog = false
-                    newChildTaskName = ""
-                } else {
-                    newChildTaskName = ""
                 }
             }
 
@@ -1427,30 +1428,19 @@ private fun AddEditeTaskScreen(
                             showAddChildTaskDialog = false
                             newChildTaskName = ""
                         },
+                        navigationIcon = Icons.Filled.Close,
                         actions = {
-                            IconButton(
-                                onClick = {
-                                    showNewChildRuleDialog = true
-                                }
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.Pattern,
-                                    contentDescription = "Rule"
-                                )
-                            }
-
                             IconButton(
                                 enabled = newChildTaskName.isNotBlank(),
                                 onClick = {
                                     submitChildTask(
-                                        closeDialog = true,
-                                        openFullEditor = false
+                                        closeDialog = true
                                     )
                                 }
                             ) {
                                 Icon(
                                     imageVector = Icons.Filled.Check,
-                                    contentDescription = "Create"
+                                    contentDescription = "ایجاد و بستن"
                                 )
                             }
 
@@ -1458,29 +1448,13 @@ private fun AddEditeTaskScreen(
                                 enabled = newChildTaskName.isNotBlank(),
                                 onClick = {
                                     submitChildTask(
-                                        closeDialog = false,
-                                        openFullEditor = false
+                                        closeDialog = false
                                     )
                                 }
                             ) {
                                 Icon(
                                     imageVector = Icons.Filled.DoneAll,
-                                    contentDescription = "Create and continue"
-                                )
-                            }
-
-                            IconButton(
-                                enabled = newChildTaskName.isNotBlank(),
-                                onClick = {
-                                    submitChildTask(
-                                        closeDialog = true,
-                                        openFullEditor = true
-                                    )
-                                }
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.ArrowForwardIos,
-                                    contentDescription = "Create and open"
+                                    contentDescription = "ایجاد و ادامه"
                                 )
                             }
                         }
@@ -1502,7 +1476,7 @@ private fun AddEditeTaskScreen(
                                 modifier = Modifier.weight(1f)
                             ) {
                                 Text(
-                                    text = "Rule",
+                                    text = "قانون اجرا",
                                     style = MaterialTheme.typography.bodyLarge
                                 )
 
@@ -1564,7 +1538,9 @@ private fun AddEditeTaskScreen(
                                         modifier = Modifier.weight(1f),
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
-                                        style = MaterialTheme.typography.bodyMedium
+                                        style = MaterialTheme.typography.bodyMedium.copy(
+                                            textDirection = TextDirection.ContentOrRtl
+                                        )
                                     )
                                 }
                             }
@@ -1587,9 +1563,9 @@ private fun AddEditeTaskScreen(
             ChildRuleEditorDialog(
                 title = newChildTaskName.ifBlank {
                     if (draft.childStructure == TaskChildStructure.LIST_ITEMS) {
-                        "Item rule"
+                        "قانون اجرای آیتم"
                     } else {
-                        "Child rule"
+                        "قانون اجرای کار فرعی"
                     }
                 },
                 rule = rulePreview,
@@ -1816,6 +1792,9 @@ private fun ChildTaskRow(
         headlineContent = {
             Text(
                 text = child.name,
+                style = MaterialTheme.typography.bodyLarge.copy(
+                    textDirection = TextDirection.ContentOrRtl
+                ),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 color = if (isDone) {
@@ -2346,6 +2325,7 @@ private fun AddEditeReminderDialog(
             AddEditeDialogTopBar(
                 title = if (addReminder) "New reminder" else "Edit reminder",
                 onNavigationClick = onDismiss,
+                navigationIcon = Icons.Filled.Close,
                 actions = {
                     IconButton(onClick = onConfirm, enabled = true) {
                         Icon(Icons.Filled.Check, contentDescription = null)
@@ -2511,6 +2491,7 @@ private fun AddEditDescriptionDialog(
             AddEditeDialogTopBar(
                 title = title,
                 onNavigationClick = onDismiss,
+                navigationIcon = Icons.Filled.Close,
                 actions = {
                     IconButton(
                         onClick = onConfirm,
@@ -2629,7 +2610,7 @@ private fun PickParentDialogSmall(
 private fun AddEditeDialogTopBar(
     title: String,
     onNavigationClick: (() -> Unit)? = null,
-    navigationIcon: ImageVector = Icons.Filled.ArrowBackIosNew,
+    navigationIcon: ImageVector = Icons.AutoMirrored.Filled.ArrowBack,
     actions: @Composable RowScope.() -> Unit = {},
     showDivider: Boolean = true
 ) {
@@ -2640,26 +2621,31 @@ private fun AddEditeDialogTopBar(
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-
-            // 🔹 آیکن سمت چپ (اختیاری)
             if (onNavigationClick != null) {
-                IconButton(onClick = onNavigationClick) {
-                    Icon(navigationIcon, contentDescription = null)
+                IconButton(
+                    onClick = onNavigationClick
+                ) {
+                    Icon(
+                        imageVector = navigationIcon,
+                        contentDescription = null
+                    )
                 }
             } else {
-                Spacer(Modifier.width(48.dp)) // جای خالی هم‌تراز
+                Spacer(Modifier.width(48.dp))
             }
 
             Spacer(Modifier.width(8.dp))
 
-            // 🔹 عنوان
             Text(
                 text = title,
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.titleMedium.copy(
+                    textDirection = TextDirection.ContentOrRtl
+                ),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
 
-            // 🔹 اکشن‌های سمت راست (هرچی بدی رندر میشه)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 content = actions
@@ -2697,9 +2683,17 @@ private fun AddEditeDialogTextField(
             placeholder = {
                 Text(
                     text = hint,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
+                    style = MaterialTheme.typography.bodyLarge.copy(
+                        textDirection = TextDirection.ContentOrRtl
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface.copy(
+                        alpha = 0.35f
+                    )
                 )
             },
+            textStyle = MaterialTheme.typography.bodyLarge.copy(
+                textDirection = TextDirection.ContentOrRtl
+            ),
             singleLine = singleLine,
             colors = TextFieldDefaults.colors(
                 focusedContainerColor = Color.Transparent,
@@ -2712,7 +2706,7 @@ private fun AddEditeDialogTextField(
                 unfocusedIndicatorColor = Color.Transparent,
                 disabledIndicatorColor = Color.Transparent,
                 errorIndicatorColor = Color.Transparent
-            )
+            ),
         )
 
         if (showDivider) HorizontalDivider()
@@ -3115,8 +3109,16 @@ private fun ParentPickerRow(
         headlineContent = {
             Text(
                 text = item.category.name,
-                color = if (enabled) LocalContentColor.current
-                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
+                style = MaterialTheme.typography.bodyLarge.copy(
+                    textDirection = TextDirection.ContentOrRtl
+                ),
+                color = if (enabled) {
+                    LocalContentColor.current
+                } else {
+                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
+                },
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         },
         supportingContent = {
@@ -4668,124 +4670,12 @@ private fun ChildRuleEditorDialog(
         g5TargetCount: Int
     ) -> Unit
 ) {
-    var selectedRuleType by remember(child.id, rule?.id) {
-        mutableStateOf(
-            rule?.ruleType ?: TaskChildRuleType.ONCE_PER_PARENT_OCCURRENCE
-        )
-    }
-
-    var timesPerDayText by remember(child.id, rule?.id) {
-        mutableStateOf(
-            (rule?.timesPerDay ?: 1).coerceAtLeast(1).toString()
-        )
-    }
-
-    var timesPerOccurrenceText by remember(child.id, rule?.id) {
-        mutableStateOf(
-            (rule?.timesPerOccurrence ?: 1).coerceAtLeast(1).toString()
-        )
-    }
-
-    var g5TargetCountText by remember(child.id, rule?.id) {
-        mutableStateOf(
-            (rule?.g5TargetCount ?: 5).coerceAtLeast(1).toString()
-        )
-    }
-
-    fun cleanPositiveInt(
-        text: String,
-        fallback: Int
-    ): Int {
-        return text
-            .trim()
-            .toIntOrNull()
-            ?.coerceAtLeast(1)
-            ?: fallback
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text("Child rule")
-        },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(520.dp)
-                    .verticalScroll(rememberScrollState())
-            ) {
-                Text(
-                    text = child.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-
-                Spacer(Modifier.height(12.dp))
-
-                childRuleTypeOptions.forEach { option ->
-                    ChildRuleTypeOptionRow(
-                        option = option,
-                        selected = selectedRuleType == option.ruleType,
-                        onClick = {
-                            selectedRuleType = option.ruleType
-                        }
-                    )
-
-                    Spacer(Modifier.height(4.dp))
-                }
-
-                Spacer(Modifier.height(12.dp))
-
-                when (selectedRuleType) {
-                    TaskChildRuleType.N_TIMES_PER_DAY -> {
-                        ChildRuleNumberField(
-                            label = "Times per day",
-                            value = timesPerDayText,
-                            onValueChange = { timesPerDayText = it }
-                        )
-                    }
-
-                    TaskChildRuleType.N_TIMES_PER_PARENT_OCCURRENCE -> {
-                        ChildRuleNumberField(
-                            label = "Times per parent occurrence",
-                            value = timesPerOccurrenceText,
-                            onValueChange = { timesPerOccurrenceText = it }
-                        )
-                    }
-
-                    TaskChildRuleType.G5_LEARNING -> {
-                        ChildRuleNumberField(
-                            label = "G5 step count",
-                            value = g5TargetCountText,
-                            onValueChange = { g5TargetCountText = it }
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    onConfirm(
-                        selectedRuleType,
-                        cleanPositiveInt(timesPerDayText, rule?.timesPerDay ?: 1),
-                        cleanPositiveInt(timesPerOccurrenceText, rule?.timesPerOccurrence ?: 1),
-                        cleanPositiveInt(g5TargetCountText, rule?.g5TargetCount ?: 5)
-                    )
-                }
-            ) {
-                Text("Save")
-            }
-        },
-        dismissButton = {
-            TextButton(
-                onClick = onDismiss
-            ) {
-                Text("Cancel")
-            }
-        }
+    ChildRuleEditorDialogContent(
+        title = child.name,
+        stateKey = "child_rule_${child.id ?: child.hashCode()}",
+        rule = rule,
+        onDismiss = onDismiss,
+        onConfirm = onConfirm
     )
 }
 
@@ -4866,36 +4756,36 @@ private fun childRuleSummaryText(
     rule: TaskChildRuleEntity?
 ): String {
     if (rule == null) {
-        return "Rule: every parent occurrence"
+        return "قانون: یک‌بار در هر اجرای والد"
     }
 
     return when (rule.ruleType) {
         TaskChildRuleType.ONCE_PER_PARENT_OCCURRENCE ->
-            "Rule: every parent occurrence"
+            "قانون: یک‌بار در هر اجرای والد"
 
         TaskChildRuleType.N_TIMES_PER_PARENT_OCCURRENCE ->
-            "Rule: ${rule.timesPerOccurrence.coerceAtLeast(1)} times per parent occurrence"
+            "قانون: ${rule.timesPerOccurrence.coerceAtLeast(1)} بار در هر اجرای والد"
 
         TaskChildRuleType.ONCE_PER_DAY ->
-            "Rule: once per day"
+            "قانون: روزی یک‌بار"
 
         TaskChildRuleType.N_TIMES_PER_DAY ->
-            "Rule: ${rule.timesPerDay.coerceAtLeast(1)} times per day"
+            "قانون: ${rule.timesPerDay.coerceAtLeast(1)} بار در روز"
 
         TaskChildRuleType.ONCE_PER_PARENT_LIFETIME ->
-            "Rule: once in parent lifetime"
+            "قانون: فقط یک‌بار در کل عمر والد"
 
         TaskChildRuleType.G5_LEARNING ->
-            "Rule: G5 learning ${rule.g5TargetCount.coerceAtLeast(1)} steps"
+            "قانون: یادگیری G5 در ${rule.g5TargetCount.coerceAtLeast(1)} مرحله"
 
         TaskChildRuleType.MANUAL_LIST_ITEM ->
-            "Rule: manual list item"
+            "قانون: آیتم دستی فهرست"
 
         TaskChildRuleType.MANUAL_RESET ->
-            "Rule: manual reset"
+            "قانون: بازنشانی دستی"
 
         else ->
-            "Rule: ${rule.ruleType}"
+            "قانون اجرای زیرتسک"
     }
 }
 
@@ -4911,27 +4801,72 @@ private fun ChildRuleEditorDialog(
         g5TargetCount: Int
     ) -> Unit
 ) {
-    var selectedRuleType by remember(rule?.id) {
+    ChildRuleEditorDialogContent(
+        title = title,
+        stateKey = "new_child_rule_${rule?.id ?: title}",
+        rule = rule,
+        onDismiss = onDismiss,
+        onConfirm = onConfirm
+    )
+}
+
+@Composable
+private fun ChildRuleEditorDialogContent(
+    title: String,
+    stateKey: Any,
+    rule: TaskChildRuleEntity?,
+    onDismiss: () -> Unit,
+    onConfirm: (
+        ruleType: String,
+        timesPerDay: Int,
+        timesPerOccurrence: Int,
+        g5TargetCount: Int
+    ) -> Unit
+) {
+    var selectedRuleType by remember(
+        stateKey,
+        rule?.id,
+        rule?.ruleType
+    ) {
         mutableStateOf(
-            rule?.ruleType ?: TaskChildRuleType.ONCE_PER_PARENT_OCCURRENCE
+            rule?.ruleType
+                ?: TaskChildRuleType.ONCE_PER_PARENT_OCCURRENCE
         )
     }
 
-    var timesPerDayText by remember(rule?.id) {
+    var timesPerDayText by remember(
+        stateKey,
+        rule?.id,
+        rule?.timesPerDay
+    ) {
         mutableStateOf(
-            (rule?.timesPerDay ?: 1).coerceAtLeast(1).toString()
+            (rule?.timesPerDay ?: 1)
+                .coerceAtLeast(1)
+                .toString()
         )
     }
 
-    var timesPerOccurrenceText by remember(rule?.id) {
+    var timesPerOccurrenceText by remember(
+        stateKey,
+        rule?.id,
+        rule?.timesPerOccurrence
+    ) {
         mutableStateOf(
-            (rule?.timesPerOccurrence ?: 1).coerceAtLeast(1).toString()
+            (rule?.timesPerOccurrence ?: 1)
+                .coerceAtLeast(1)
+                .toString()
         )
     }
 
-    var g5TargetCountText by remember(rule?.id) {
+    var g5TargetCountText by remember(
+        stateKey,
+        rule?.id,
+        rule?.g5TargetCount
+    ) {
         mutableStateOf(
-            (rule?.g5TargetCount ?: 5).coerceAtLeast(1).toString()
+            (rule?.g5TargetCount ?: 5)
+                .coerceAtLeast(1)
+                .toString()
         )
     }
 
@@ -4943,107 +4878,249 @@ private fun ChildRuleEditorDialog(
             .trim()
             .toIntOrNull()
             ?.coerceAtLeast(1)
-            ?: fallback
+            ?: fallback.coerceAtLeast(1)
     }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text("Child rule")
-        },
-        text = {
+    fun confirmRule() {
+        onConfirm(
+            selectedRuleType,
+            cleanPositiveInt(
+                text = timesPerDayText,
+                fallback = rule?.timesPerDay ?: 1
+            ),
+            cleanPositiveInt(
+                text = timesPerOccurrenceText,
+                fallback = rule?.timesPerOccurrence ?: 1
+            ),
+            cleanPositiveInt(
+                text = g5TargetCountText,
+                fallback = rule?.g5TargetCount ?: 5
+            )
+        )
+    }
+
+    CompositionLocalProvider(
+        LocalLayoutDirection provides LayoutDirection.Rtl
+    ) {
+        DimmedDialog(
+            onDismiss = onDismiss,
+            shape = RoundedCornerShape(28.dp),
+            modifier = Modifier
+                .fillMaxWidth(0.96f)
+                .fillMaxHeight(0.92f)
+                .background(
+                    color = MaterialTheme.colorScheme.surface,
+                    shape = RoundedCornerShape(28.dp)
+                )
+        ) {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(520.dp)
-                    .verticalScroll(rememberScrollState())
+                modifier = Modifier.fillMaxSize()
             ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                AddEditeDialogTopBar(
+                    title = "قانون اجرای زیرتسک",
+                    onNavigationClick = onDismiss,
+                    navigationIcon = Icons.Filled.Close
                 )
 
-                Spacer(Modifier.height(12.dp))
-
-                childRuleTypeOptions.forEach { option ->
-                    ChildRuleTypeOptionRow(
-                        option = option,
-                        selected = selectedRuleType == option.ruleType,
-                        onClick = {
-                            selectedRuleType = option.ruleType
-                        }
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(
+                            horizontal = 20.dp,
+                            vertical = 12.dp
+                        )
+                ) {
+                    Text(
+                        text = title.ifBlank {
+                            "زیرتسک بدون عنوان"
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Right,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            textDirection = TextDirection.ContentOrRtl
+                        )
                     )
 
                     Spacer(Modifier.height(4.dp))
-                }
 
-                Spacer(Modifier.height(12.dp))
-
-                when (selectedRuleType) {
-                    TaskChildRuleType.N_TIMES_PER_DAY -> {
-                        ChildRuleNumberField(
-                            label = "Times per day",
-                            value = timesPerDayText,
-                            onValueChange = { timesPerDayText = it }
-                        )
-                    }
-
-                    TaskChildRuleType.N_TIMES_PER_PARENT_OCCURRENCE -> {
-                        ChildRuleNumberField(
-                            label = "Times per parent occurrence",
-                            value = timesPerOccurrenceText,
-                            onValueChange = { timesPerOccurrenceText = it }
-                        )
-                    }
-
-                    TaskChildRuleType.G5_LEARNING -> {
-                        ChildRuleNumberField(
-                            label = "G5 step count",
-                            value = g5TargetCountText,
-                            onValueChange = { g5TargetCountText = it }
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    onConfirm(
-                        selectedRuleType,
-                        cleanPositiveInt(timesPerDayText, rule?.timesPerDay ?: 1),
-                        cleanPositiveInt(timesPerOccurrenceText, rule?.timesPerOccurrence ?: 1),
-                        cleanPositiveInt(g5TargetCountText, rule?.g5TargetCount ?: 5)
+                    Text(
+                        text = "مشخص کنید این زیرتسک با چه قانونی در نوبت‌های والد ایجاد و تکمیل شود.",
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Right,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            textDirection = TextDirection.ContentOrRtl
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-            ) {
-                Text("Save")
-            }
-        },
-        dismissButton = {
-            TextButton(
-                onClick = onDismiss
-            ) {
-                Text("Cancel")
+
+                HorizontalDivider()
+
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .padding(
+                            horizontal = 12.dp,
+                            vertical = 10.dp
+                        ),
+                    verticalArrangement =
+                    Arrangement.spacedBy(8.dp)
+                ) {
+                    items(
+                        items = childRuleTypeOptions,
+                        key = { option ->
+                            option.ruleType
+                        }
+                    ) { option ->
+                        val selected =
+                            selectedRuleType == option.ruleType
+
+                        val inlineContent:
+                                (@Composable () -> Unit)? =
+                            if (!selected) {
+                                null
+                            } else {
+                                when (option.ruleType) {
+                                    TaskChildRuleType.N_TIMES_PER_DAY -> {
+                                        {
+                                            ChildRuleNumberField(
+                                                label = "تعداد دفعات در روز",
+                                                value = timesPerDayText,
+                                                onValueChange = {
+                                                    timesPerDayText = it
+                                                }
+                                            )
+                                        }
+                                    }
+
+                                    TaskChildRuleType.N_TIMES_PER_PARENT_OCCURRENCE -> {
+                                        {
+                                            ChildRuleNumberField(
+                                                label = "تعداد در هر اجرای والد",
+                                                value = timesPerOccurrenceText,
+                                                onValueChange = {
+                                                    timesPerOccurrenceText = it
+                                                }
+                                            )
+                                        }
+                                    }
+
+                                    TaskChildRuleType.G5_LEARNING -> {
+                                        {
+                                            ChildRuleNumberField(
+                                                label = "تعداد مراحل یادگیری",
+                                                value = g5TargetCountText,
+                                                onValueChange = {
+                                                    g5TargetCountText = it
+                                                }
+                                            )
+                                        }
+                                    }
+
+                                    else -> null
+                                }
+                            }
+
+                        ChildRuleTypeOptionRow(
+                            option = option,
+                            selected = selected,
+                            onClick = {
+                                selectedRuleType =
+                                    option.ruleType
+                            },
+                            inlineContent = inlineContent
+                        )
+                    }
+                }
+
+                HorizontalDivider()
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(
+                            horizontal = 12.dp,
+                            vertical = 8.dp
+                        ),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(
+                        onClick = onDismiss
+                    ) {
+                        Text("انصراف")
+                    }
+
+                    Spacer(Modifier.width(8.dp))
+
+                    TextButton(
+                        onClick = ::confirmRule
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Check,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+
+                        Spacer(Modifier.width(6.dp))
+
+                        Text("ذخیره")
+                    }
+                }
             }
         }
-    )
+    }
 }
 
 @Composable
 private fun ChildRuleTypeOptionRow(
     option: ChildRuleTypeOption,
     selected: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    inlineContent: (@Composable () -> Unit)? = null
 ) {
-    ListItem(
+    val shape = RoundedCornerShape(16.dp)
+
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick),
-        leadingContent = {
+            .clip(shape)
+            .background(
+                color = if (selected) {
+                    MaterialTheme.colorScheme.primaryContainer
+                        .copy(alpha = 0.60f)
+                } else {
+                    MaterialTheme.colorScheme.surfaceContainerLow
+                },
+                shape = shape
+            )
+            .border(
+                width = if (selected) {
+                    1.5.dp
+                } else {
+                    0.8.dp
+                },
+                color = if (selected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.outline
+                        .copy(alpha = 0.40f)
+                },
+                shape = shape
+            )
+            .clickable(onClick = onClick)
+            .padding(
+                horizontal = 14.dp,
+                vertical = 12.dp
+            )
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.Top
+        ) {
             Icon(
                 imageVector = if (selected) {
                     Icons.Filled.CheckCircle
@@ -5055,27 +5132,52 @@ private fun ChildRuleTypeOptionRow(
                     MaterialTheme.colorScheme.primary
                 } else {
                     MaterialTheme.colorScheme.onSurfaceVariant
-                }
+                },
+                modifier = Modifier.size(24.dp)
             )
-        },
-        headlineContent = {
-            Text(
-                text = option.title,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+
+            Spacer(Modifier.width(12.dp))
+
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = option.title,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Right,
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        textDirection = TextDirection.ContentOrRtl
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                Spacer(Modifier.height(3.dp))
+
+                Text(
+                    text = option.subtitle,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Right,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        textDirection = TextDirection.ContentOrRtl
+                    ),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        if (inlineContent != null) {
+            Spacer(Modifier.height(10.dp))
+
+            HorizontalDivider(
+                color = MaterialTheme.colorScheme.outline
+                    .copy(alpha = 0.25f)
             )
-        },
-        supportingContent = {
-            Text(
-                text = option.subtitle,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-        },
-        colors = ListItemDefaults.colors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
-    )
+
+            Spacer(Modifier.height(8.dp))
+
+            inlineContent()
+        }
+    }
 }
 
 @Composable
@@ -5084,20 +5186,57 @@ private fun ChildRuleNumberField(
     value: String,
     onValueChange: (String) -> Unit
 ) {
-    TextField(
-        value = value,
-        onValueChange = { raw ->
-            onValueChange(raw.filter { it.isDigit() }.take(3))
-        },
-        label = {
-            Text(label)
-        },
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(
-            keyboardType = KeyboardType.Number
-        ),
-        modifier = Modifier.fillMaxWidth()
-    )
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.weight(1f),
+            textAlign = TextAlign.Right,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+
+        Spacer(Modifier.width(12.dp))
+
+        TextField(
+            value = value,
+            onValueChange = { rawValue ->
+                onValueChange(
+                    rawValue
+                        .filter(Char::isDigit)
+                        .take(3)
+                )
+            },
+            modifier = Modifier.width(100.dp),
+            singleLine = true,
+            textStyle = LocalTextStyle.current.copy(
+                textAlign = TextAlign.Center
+            ),
+            placeholder = {
+                Text(
+                    text = "۱",
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center
+                )
+            },
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Number,
+                imeAction = ImeAction.Done
+            ),
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor =
+                MaterialTheme.colorScheme.surface,
+                unfocusedContainerColor =
+                MaterialTheme.colorScheme.surface,
+                focusedIndicatorColor =
+                MaterialTheme.colorScheme.primary,
+                unfocusedIndicatorColor =
+                MaterialTheme.colorScheme.outline
+            )
+        )
+    }
 }
 
 private data class ChildRuleTypeOption(
@@ -5108,44 +5247,62 @@ private data class ChildRuleTypeOption(
 
 private val childRuleTypeOptions = listOf(
     ChildRuleTypeOption(
-        ruleType = TaskChildRuleType.ONCE_PER_PARENT_OCCURRENCE,
-        title = "Every parent occurrence",
-        subtitle = "Create one requirement each time the parent runs."
+        ruleType =
+        TaskChildRuleType.ONCE_PER_PARENT_OCCURRENCE,
+        title = "یک‌بار در هر اجرای والد",
+        subtitle =
+        "با هر بار اجرای تسک والد، یک مورد برای انجام این زیرتسک ایجاد می‌شود."
     ),
     ChildRuleTypeOption(
-        ruleType = TaskChildRuleType.N_TIMES_PER_PARENT_OCCURRENCE,
-        title = "N times per parent occurrence",
-        subtitle = "Create multiple requirements each time the parent runs."
+        ruleType =
+        TaskChildRuleType.N_TIMES_PER_PARENT_OCCURRENCE,
+        title = "چند بار در هر اجرای والد",
+        subtitle =
+        "با هر بار اجرای تسک والد، این زیرتسک به تعداد تعیین‌شده تکرار می‌شود."
     ),
     ChildRuleTypeOption(
-        ruleType = TaskChildRuleType.ONCE_PER_DAY,
-        title = "Once per day",
-        subtitle = "Count this child once per active day."
+        ruleType =
+        TaskChildRuleType.ONCE_PER_DAY,
+        title = "روزی یک‌بار",
+        subtitle =
+        "در هر روز فعال، فقط یک مورد برای این زیرتسک در نظر گرفته می‌شود."
     ),
     ChildRuleTypeOption(
-        ruleType = TaskChildRuleType.N_TIMES_PER_DAY,
-        title = "N times per day",
-        subtitle = "Count this child multiple times per active day."
+        ruleType =
+        TaskChildRuleType.N_TIMES_PER_DAY,
+        title = "چند بار در روز",
+        subtitle =
+        "در هر روز فعال، این زیرتسک به تعداد تعیین‌شده تکرار می‌شود."
     ),
     ChildRuleTypeOption(
-        ruleType = TaskChildRuleType.ONCE_PER_PARENT_LIFETIME,
-        title = "Once in parent lifetime",
-        subtitle = "Complete this child once and keep it done."
+        ruleType =
+        TaskChildRuleType.ONCE_PER_PARENT_LIFETIME,
+        title = "فقط یک‌بار در کل عمر والد",
+        subtitle =
+        "این زیرتسک فقط یک‌بار انجام می‌شود و پس از آن انجام‌شده باقی می‌ماند."
     ),
     ChildRuleTypeOption(
-        ruleType = TaskChildRuleType.G5_LEARNING,
-        title = "G5 learning",
-        subtitle = "Complete this child across multiple learning steps."
+        ruleType =
+        TaskChildRuleType.G5_LEARNING,
+        title = "یادگیری G5",
+        subtitle =
+        "این زیرتسک طی چند مرحله یادگیری تکمیل می‌شود."
     ),
     ChildRuleTypeOption(
-        ruleType = TaskChildRuleType.MANUAL_LIST_ITEM,
-        title = "Manual list item",
-        subtitle = "Use this child as a manually added list item."
+        ruleType =
+        TaskChildRuleType.MANUAL_LIST_ITEM,
+        title = "آیتم دستی فهرست",
+        subtitle =
+        "این گزینه به‌صورت یک آیتم دستی در فهرست استفاده و مدیریت می‌شود."
     ),
     ChildRuleTypeOption(
-        ruleType = TaskChildRuleType.MANUAL_RESET,
-        title = "Manual reset",
-        subtitle = "Keep it done until the user manually resets it."
+        ruleType =
+        TaskChildRuleType.MANUAL_RESET,
+        title = "بازنشانی دستی",
+        subtitle =
+        "پس از انجام، تا زمانی که کاربر آن را دستی بازنشانی کند انجام‌شده باقی می‌ماند."
     )
 )
+
+
 
